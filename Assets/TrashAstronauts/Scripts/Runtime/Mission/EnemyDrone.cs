@@ -9,7 +9,7 @@ using UnityEngine;
 namespace TrashAstronauts.Mission
 {
     /// <summary>
-    /// JANITOR-7, a malfunctioning maintenance drone. This is the body: it senses (line of sight and
+    /// The thing that used to be maintenance unit JANITOR-7. This is the body: it senses (line of sight and
     /// noise), moves along the waypoint graph, and presents its state with light, a glyph and sound.
     /// Decisions are made by <see cref="EnemyBrain"/>.
     ///
@@ -35,6 +35,8 @@ namespace TrashAstronauts.Mission
         [Header("Presentation")]
         public Light eyeLight;
         public Renderer eyeRenderer;
+        [Tooltip("Additional eyes that glow together with the main one.")]
+        public Renderer[] extraEyes;
         public TMP_Text glyph;
         public AudioSource hum;
         public AudioSource voice;
@@ -398,13 +400,13 @@ namespace TrashAstronauts.Mission
             switch (state)
             {
                 case EnemyState.Patrol:
-                    color = new Color(1f, 0.6f, 0.1f); blinkHz = 0f; symbol = Brain.Suspicion > 0.2f ? "?" : ""; humPitch = 1f; break;
+                    color = new Color(0.75f, 0.12f, 0.05f); blinkHz = 0f; symbol = ""; humPitch = 1f; break;
                 case EnemyState.Investigate:
-                    color = new Color(1f, 0.9f, 0.2f); blinkHz = 2f; symbol = "?"; humPitch = 1.15f; break;
+                    color = new Color(1f, 0.55f, 0.1f); blinkHz = 2f; symbol = ""; humPitch = 1.12f; break;
                 case EnemyState.Chase:
-                    color = new Color(1f, 0.1f, 0.1f); blinkHz = 8f; symbol = "!"; humPitch = 1.45f; break;
+                    color = new Color(1f, 0.05f, 0.03f); blinkHz = 9f; symbol = ""; humPitch = 1.35f; break;
                 case EnemyState.Search:
-                    color = new Color(0.9f, 0.95f, 1f); blinkHz = 1f; symbol = "?"; humPitch = 1.1f; break;
+                    color = new Color(1f, 0.35f, 0.15f); blinkHz = 1f; symbol = ""; humPitch = 1.06f; break;
                 default:
                     color = Color.black; blinkHz = 0f; symbol = ""; humPitch = 0.8f; break;
             }
@@ -425,6 +427,13 @@ namespace TrashAstronauts.Mission
                 m_Block.SetColor(k_BaseColor, state == EnemyState.Dormant ? new Color(0.05f, 0.05f, 0.05f) : color);
                 m_Block.SetColor(k_Emission, color * (2.5f * brightness));
                 eyeRenderer.SetPropertyBlock(m_Block);
+                if (extraEyes != null)
+                {
+                    for (int i = 0; i < extraEyes.Length; i++)
+                    {
+                        if (extraEyes[i] != null) extraEyes[i].SetPropertyBlock(m_Block);
+                    }
+                }
             }
             if (glyph != null && glyph.text != symbol) glyph.text = symbol;
 

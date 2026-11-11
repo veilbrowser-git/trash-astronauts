@@ -9,7 +9,7 @@ namespace TrashAstronauts.UI
 {
     /// <summary>
     /// Comfort and suit settings, built from physical buttons: seated height adjustment, snap-turn angle,
-    /// handedness, unstuck and tool recall. The same component drives the wall console in the tug and
+    /// handedness, zero-g drift on/off, unstuck and tool recall. The same component drives the wall console in the tug and
     /// the pop-up wrist menu, and every change is saved immediately.
     /// </summary>
     public sealed class SettingsPanel : MonoBehaviour
@@ -20,6 +20,7 @@ namespace TrashAstronauts.UI
         public PushButton heightDown;
         public PushButton snapTurn;
         public PushButton handedness;
+        public PushButton drift;
         public PushButton unstuck;
         public PushButton recallTools;
         public float heightStep = 0.1f;
@@ -31,6 +32,7 @@ namespace TrashAstronauts.UI
             Hook(heightDown, OnHeightDown, true);
             Hook(snapTurn, OnSnapTurn, true);
             Hook(handedness, OnHandedness, true);
+            Hook(drift, OnDrift, true);
             Hook(unstuck, OnUnstuck, true);
             Hook(recallTools, OnRecall, true);
             if (director != null) director.ProfileChanged += Refresh;
@@ -43,6 +45,7 @@ namespace TrashAstronauts.UI
             Hook(heightDown, OnHeightDown, false);
             Hook(snapTurn, OnSnapTurn, false);
             Hook(handedness, OnHandedness, false);
+            Hook(drift, OnDrift, false);
             Hook(unstuck, OnUnstuck, false);
             Hook(recallTools, OnRecall, false);
             if (director != null) director.ProfileChanged -= Refresh;
@@ -95,6 +98,13 @@ namespace TrashAstronauts.UI
             director.ApplyAndSaveSettings();
         }
 
+        void OnDrift(PushButton b, HandRig hand)
+        {
+            if (Data == null) return;
+            Data.zeroGDrift = !Data.zeroGDrift;
+            director.ApplyAndSaveSettings();
+        }
+
         void OnUnstuck(PushButton b, HandRig hand)
         {
             var player = PlayerFor(hand);
@@ -117,12 +127,14 @@ namespace TrashAstronauts.UI
                 summary.text = "SUIT SETTINGS\n"
                     + "Height boost: " + (cm >= 0 ? "+" : "") + cm + " cm\n"
                     + "Snap turn: " + Mathf.RoundToInt(data.snapTurnDegrees) + " deg\n"
-                    + "Main hand: " + (data.Handedness == Handedness.Left ? "LEFT" : "RIGHT");
+                    + "Main hand: " + (data.Handedness == Handedness.Left ? "LEFT" : "RIGHT") + "\n"
+                    + "Drift: " + (data.zeroGDrift ? "ON (keep gliding)" : "OFF (stop on release)");
             }
             if (heightUp != null) heightUp.SetLabel("HEIGHT +");
             if (heightDown != null) heightDown.SetLabel("HEIGHT -");
             if (snapTurn != null) snapTurn.SetLabel("TURN " + Mathf.RoundToInt(data.snapTurnDegrees));
             if (handedness != null) handedness.SetLabel(data.Handedness == Handedness.Left ? "HAND: LEFT" : "HAND: RIGHT");
+            if (drift != null) drift.SetLabel(data.zeroGDrift ? "DRIFT: ON" : "DRIFT: OFF");
             if (unstuck != null) unstuck.SetLabel("UNSTUCK");
             if (recallTools != null) recallTools.SetLabel("RECALL TOOLS");
         }

@@ -19,7 +19,6 @@ using UnityEngine.XR.Interaction.Toolkit.Inputs.Readers;
 using UnityEngine.XR.Interaction.Toolkit.Interactables;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion;
-using UnityEngine.XR.Interaction.Toolkit.Locomotion.Climbing;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
 
@@ -146,120 +145,276 @@ namespace TrashAstronauts.EditorTools
 
         static void BuildSalvagePrefabs()
         {
-            // Small scrap: bent hull plate
-            var go = FloatingRoot("Salvage_HullPlate", 1.2f, GameLayers.Salvage);
-            Prim(go.transform, "Plate", PrimitiveType.Cube, Vector3.zero, new Vector3(0.24f, 0.02f, 0.17f), M("Scrap"), true);
-            Prim(go.transform, "Bend", PrimitiveType.Cube, new Vector3(0.1f, 0.03f, 0), new Vector3(0.09f, 0.02f, 0.17f), M("Scrap"), true, new Vector3(0, 0, 35));
+            GameObject go;
+            Transform t;
+
+            // Small scrap: bent hull plate with stiffening ribs and bolts
+            go = FloatingRoot("Salvage_HullPlate", 1.2f, GameLayers.Salvage);
+            t = go.transform;
+            go.AddComponent<BoxCollider>().size = new Vector3(0.27f, 0.05f, 0.19f);
+            CBox(t, "Plate", Vector3.zero, new Vector3(0.26f, 0.018f, 0.18f), M("Scrap"), 0.004f);
+            CBox(t, "Bent Flap", new Vector3(0.105f, 0.026f, 0f), new Vector3(0.09f, 0.016f, 0.18f), M("Scrap"), 0.004f, new Vector3(0, 0, 38));
+            for (int i = 0; i < 3; i++) CBox(t, "Rib", new Vector3(-0.03f, 0.014f, -0.06f + i * 0.06f), new Vector3(0.18f, 0.012f, 0.012f), M("Steel"), 0.003f);
+            foreach (float x in new[] { -0.11f, 0.02f })
+                foreach (float z in new[] { -0.075f, 0.075f })
+                    Part(t, "Bolt", Tube(0.008f, 0.01f, 6), new Vector3(x, 0.014f, z), M("Brass"));
+            CBox(t, "Scorch", new Vector3(-0.06f, 0.0095f, 0.02f), new Vector3(0.07f, 0.002f, 0.05f), M("Chip"), 0.0005f, new Vector3(0, 25, 0));
             FinishSalvage(go, "scrap_hull_plate");
 
-            // Small scrap: cable coil
+            // Small scrap: spool of copper cable
             go = FloatingRoot("Salvage_CableCoil", 1f, GameLayers.Salvage);
-            Prim(go.transform, "Coil", PrimitiveType.Cylinder, Vector3.zero, new Vector3(0.2f, 0.03f, 0.2f), M("Copper"), true);
-            Prim(go.transform, "Hub", PrimitiveType.Cylinder, Vector3.zero, new Vector3(0.08f, 0.04f, 0.08f), M("Cable"));
+            t = go.transform;
+            go.AddComponent<BoxCollider>().size = new Vector3(0.23f, 0.09f, 0.23f);
+            for (int i = 0; i < 3; i++) Part(t, "Winding", Torus(0.078f, 0.016f), new Vector3(0, -0.026f + i * 0.026f, 0), M("Copper"));
+            Part(t, "Hub", Tube(0.05f, 0.09f), Vector3.zero, M("Rubber"));
+            Part(t, "Flange Top", Tube(0.108f, 0.007f, 18), new Vector3(0, 0.043f, 0), M("Steel"));
+            Part(t, "Flange Bottom", Tube(0.108f, 0.007f, 18), new Vector3(0, -0.043f, 0), M("Steel"));
+            Part(t, "Loose End", Tube(0.008f, 0.09f, 6), new Vector3(0.11f, 0.02f, 0.03f), M("Copper"), new Vector3(70, 20, 0));
             FinishSalvage(go, "scrap_cable_coil");
 
-            // Electronics: nav board
+            // Electronics: navigation board
             go = FloatingRoot("Salvage_NavBoard", 1.5f, GameLayers.Salvage);
-            Prim(go.transform, "Board", PrimitiveType.Cube, Vector3.zero, new Vector3(0.22f, 0.015f, 0.15f), M("Pcb"), true);
-            Prim(go.transform, "ChipA", PrimitiveType.Cube, new Vector3(-0.05f, 0.014f, 0.02f), new Vector3(0.05f, 0.012f, 0.05f), M("Chip"));
-            Prim(go.transform, "ChipB", PrimitiveType.Cube, new Vector3(0.05f, 0.014f, -0.03f), new Vector3(0.07f, 0.012f, 0.03f), M("Chip"));
-            Prim(go.transform, "Led", PrimitiveType.Cube, new Vector3(0.08f, 0.014f, 0.05f), new Vector3(0.012f, 0.01f, 0.012f), M("Led"));
+            t = go.transform;
+            go.AddComponent<BoxCollider>().size = new Vector3(0.25f, 0.05f, 0.17f);
+            CBox(t, "Board", Vector3.zero, new Vector3(0.24f, 0.008f, 0.16f), M("Pcb"), 0.002f);
+            CBox(t, "Processor", new Vector3(-0.05f, 0.012f, 0.015f), new Vector3(0.055f, 0.014f, 0.055f), M("Chip"), 0.003f);
+            for (int i = 0; i < 5; i++) CBox(t, "Heat Fin", new Vector3(-0.07f + i * 0.01f, 0.03f, 0.015f), new Vector3(0.004f, 0.022f, 0.05f), M("Steel"), 0.001f);
+            CBox(t, "Memory A", new Vector3(0.04f, 0.01f, -0.035f), new Vector3(0.07f, 0.01f, 0.022f), M("Chip"), 0.002f);
+            CBox(t, "Memory B", new Vector3(0.04f, 0.01f, -0.005f), new Vector3(0.07f, 0.01f, 0.022f), M("Chip"), 0.002f);
+            CBox(t, "Connector", new Vector3(0f, 0.008f, 0.07f), new Vector3(0.18f, 0.012f, 0.014f), M("Brass"), 0.002f);
+            for (int i = 0; i < 4; i++) Part(t, "Capacitor", Tube(0.008f, 0.022f, 8), new Vector3(0.075f + (i % 2) * 0.022f, 0.015f, 0.02f + (i / 2) * 0.024f), M("Chrome"));
+            CBox(t, "Led A", new Vector3(-0.1f, 0.008f, -0.06f), new Vector3(0.01f, 0.008f, 0.01f), M("Led"), 0.002f);
+            CBox(t, "Led B", new Vector3(-0.08f, 0.008f, -0.06f), new Vector3(0.01f, 0.008f, 0.01f), M("GlowRed"), 0.002f);
             FinishSalvage(go, "elec_nav_board");
 
             // Electronics: comms relay
             go = FloatingRoot("Salvage_CommsRelay", 2.5f, GameLayers.Salvage);
-            Prim(go.transform, "Body", PrimitiveType.Cube, Vector3.zero, new Vector3(0.16f, 0.12f, 0.2f), M("ToolBody"), true);
-            Prim(go.transform, "Panel", PrimitiveType.Cube, new Vector3(0, 0, -0.101f), new Vector3(0.12f, 0.08f, 0.004f), M("Pcb"));
-            Prim(go.transform, "Antenna", PrimitiveType.Cylinder, new Vector3(0.05f, 0.11f, 0.06f), new Vector3(0.012f, 0.05f, 0.012f), M("Chrome"));
-            Prim(go.transform, "Led", PrimitiveType.Cube, new Vector3(-0.04f, 0.03f, -0.104f), new Vector3(0.015f, 0.015f, 0.004f), M("Led"));
+            t = go.transform;
+            go.AddComponent<BoxCollider>().size = new Vector3(0.18f, 0.15f, 0.22f);
+            CBox(t, "Body", Vector3.zero, new Vector3(0.17f, 0.12f, 0.2f), M("ToolBody"), 0.014f);
+            CBox(t, "Front Panel", new Vector3(0, 0, -0.1f), new Vector3(0.14f, 0.09f, 0.008f), M("Steel"), 0.003f);
+            CBox(t, "Screen", new Vector3(-0.025f, 0.012f, -0.105f), new Vector3(0.07f, 0.04f, 0.003f), M("ScreenGlow"), 0.001f);
+            Part(t, "Knob A", Tube(0.012f, 0.012f, 10), new Vector3(0.04f, 0.02f, -0.108f), M("Brass"), new Vector3(90, 0, 0));
+            Part(t, "Knob B", Tube(0.012f, 0.012f, 10), new Vector3(0.04f, -0.015f, -0.108f), M("Brass"), new Vector3(90, 0, 0));
+            for (int i = 0; i < 5; i++) CBox(t, "Vent", new Vector3(0.086f, 0.03f - i * 0.015f, 0.01f), new Vector3(0.004f, 0.006f, 0.12f), M("Chip"), 0.001f);
+            Part(t, "Antenna", Tube(0.005f, 0.14f, 6), new Vector3(0.05f, 0.13f, 0.06f), M("Chrome"));
+            Part(t, "Antenna Base", Cone(0.014f, 0.006f, 0.02f), new Vector3(0.05f, 0.07f, 0.06f), M("Steel"));
+            CBox(t, "Handle", new Vector3(-0.02f, 0.075f, 0f), new Vector3(0.02f, 0.016f, 0.13f), M("PaintOrange"), 0.005f);
+            CBox(t, "Handle Post A", new Vector3(-0.02f, 0.066f, 0.055f), new Vector3(0.018f, 0.02f, 0.018f), M("Steel"), 0.003f);
+            CBox(t, "Handle Post B", new Vector3(-0.02f, 0.066f, -0.055f), new Vector3(0.018f, 0.02f, 0.018f), M("Steel"), 0.003f);
             FinishSalvage(go, "elec_comms_relay");
 
-            // Reactor component: bulky regulator core
+            // Reactor component: bulky regulator core in a protective cage
             go = FloatingRoot("Salvage_ReactorCore", 14f, GameLayers.Salvage);
-            Prim(go.transform, "Shell", PrimitiveType.Cylinder, Vector3.zero, new Vector3(0.26f, 0.2f, 0.26f), M("ReactorShell"), true);
-            Prim(go.transform, "Band", PrimitiveType.Cylinder, Vector3.zero, new Vector3(0.275f, 0.045f, 0.275f), M("ReactorGlow"));
-            Prim(go.transform, "CapTop", PrimitiveType.Cylinder, new Vector3(0, 0.21f, 0), new Vector3(0.2f, 0.015f, 0.2f), M("Chrome"));
-            Prim(go.transform, "CapBottom", PrimitiveType.Cylinder, new Vector3(0, -0.21f, 0), new Vector3(0.2f, 0.015f, 0.2f), M("Chrome"));
-            Prim(go.transform, "Handle", PrimitiveType.Cube, new Vector3(0, 0.25f, 0), new Vector3(0.16f, 0.02f, 0.03f), M("ToolAccent"), true);
+            t = go.transform;
+            var capsule = go.AddComponent<CapsuleCollider>();
+            capsule.radius = 0.15f;
+            capsule.height = 0.54f;
+            Part(t, "Shell", Lathe("ReactorCore", 18,
+                new Vector2(0.09f, -0.25f), new Vector2(0.145f, -0.25f), new Vector2(0.145f, -0.21f), new Vector2(0.118f, -0.19f),
+                new Vector2(0.118f, -0.075f), new Vector2(0.1f, -0.06f), new Vector2(0.1f, 0.06f), new Vector2(0.118f, 0.075f),
+                new Vector2(0.118f, 0.19f), new Vector2(0.145f, 0.21f), new Vector2(0.145f, 0.25f), new Vector2(0.09f, 0.25f)), Vector3.zero, M("ReactorShell"));
+            Part(t, "Glow Core", Tube(0.103f, 0.118f, 18), Vector3.zero, M("ReactorGlow"));
+            Part(t, "Ring A", Torus(0.122f, 0.01f), new Vector3(0, 0.13f, 0), M("Chrome"));
+            Part(t, "Ring B", Torus(0.122f, 0.01f), new Vector3(0, -0.13f, 0), M("Chrome"));
+            for (int i = 0; i < 4; i++)
+            {
+                float a = (i * 90f + 45f) * Mathf.Deg2Rad;
+                CBox(t, "Cage Bar", new Vector3(Mathf.Cos(a) * 0.138f, 0, Mathf.Sin(a) * 0.138f), new Vector3(0.016f, 0.44f, 0.016f), M("Steel"), 0.004f, new Vector3(0, -i * 90f - 45f, 0));
+            }
+            CBox(t, "Handle", new Vector3(0, 0.31f, 0), new Vector3(0.2f, 0.022f, 0.03f), M("PaintOrange"), 0.008f);
+            CBox(t, "Handle Post A", new Vector3(0.09f, 0.28f, 0), new Vector3(0.022f, 0.06f, 0.026f), M("Steel"), 0.005f);
+            CBox(t, "Handle Post B", new Vector3(-0.09f, 0.28f, 0), new Vector3(0.022f, 0.06f, 0.026f), M("Steel"), 0.005f);
+            CBox(t, "Warning Plate", new Vector3(0, 0.13f, -0.119f), new Vector3(0.07f, 0.04f, 0.004f), M("Hazard"), 0.001f);
             FinishSalvage(go, "reactor_regulator_core");
 
             // Novelty: the suspiciously expensive toaster
             go = FloatingRoot("Salvage_OrbitalToaster", 2f, GameLayers.Salvage);
-            Prim(go.transform, "Body", PrimitiveType.Cube, Vector3.zero, new Vector3(0.26f, 0.17f, 0.15f), M("Chrome"), true);
-            Prim(go.transform, "SlotA", PrimitiveType.Cube, new Vector3(0, 0.083f, 0.03f), new Vector3(0.19f, 0.008f, 0.025f), M("Chip"));
-            Prim(go.transform, "SlotB", PrimitiveType.Cube, new Vector3(0, 0.083f, -0.03f), new Vector3(0.19f, 0.008f, 0.025f), M("Chip"));
-            Prim(go.transform, "Toast", PrimitiveType.Cube, new Vector3(0.02f, 0.1f, 0.03f), new Vector3(0.12f, 0.09f, 0.018f), M("Toast"));
-            Prim(go.transform, "Lever", PrimitiveType.Cube, new Vector3(0.137f, 0.02f, 0), new Vector3(0.02f, 0.03f, 0.04f), M("ToolAccent"));
-            Prim(go.transform, "Dial", PrimitiveType.Cylinder, new Vector3(0, -0.03f, -0.078f), new Vector3(0.04f, 0.004f, 0.04f), M("Chip"), false, new Vector3(90, 0, 0));
-            Prim(go.transform, "Badge", PrimitiveType.Cube, new Vector3(-0.07f, 0.04f, -0.076f), new Vector3(0.06f, 0.02f, 0.003f), M("GlowWarm"));
+            t = go.transform;
+            go.AddComponent<BoxCollider>().size = new Vector3(0.28f, 0.2f, 0.17f);
+            CBox(t, "Body", Vector3.zero, new Vector3(0.26f, 0.16f, 0.15f), M("Chrome"), 0.03f);
+            CBox(t, "Base", new Vector3(0, -0.085f, 0), new Vector3(0.265f, 0.02f, 0.155f), M("Rubber"), 0.006f);
+            CBox(t, "Top Plate", new Vector3(0, 0.079f, 0), new Vector3(0.21f, 0.006f, 0.1f), M("Steel"), 0.002f);
+            CBox(t, "Slot A", new Vector3(0, 0.082f, 0.026f), new Vector3(0.18f, 0.004f, 0.022f), M("Chip"), 0.001f);
+            CBox(t, "Slot B", new Vector3(0, 0.082f, -0.026f), new Vector3(0.18f, 0.004f, 0.022f), M("Chip"), 0.001f);
+            CBox(t, "Toast", new Vector3(0.015f, 0.105f, 0.026f), new Vector3(0.12f, 0.085f, 0.016f), M("Toast"), 0.006f, new Vector3(0, 0, 4));
+            CBox(t, "Lever Track", new Vector3(0.132f, 0f, 0), new Vector3(0.004f, 0.1f, 0.012f), M("Chip"), 0.001f);
+            CBox(t, "Lever", new Vector3(0.142f, 0.03f, 0), new Vector3(0.022f, 0.016f, 0.045f), M("PaintOrange"), 0.005f);
+            Part(t, "Dial", Lathe("ToasterDial", 14, new Vector2(0.024f, 0f), new Vector2(0.02f, 0.012f), new Vector2(0.012f, 0.016f)), new Vector3(-0.07f, -0.03f, -0.075f), M("Brass"), new Vector3(-90, 0, 0));
+            CBox(t, "Badge", new Vector3(0.04f, 0.035f, -0.0765f), new Vector3(0.08f, 0.022f, 0.003f), M("GlowWarm"), 0.001f);
+            foreach (float x in new[] { -0.1f, 0.1f })
+                foreach (float z in new[] { -0.055f, 0.055f })
+                    Part(t, "Foot", Tube(0.012f, 0.012f, 8), new Vector3(x, -0.1f, z), M("Rubber"));
+            Part(t, "Cord Stub", Tube(0.007f, 0.06f, 6), new Vector3(-0.08f, -0.05f, 0.09f), M("Rubber"), new Vector3(70, 0, 0));
             FinishSalvage(go, "novelty_orbital_toaster");
 
             // Tutorial practice scrap (worth nothing)
             go = FloatingRoot("Salvage_TrainingScrap", 1f, GameLayers.Salvage);
-            Prim(go.transform, "Plate", PrimitiveType.Cube, Vector3.zero, new Vector3(0.2f, 0.03f, 0.14f), M("ScrapTraining"), true);
+            t = go.transform;
+            go.AddComponent<BoxCollider>().size = new Vector3(0.21f, 0.04f, 0.15f);
+            CBox(t, "Plate", Vector3.zero, new Vector3(0.2f, 0.028f, 0.14f), M("ScrapTraining"), 0.006f);
+            CBox(t, "Grip Bar", new Vector3(0, 0.022f, 0), new Vector3(0.12f, 0.014f, 0.02f), M("Steel"), 0.004f);
             s_TrainingScrapPrefab = FinishSalvage(go, null, true);
 
             // Worthless junk: good for throwing as a distraction.
             go = FloatingRoot("Junk_Can", 0.6f, GameLayers.Salvage);
-            Prim(go.transform, "Can", PrimitiveType.Cylinder, Vector3.zero, new Vector3(0.09f, 0.07f, 0.09f), M("Junk"), true);
+            t = go.transform;
+            var canCollider = go.AddComponent<CapsuleCollider>();
+            canCollider.radius = 0.048f;
+            canCollider.height = 0.15f;
+            Part(t, "Can", Lathe("Can", 14, new Vector2(0.04f, -0.07f), new Vector2(0.046f, -0.066f), new Vector2(0.046f, 0.066f), new Vector2(0.04f, 0.07f)), Vector3.zero, M("Junk"));
+            Part(t, "Label", Tube(0.0468f, 0.07f, 14), Vector3.zero, M("PaintOrange"));
+            Part(t, "Rim", Torus(0.043f, 0.004f, 14, 6), new Vector3(0, 0.068f, 0), M("Steel"));
             MakeGrabbable(go, false, out _, out _, out _);
             go.AddComponent<FloatingDebris>();
             s_JunkCanPrefab = SavePrefab(go, go.name);
 
             go = FloatingRoot("Junk_Crate", 2.5f, GameLayers.Salvage);
-            Prim(go.transform, "Crate", PrimitiveType.Cube, Vector3.zero, new Vector3(0.28f, 0.22f, 0.22f), M("Container"), true);
-            Prim(go.transform, "Strap", PrimitiveType.Cube, Vector3.zero, new Vector3(0.05f, 0.225f, 0.225f), M("Trim"));
+            t = go.transform;
+            go.AddComponent<BoxCollider>().size = new Vector3(0.29f, 0.23f, 0.23f);
+            CBox(t, "Crate", Vector3.zero, new Vector3(0.28f, 0.22f, 0.22f), M("Container"), 0.012f);
+            CBox(t, "Strap A", new Vector3(-0.07f, 0, 0), new Vector3(0.03f, 0.226f, 0.226f), M("Rubber"), 0.004f);
+            CBox(t, "Strap B", new Vector3(0.07f, 0, 0), new Vector3(0.03f, 0.226f, 0.226f), M("Rubber"), 0.004f);
+            CBox(t, "Lid Seam", new Vector3(0, 0.06f, 0), new Vector3(0.284f, 0.006f, 0.224f), M("Chip"), 0.001f);
+            CBox(t, "Label", new Vector3(0, -0.02f, -0.111f), new Vector3(0.09f, 0.05f, 0.003f), M("PaintWhite"), 0.001f);
             MakeGrabbable(go, false, out _, out _, out _);
             go.AddComponent<FloatingDebris>();
             s_JunkCratePrefab = SavePrefab(go, go.name);
         }
 
-        // ------------------------------------------------------------------ drone
+        // ------------------------------------------------------------------ the creature
 
+        /// <summary>
+        /// What is left of maintenance unit JANITOR-7: a hunched black carapace with too many eyes, a
+        /// jaw full of scavenged spikes, four long clawed limbs and trailing cables. No gore.
+        /// </summary>
         static GameObject BuildDronePrefab()
         {
             var go = new GameObject("Drone_Janitor7") { layer = GameLayers.Enemy };
             var rb = go.AddComponent<Rigidbody>();
             rb.isKinematic = true;
             rb.useGravity = false;
-            go.AddComponent<SphereCollider>().radius = 0.28f;
+            go.AddComponent<SphereCollider>().radius = 0.3f;
 
-            Prim(go.transform, "Body", PrimitiveType.Sphere, Vector3.zero, new Vector3(0.5f, 0.42f, 0.5f), M("DroneBody"));
-            Prim(go.transform, "Ring", PrimitiveType.Cylinder, Vector3.zero, new Vector3(0.62f, 0.02f, 0.62f), M("Hazard"));
-            var eye = Prim(go.transform, "Eye", PrimitiveType.Sphere, new Vector3(0, 0.02f, 0.21f), new Vector3(0.14f, 0.14f, 0.1f), M("DroneEye"));
-            Prim(go.transform, "ArmL", PrimitiveType.Cube, new Vector3(-0.18f, -0.3f, 0.05f), new Vector3(0.03f, 0.28f, 0.03f), M("Trim"));
-            Prim(go.transform, "ArmR", PrimitiveType.Cube, new Vector3(0.18f, -0.3f, 0.05f), new Vector3(0.03f, 0.28f, 0.03f), M("Trim"));
-            Prim(go.transform, "Brush", PrimitiveType.Cube, new Vector3(0, -0.45f, 0.05f), new Vector3(0.42f, 0.05f, 0.08f), M("ToolAccent"));
-            var sign = Prim(go.transform, "Sign", PrimitiveType.Cube, new Vector3(0, -0.02f, -0.255f), new Vector3(0.2f, 0.12f, 0.01f), M("ButtonYellow"));
-            Text(go.transform, "SignText", "CAUTION\nWET FLOOR", new Vector3(0, -0.02f, -0.262f), Quaternion.identity, 0.3f, new Vector2(0.2f, 0.12f), Color.black).fontStyle = FontStyles.Bold;
+            var body = Empty(go.transform, "Body", Vector3.zero).transform;
 
-            var eyePoint = Empty(go.transform, "Eye Point", new Vector3(0, 0.02f, 0.3f));
-            var lightGo = Empty(go.transform, "Eye Light", new Vector3(0, 0.02f, 0.27f));
+            // Hunched torso
+            CBox(body, "Thorax", new Vector3(0, 0.05f, -0.04f), new Vector3(0.36f, 0.28f, 0.5f), M("Carapace"), 0.09f, new Vector3(-12, 0, 0));
+            CBox(body, "Abdomen", new Vector3(0, 0.15f, -0.38f), new Vector3(0.28f, 0.22f, 0.4f), M("Carapace"), 0.08f, new Vector3(-30, 0, 0));
+            CBox(body, "Underbelly", new Vector3(0, -0.09f, -0.08f), new Vector3(0.22f, 0.08f, 0.36f), M("Sinew"), 0.03f, new Vector3(-10, 0, 0));
+            for (int i = 0; i < 6; i++)
+            {
+                float z = 0.16f - i * 0.11f;
+                float y = 0.2f + i * 0.035f;
+                CBox(body, "Spine Plate", new Vector3(0, y, z), new Vector3(0.3f - i * 0.03f, 0.03f, 0.08f), M("Claw"), 0.012f, new Vector3(-18 - i * 5f, 0, 0));
+                Part(body, "Spine Spike", Cone(0.018f, 0f, 0.11f + (i % 2) * 0.05f, 6), new Vector3(0, y + 0.06f, z - 0.01f), M("Bone"), new Vector3(-25 - i * 6f, 0, 0));
+            }
+            for (int i = 0; i < 3; i++)
+            {
+                foreach (float side in new[] { -1f, 1f })
+                    CBox(body, "Rib", new Vector3(side * 0.185f, 0.02f, 0.1f - i * 0.12f), new Vector3(0.022f, 0.22f, 0.035f), M("Bone"), 0.007f, new Vector3(0, 0, side * 14f));
+            }
+
+            // The last piece of its old casing, hanging off one side.
+            var casing = Empty(body, "Old Casing", new Vector3(-0.2f, 0.05f, -0.3f), Quaternion.Euler(8f, -80f, 18f)).transform;
+            CBox(casing, "Panel", Vector3.zero, new Vector3(0.24f, 0.15f, 0.012f), M("PaintWhite"), 0.004f);
+            CBox(casing, "Stripe", new Vector3(0, -0.055f, -0.007f), new Vector3(0.24f, 0.03f, 0.002f), M("Hazard"), 0.0005f);
+            Text(casing, "Label", "JANITOR-7", new Vector3(0, 0.02f, -0.008f), Quaternion.identity, 0.32f, new Vector2(0.22f, 0.06f), new Color(0.25f, 0.25f, 0.25f)).fontStyle = FontStyles.Bold;
+
+            // Head: low and forward, a cluster of eyes over a hinged jaw.
+            var head = Empty(body, "Head", new Vector3(0, -0.03f, 0.27f)).transform;
+            CBox(head, "Skull", new Vector3(0, 0.02f, 0.02f), new Vector3(0.22f, 0.15f, 0.24f), M("Carapace"), 0.055f);
+            CBox(head, "Brow", new Vector3(0, 0.085f, 0.1f), new Vector3(0.24f, 0.04f, 0.1f), M("Claw"), 0.014f, new Vector3(18, 0, 0));
+            var mainEye = Prim(head, "Eye Main", PrimitiveType.Sphere, new Vector3(0, 0.03f, 0.135f), new Vector3(0.06f, 0.06f, 0.035f), M("CreatureEye"));
+            var extraEyes = new List<Renderer>();
+            Vector3[] eyeOffsets =
+            {
+                new Vector3(-0.055f, 0.045f, 0.128f), new Vector3(0.055f, 0.045f, 0.128f), new Vector3(-0.075f, 0.005f, 0.12f),
+                new Vector3(0.08f, 0.012f, 0.118f), new Vector3(-0.03f, -0.012f, 0.134f), new Vector3(0.035f, 0.072f, 0.12f),
+            };
+            float[] eyeSizes = { 0.03f, 0.026f, 0.02f, 0.022f, 0.018f, 0.016f };
+            for (int i = 0; i < eyeOffsets.Length; i++)
+                extraEyes.Add(Prim(head, "Eye " + i, PrimitiveType.Sphere, eyeOffsets[i], new Vector3(eyeSizes[i], eyeSizes[i], eyeSizes[i] * 0.6f), M("CreatureEye")).GetComponent<MeshRenderer>());
+            for (int i = 0; i < 6; i++)
+                Part(head, "Upper Fang", Cone(0.011f, 0f, 0.05f + (i % 3) * 0.012f, 6), new Vector3(-0.075f + i * 0.03f, -0.07f, 0.125f - Mathf.Abs(i - 2.5f) * 0.008f), M("Bone"), new Vector3(180 + (i - 2.5f) * 4f, 0, 0));
+            var jaw = Empty(head, "Jaw", new Vector3(0, -0.07f, -0.02f)).transform;
+            CBox(jaw, "Jaw Plate", new Vector3(0, -0.03f, 0.08f), new Vector3(0.19f, 0.035f, 0.2f), M("Carapace"), 0.014f);
+            for (int i = 0; i < 5; i++)
+                Part(jaw, "Lower Fang", Cone(0.011f, 0f, 0.045f + (i % 2) * 0.014f, 6), new Vector3(-0.065f + i * 0.0325f, 0.01f, 0.165f), M("Bone"));
+            foreach (float side in new[] { -1f, 1f })
+                Part(head, "Mandible", Cone(0.02f, 0f, 0.2f, 6), new Vector3(side * 0.12f, -0.05f, 0.14f), M("Claw"), new Vector3(105, side * 28f, 0));
+
+            // Four long limbs: upper arm, elbow, forearm, three claws.
+            var shoulders = new List<Transform>();
+            var elbows = new List<Transform>();
+            Vector3[] shoulderPos = { new Vector3(-0.19f, 0.03f, 0.12f), new Vector3(0.19f, 0.03f, 0.12f), new Vector3(-0.17f, 0.08f, -0.2f), new Vector3(0.17f, 0.08f, -0.2f) };
+            for (int i = 0; i < 4; i++)
+            {
+                float side = i % 2 == 0 ? -1f : 1f;
+                bool front = i < 2;
+                var shoulder = Empty(body, "Shoulder " + i, shoulderPos[i], Quaternion.Euler(front ? -22f : 18f, 0f, side * (front ? 30f : 40f))).transform;
+                Prim(shoulder, "Joint", PrimitiveType.Sphere, Vector3.zero, Vector3.one * 0.075f, M("Sinew"));
+                CBox(shoulder, "Upper Arm", new Vector3(0, -0.2f, 0), new Vector3(0.04f, 0.4f, 0.04f), M("Carapace"), 0.012f);
+                Part(shoulder, "Tendon", Tube(0.007f, 0.36f, 6), new Vector3(0.022f, -0.2f, 0.01f), M("Sinew"));
+                var elbow = Empty(shoulder, "Elbow", new Vector3(0, -0.4f, 0), Quaternion.Euler(front ? 30f : 22f, 0, 0)).transform;
+                Prim(elbow, "Joint", PrimitiveType.Sphere, Vector3.zero, Vector3.one * 0.06f, M("Sinew"));
+                CBox(elbow, "Forearm", new Vector3(0, -0.22f, 0), new Vector3(0.03f, 0.44f, 0.03f), M("Bone"), 0.009f);
+                for (int c = 0; c < 3; c++)
+                    Part(elbow, "Claw", Cone(0.013f, 0f, 0.16f, 6), new Vector3((c - 1) * 0.022f, -0.5f, 0.01f), M("Claw"), new Vector3(180 - 14f, 0, (c - 1) * 16f));
+                shoulders.Add(shoulder);
+                elbows.Add(elbow);
+            }
+
+            // Trailing cables under the abdomen.
+            var tendrils = new List<Transform>();
+            for (int i = 0; i < 5; i++)
+            {
+                Transform parent = body;
+                Vector3 pos = new Vector3(-0.1f + i * 0.05f, -0.03f + (i % 2) * 0.02f, -0.32f - (i % 3) * 0.06f);
+                int segments = 3 + i % 2;
+                for (int sgm = 0; sgm < segments; sgm++)
+                {
+                    var pivot = Empty(parent, "Cable " + i + "." + sgm, pos).transform;
+                    Part(pivot, "Segment", Tube(0.009f - sgm * 0.0015f, 0.17f, 6), new Vector3(0, -0.085f, 0), M(i % 2 == 0 ? "Rubber" : "Sinew"));
+                    tendrils.Add(pivot);
+                    parent = pivot;
+                    pos = new Vector3(0, -0.17f, 0);
+                }
+            }
+
+            var eyePoint = Empty(go.transform, "Eye Point", new Vector3(0, 0f, 0.42f));
+            var lightGo = Empty(head, "Eye Light", new Vector3(0, 0.03f, 0.16f));
             var light = lightGo.AddComponent<Light>();
             light.type = LightType.Spot;
-            light.spotAngle = 70f;
-            light.innerSpotAngle = 40f;
+            light.spotAngle = 80f;
+            light.innerSpotAngle = 35f;
             light.range = 9f;
             light.intensity = 3f;
             light.shadows = LightShadows.None;
-            light.color = new Color(1f, 0.6f, 0.1f);
-
-            var glyph = Text(go.transform, "Glyph", "", new Vector3(0, 0.45f, 0), Quaternion.identity, 3f, new Vector2(0.5f, 0.5f), Color.white);
-            glyph.fontStyle = FontStyles.Bold;
-            glyph.transform.parent.gameObject.AddComponent<Billboard>();
+            light.color = new Color(0.75f, 0.12f, 0.05f);
 
             var hum = Empty(go.transform, "Hum", Vector3.zero).AddComponent<AudioSource>();
-            ConfigureSpatial(hum, s_Audio != null ? s_Audio.droneHum : null, true, 0.55f, 1.5f, 16f);
+            ConfigureSpatial(hum, s_Audio != null ? s_Audio.droneHum : null, true, 0.7f, 1.5f, 17f);
             var voice = Empty(go.transform, "Voice", Vector3.zero).AddComponent<AudioSource>();
-            ConfigureSpatial(voice, null, true, 0.75f, 2f, 26f);
+            ConfigureSpatial(voice, null, true, 0.8f, 2f, 26f);
 
             var drone = go.AddComponent<EnemyDrone>();
             drone.eye = eyePoint.transform;
             drone.eyeLight = light;
-            drone.eyeRenderer = eye.GetComponent<MeshRenderer>();
-            drone.glyph = glyph;
+            drone.eyeRenderer = mainEye.GetComponent<MeshRenderer>();
+            drone.extraEyes = extraEyes.ToArray();
             drone.hum = hum;
             drone.voice = voice;
+            drone.hoverHeight = 1.45f;
+
+            var animator = go.AddComponent<CreatureAnimator>();
+            animator.drone = drone;
+            animator.body = body;
+            animator.head = head;
+            animator.jaw = jaw;
+            animator.shoulders = shoulders.ToArray();
+            animator.elbows = elbows.ToArray();
+            animator.tendrils = tendrils.ToArray();
             return SavePrefab(go, go.name);
         }
 
@@ -309,12 +464,24 @@ namespace TrashAstronauts.EditorTools
         {
             var go = ToolRoot("Tool_Flashlight");
             go.transform.SetParent(parent, false);
-            var body = Prim(go.transform, "Body", PrimitiveType.Cylinder, new Vector3(0, 0, 0.0f), new Vector3(0.038f, 0.075f, 0.038f), M("ToolBody"), true, new Vector3(90, 0, 0));
-            Prim(go.transform, "Head", PrimitiveType.Cylinder, new Vector3(0, 0, 0.09f), new Vector3(0.058f, 0.02f, 0.058f), M("ToolAccent"), false, new Vector3(90, 0, 0));
-            var lens = Prim(go.transform, "Lens", PrimitiveType.Cylinder, new Vector3(0, 0, 0.111f), new Vector3(0.048f, 0.002f, 0.048f), M("Lens"), false, new Vector3(90, 0, 0));
+            Transform t = go.transform;
+            var col = go.AddComponent<CapsuleCollider>();
+            col.direction = 2;
+            col.radius = 0.028f;
+            col.height = 0.24f;
+            col.center = new Vector3(0, 0, 0.02f);
+            var x90 = new Vector3(90, 0, 0);
+            Part(t, "Body", Tube(0.02f, 0.15f), new Vector3(0, 0, -0.005f), M("ToolBody"), x90);
+            for (int i = 0; i < 4; i++) Part(t, "Grip Ring", Torus(0.0205f, 0.0035f, 14, 6), new Vector3(0, 0, -0.055f + i * 0.022f), M("Rubber"), x90);
+            Part(t, "Tail Cap", Tube(0.022f, 0.014f), new Vector3(0, 0, -0.087f), M("Steel"), x90);
+            Part(t, "Head", Cone(0.021f, 0.034f, 0.045f, 14), new Vector3(0, 0, 0.092f), M("PaintOrange"), x90);
+            Part(t, "Bezel", Tube(0.036f, 0.014f, 16), new Vector3(0, 0, 0.121f), M("Steel"), x90);
+            var lens = Part(t, "Lens", Tube(0.03f, 0.003f, 16), new Vector3(0, 0, 0.128f), M("Lens"), x90);
+            CBox(t, "Switch", new Vector3(0, 0.022f, 0.02f), new Vector3(0.012f, 0.008f, 0.024f), M("PaintOrange"), 0.003f);
+            CBox(t, "Clip", new Vector3(0, -0.024f, -0.02f), new Vector3(0.01f, 0.004f, 0.08f), M("Steel"), 0.0015f);
             var grab = ToolGrab(go);
 
-            var lightGo = Empty(go.transform, "Beam", new Vector3(0, 0, 0.115f));
+            var lightGo = Empty(t, "Beam", new Vector3(0, 0, 0.132f));
             var light = lightGo.AddComponent<Light>();
             light.type = LightType.Spot;
             light.spotAngle = 62f;
@@ -336,14 +503,25 @@ namespace TrashAstronauts.EditorTools
         {
             var go = ToolRoot("Tool_Scanner");
             go.transform.SetParent(parent, false);
-            Prim(go.transform, "Body", PrimitiveType.Cube, new Vector3(0, 0, 0.02f), new Vector3(0.07f, 0.035f, 0.16f), M("ToolBody"), true);
-            Prim(go.transform, "Dish", PrimitiveType.Cylinder, new Vector3(0, 0, 0.105f), new Vector3(0.07f, 0.006f, 0.07f), M("ToolAccent"), false, new Vector3(90, 0, 0));
+            Transform t = go.transform;
+            var col = go.AddComponent<BoxCollider>();
+            col.size = new Vector3(0.08f, 0.09f, 0.2f);
+            col.center = new Vector3(0, -0.01f, 0.02f);
+            CBox(t, "Body", new Vector3(0, 0, 0.02f), new Vector3(0.07f, 0.038f, 0.16f), M("ToolBody"), 0.01f);
+            CBox(t, "Grip", new Vector3(0, -0.05f, -0.035f), new Vector3(0.034f, 0.085f, 0.042f), M("Rubber"), 0.01f, new Vector3(-14, 0, 0));
+            CBox(t, "Trigger Guard", new Vector3(0, -0.035f, 0.005f), new Vector3(0.012f, 0.008f, 0.05f), M("Steel"), 0.002f);
+            CBox(t, "Side Stripe L", new Vector3(-0.0355f, 0, 0.02f), new Vector3(0.002f, 0.014f, 0.12f), M("Hazard"), 0.0005f);
+            CBox(t, "Side Stripe R", new Vector3(0.0355f, 0, 0.02f), new Vector3(0.002f, 0.014f, 0.12f), M("Hazard"), 0.0005f);
+            Part(t, "Dish", Lathe("ScannerDish", 16, new Vector2(0.012f, 0f), new Vector2(0.044f, 0.03f), new Vector2(0.047f, 0.03f), new Vector2(0.016f, -0.004f)), new Vector3(0, 0, 0.1f), M("PaintOrange"), new Vector3(90, 0, 0));
+            Part(t, "Emitter Pin", Cone(0.006f, 0.002f, 0.035f, 8), new Vector3(0, 0, 0.125f), M("Chrome"), new Vector3(90, 0, 0));
+            Part(t, "Antenna", Tube(0.003f, 0.07f, 6), new Vector3(0.028f, 0.05f, -0.04f), M("Chrome"));
             var grab = ToolGrab(go);
 
-            var screenRoot = Empty(go.transform, "Screen", new Vector3(0, 0.05f, -0.01f), Quaternion.Euler(40f, 0f, 0f));
-            Prim(screenRoot.transform, "Back", PrimitiveType.Cube, new Vector3(0, 0, 0.004f), new Vector3(0.12f, 0.075f, 0.006f), M("Screen"));
+            var screenRoot = Empty(t, "Screen", new Vector3(0, 0.052f, -0.01f), Quaternion.Euler(40f, 0f, 0f));
+            CBox(screenRoot.transform, "Housing", new Vector3(0, 0, 0.006f), new Vector3(0.13f, 0.085f, 0.012f), M("ToolBody"), 0.004f);
+            Prim(screenRoot.transform, "Glass", PrimitiveType.Cube, new Vector3(0, 0, 0.0005f), new Vector3(0.12f, 0.075f, 0.002f), M("Screen"));
             var text = Text(screenRoot.transform, "Text", "SCANNER\nSTANDBY", new Vector3(0, 0, -0.001f), Quaternion.identity, 0.085f, new Vector2(0.115f, 0.07f), new Color(0.5f, 1f, 0.8f));
-            var emitter = Empty(go.transform, "Emitter", new Vector3(0, 0, 0.11f));
+            var emitter = Empty(t, "Emitter", new Vector3(0, 0, 0.13f));
 
             var tool = go.AddComponent<ScannerTool>();
             tool.toolName = "Scanner";
@@ -357,29 +535,42 @@ namespace TrashAstronauts.EditorTools
         {
             var go = ToolRoot("Tool_PlasmaCutter");
             go.transform.SetParent(parent, false);
-            Prim(go.transform, "Body", PrimitiveType.Cube, new Vector3(0, 0, 0.03f), new Vector3(0.05f, 0.06f, 0.18f), M("ToolBody"), true);
-            Prim(go.transform, "Tank", PrimitiveType.Cylinder, new Vector3(0, -0.045f, 0.0f), new Vector3(0.04f, 0.05f, 0.04f), M("ToolAccent"), false, new Vector3(90, 0, 0));
-            Prim(go.transform, "Nozzle", PrimitiveType.Cylinder, new Vector3(0, 0, 0.14f), new Vector3(0.022f, 0.03f, 0.022f), M("Chrome"), false, new Vector3(90, 0, 0));
+            Transform t = go.transform;
+            var col = go.AddComponent<BoxCollider>();
+            col.size = new Vector3(0.06f, 0.12f, 0.24f);
+            col.center = new Vector3(0, -0.02f, 0.04f);
+            var x90 = new Vector3(90, 0, 0);
+            CBox(t, "Body", new Vector3(0, 0, 0.03f), new Vector3(0.05f, 0.06f, 0.17f), M("ToolBody"), 0.012f);
+            CBox(t, "Grip", new Vector3(0, -0.06f, -0.03f), new Vector3(0.034f, 0.09f, 0.044f), M("Rubber"), 0.01f, new Vector3(-12, 0, 0));
+            Part(t, "Fuel Tank", Lathe("CutterTank", 12, new Vector2(0f, -0.055f), new Vector2(0.018f, -0.05f), new Vector2(0.022f, -0.035f), new Vector2(0.022f, 0.035f), new Vector2(0.018f, 0.05f), new Vector2(0f, 0.055f)),
+                new Vector3(0, -0.05f, 0.06f), M("PaintOrange"), x90);
+            Part(t, "Barrel", Tube(0.014f, 0.06f, 12), new Vector3(0, 0, 0.14f), M("Steel"), x90);
+            for (int i = 0; i < 4; i++) Part(t, "Heat Fin", Tube(0.022f, 0.004f, 12), new Vector3(0, 0, 0.122f + i * 0.012f), M("Steel"), x90);
+            Part(t, "Nozzle", Cone(0.014f, 0.006f, 0.04f, 12), new Vector3(0, 0, 0.19f), M("Brass"), x90);
+            Part(t, "Guard Ring", Torus(0.026f, 0.003f, 14, 6), new Vector3(0, 0, 0.165f), M("Chrome"), x90);
+            CBox(t, "Top Rail", new Vector3(0, 0.034f, 0.04f), new Vector3(0.016f, 0.008f, 0.12f), M("Steel"), 0.002f);
+            CBox(t, "Hazard Band", new Vector3(0, 0, 0.1f), new Vector3(0.052f, 0.062f, 0.012f), M("Hazard"), 0.002f);
             var grab = ToolGrab(go);
 
-            var tip = Empty(go.transform, "Tip", new Vector3(0, 0, 0.215f));
-            var flame = Prim(go.transform, "Flame", PrimitiveType.Capsule, new Vector3(0, 0, 0.195f), new Vector3(0.014f, 0.03f, 0.014f), M("Flame"), false, new Vector3(90, 0, 0));
-            var flameLight = Empty(go.transform, "Flame Light", new Vector3(0, 0, 0.2f)).AddComponent<Light>();
+            var tip = Empty(t, "Tip", new Vector3(0, 0, 0.225f));
+            var flame = Part(t, "Flame", Cone(0.007f, 0.001f, 0.05f, 8), new Vector3(0, 0, 0.228f), M("Flame"), x90);
+            var flameLight = Empty(t, "Flame Light", new Vector3(0, 0, 0.21f)).AddComponent<Light>();
             flameLight.type = LightType.Point;
             flameLight.range = 2.2f;
             flameLight.intensity = 2.5f;
             flameLight.color = new Color(0.5f, 0.8f, 1f);
             flameLight.shadows = LightShadows.None;
 
-            var readoutRoot = Empty(go.transform, "Readout", new Vector3(0, 0.055f, -0.03f), Quaternion.Euler(40f, 0f, 0f));
-            Prim(readoutRoot.transform, "Back", PrimitiveType.Cube, new Vector3(0, 0, 0.004f), new Vector3(0.1f, 0.06f, 0.006f), M("Screen"));
+            var readoutRoot = Empty(t, "Readout", new Vector3(0, 0.058f, -0.03f), Quaternion.Euler(40f, 0f, 0f));
+            CBox(readoutRoot.transform, "Housing", new Vector3(0, 0, 0.006f), new Vector3(0.108f, 0.068f, 0.012f), M("ToolBody"), 0.004f);
+            Prim(readoutRoot.transform, "Glass", PrimitiveType.Cube, new Vector3(0, 0, 0.0005f), new Vector3(0.1f, 0.06f, 0.002f), M("Screen"));
             var readout = Text(readoutRoot.transform, "Text", "HEAT 0%\nREADY", new Vector3(0, 0.006f, -0.001f), Quaternion.identity, 0.085f, new Vector2(0.095f, 0.04f), new Color(1f, 0.85f, 0.5f));
             // Heat bar: a pivot at the left edge scaled along X.
             var barPivot = Empty(readoutRoot.transform, "Heat Bar", new Vector3(-0.045f, -0.022f, -0.001f));
             var barScale = Empty(barPivot.transform, "Scale", Vector3.zero);
             var bar = Prim(barScale.transform, "Fill", PrimitiveType.Cube, new Vector3(0.045f, 0, 0), new Vector3(0.09f, 0.008f, 0.002f), M("GlowWhite"));
 
-            var sparksGo = Empty(go.transform, "Sparks", new Vector3(0, 0, 0.215f));
+            var sparksGo = Empty(t, "Sparks", new Vector3(0, 0, 0.225f));
             var sparks = sparksGo.AddComponent<ParticleSystem>();
             var main = sparks.main;
             main.playOnAwake = false;
@@ -400,7 +591,7 @@ namespace TrashAstronauts.EditorTools
             psr.sharedMaterial = M("Spark");
             Cheap(psr);
 
-            var loop = Empty(go.transform, "Loop Audio", new Vector3(0, 0, 0.15f)).AddComponent<AudioSource>();
+            var loop = Empty(t, "Loop Audio", new Vector3(0, 0, 0.15f)).AddComponent<AudioSource>();
             ConfigureSpatial(loop, s_Audio != null ? s_Audio.cutterLoop : null, true, 0.6f, 0.5f, 16f);
 
             var tool = go.AddComponent<PlasmaCutterTool>();
@@ -425,8 +616,8 @@ namespace TrashAstronauts.EditorTools
         {
             var root = Empty(parent, name, localPos, localRot, GameLayers.Default);
             root.transform.localScale = Vector3.one * scale;
-            Prim(root.transform, "Back", PrimitiveType.Cube, new Vector3(0, 0, 0.012f), new Vector3(0.56f, 0.42f, 0.02f), M("Screen"));
-            var summary = Text(root.transform, "Summary", "SUIT SETTINGS", new Vector3(0, 0.125f, -0.002f), Quaternion.identity, 0.26f, new Vector2(0.52f, 0.14f), new Color(0.75f, 0.95f, 1f));
+            Prim(root.transform, "Back", PrimitiveType.Cube, new Vector3(0, -0.03f, 0.012f), new Vector3(0.56f, 0.54f, 0.02f), M("Screen"));
+            var summary = Text(root.transform, "Summary", "SUIT SETTINGS", new Vector3(0, 0.15f, -0.002f), Quaternion.identity, 0.22f, new Vector2(0.52f, 0.16f), new Color(0.75f, 0.95f, 1f));
 
             var size = new Vector2(0.24f, 0.07f);
             var panel = root.AddComponent<SettingsPanel>();
@@ -435,8 +626,9 @@ namespace TrashAstronauts.EditorTools
             panel.heightDown = Button(root.transform, "Height Down", new Vector3(0.13f, 0.02f, 0), Quaternion.identity, size, "HEIGHT -", M("ButtonBlue"), 0.22f);
             panel.snapTurn = Button(root.transform, "Snap Turn", new Vector3(-0.13f, -0.065f, 0), Quaternion.identity, size, "TURN 45", M("ButtonBlue"), 0.22f);
             panel.handedness = Button(root.transform, "Handedness", new Vector3(0.13f, -0.065f, 0), Quaternion.identity, size, "HAND: RIGHT", M("ButtonBlue"), 0.22f);
-            panel.unstuck = Button(root.transform, "Unstuck", new Vector3(-0.13f, -0.15f, 0), Quaternion.identity, size, "UNSTUCK", M("ButtonAmber"), 0.22f);
-            panel.recallTools = Button(root.transform, "Recall Tools", new Vector3(0.13f, -0.15f, 0), Quaternion.identity, size, "RECALL TOOLS", M("ButtonAmber"), 0.22f);
+            panel.drift = Button(root.transform, "Drift", new Vector3(-0.13f, -0.15f, 0), Quaternion.identity, size, "DRIFT: ON", M("ButtonBlue"), 0.22f);
+            panel.unstuck = Button(root.transform, "Unstuck", new Vector3(0.13f, -0.15f, 0), Quaternion.identity, size, "UNSTUCK", M("ButtonAmber"), 0.22f);
+            panel.recallTools = Button(root.transform, "Recall Tools", new Vector3(0f, -0.235f, 0), Quaternion.identity, new Vector2(0.5f, 0.07f), "RECALL TOOLS", M("ButtonAmber"), 0.22f);
             return panel;
         }
 
@@ -510,8 +702,8 @@ namespace TrashAstronauts.EditorTools
             snap.leftHandTurnInput.inputActionReference = Ref("LeftHand/Thumbstick");
             snap.rightHandTurnInput.inputSourceMode = XRInputValueReader.InputSourceMode.InputActionReference;
             snap.rightHandTurnInput.inputActionReference = Ref("RightHand/Thumbstick");
-            var climb = rig.AddComponent<ClimbProvider>();
-            climb.mediator = mediator;
+            var zeroG = rig.AddComponent<ZeroGLocomotion>();
+            zeroG.mediator = mediator;
 
             var actionManager = rig.AddComponent<InputActionManager>();
             actionManager.actionAssets = new List<InputActionAsset> { AssetDatabase.LoadAssetAtPath<InputActionAsset>(InputPath) };
@@ -531,7 +723,7 @@ namespace TrashAstronauts.EditorTools
             locomotion.origin = origin;
             locomotion.teleportation = teleport;
             locomotion.snapTurn = snap;
-            locomotion.climb = climb;
+            locomotion.zeroG = zeroG;
             locomotion.heightAdjust = heightAdjust.transform;
             locomotion.bodyAnchor = body;
 
@@ -546,6 +738,8 @@ namespace TrashAstronauts.EditorTools
             reticle.SetActive(false);
             context.leftHand = BuildHand(cameraOffset.transform, true, locomotion, reticle.transform);
             context.rightHand = BuildHand(cameraOffset.transform, false, locomotion, reticle.transform);
+            zeroG.leftHand = context.leftHand;
+            zeroG.rightHand = context.rightHand;
 
             // --- tools in their holsters
             var flashlight = BuildFlashlight(null);
@@ -578,6 +772,18 @@ namespace TrashAstronauts.EditorTools
             menu.player = context;
             menu.panel = menuRoot;
 
+            var promptRoot = Empty(rig.transform, "Tutorial Prompt", new Vector3(0, 1.2f, 1f), null, GameLayers.Default);
+            var promptVisuals = Empty(promptRoot.transform, "Visuals", Vector3.zero, null, GameLayers.Default);
+            CBox(promptVisuals.transform, "Back", new Vector3(0, 0, 0.008f), new Vector3(0.74f, 0.27f, 0.012f), M("Screen"), 0.005f);
+            CBox(promptVisuals.transform, "Accent", new Vector3(0, 0.128f, 0.006f), new Vector3(0.74f, 0.012f, 0.014f), M("GlowWarm"), 0.003f);
+            var prompt = promptRoot.AddComponent<TutorialPrompt>();
+            prompt.head = camGo.transform;
+            prompt.visuals = promptVisuals;
+            prompt.title = Text(promptVisuals.transform, "Title", "WELCOME ABOARD", new Vector3(0, 0.092f, -0.001f), Quaternion.identity, 0.34f, new Vector2(0.7f, 0.05f), new Color(1f, 0.85f, 0.3f));
+            prompt.title.fontStyle = FontStyles.Bold;
+            prompt.body = Text(promptVisuals.transform, "Body", "", new Vector3(0, -0.02f, -0.001f), Quaternion.identity, 0.25f, new Vector2(0.7f, 0.17f), new Color(0.88f, 0.96f, 1f));
+            promptVisuals.SetActive(false);
+
             var alerts = rig.AddComponent<SuitAlerts>();
             alerts.player = context;
 
@@ -591,6 +797,9 @@ namespace TrashAstronauts.EditorTools
             trigger.radius = 0.1f;
             var interactable = holsterGo.AddComponent<XRSimpleInteractable>();
             interactable.selectMode = InteractableSelectMode.Single;
+            // Only the holster's own trigger belongs to it. Left empty, XRI would also claim the docked
+            // tool's colliders (the tool is parented under the holster) and the tool could not be grabbed directly.
+            interactable.colliders.Add(trigger);
 
             var dock = Empty(holsterGo.transform, "Dock", Vector3.zero, dockRotation, GameLayers.Tool);
             var marker = Prim(holsterGo.transform, "Empty Marker", PrimitiveType.Cube, Vector3.zero, new Vector3(0.07f, 0.07f, 0.07f), M("Ghost"), false, new Vector3(45, 45, 0));
@@ -633,27 +842,43 @@ namespace TrashAstronauts.EditorTools
             ConfigureButtonReader(interactor.selectInput, side + "/Select", side + "/SelectValue");
             ConfigureButtonReader(interactor.activateInput, side + "/Activate", side + "/ActivateValue");
             interactor.handedness = left ? InteractorHandedness.Left : InteractorHandedness.Right;
+            // Find grab targets with overlap queries against the grabbable layers. The default mode
+            // relies on physics trigger events, which the Hand layer does not receive (its collisions are
+            // switched off so hands can never shove the player or salvage), and it cannot see holsters,
+            // which have no rigidbody.
+            interactor.improveAccuracyWithSphereCollider = true;
             interactor.physicsLayerMask = GameLayers.GrabbableMask;
             interactor.physicsTriggerInteraction = QueryTriggerInteraction.Collide;
             interactor.attachTransform = attach.transform;
 
-            // Glove
+            // Glove: padded suit glove with two-jointed fingers that follow grip and trigger.
             var glove = Empty(go.transform, "Glove", Vector3.zero, null, GameLayers.Hand);
-            Prim(glove.transform, "Palm", PrimitiveType.Cube, new Vector3(0, -0.03f, -0.075f), new Vector3(0.085f, 0.032f, 0.1f), M("Glove"));
-            Prim(glove.transform, "Cuff", PrimitiveType.Cube, new Vector3(0, -0.03f, -0.15f), new Vector3(0.095f, 0.05f, 0.055f), M("GloveAccent"));
+            Transform g = glove.transform;
+            CBox(g, "Palm", new Vector3(0, -0.03f, -0.075f), new Vector3(0.086f, 0.032f, 0.098f), M("PaintWhite"), 0.011f);
+            CBox(g, "Back Plate", new Vector3(0, -0.011f, -0.078f), new Vector3(0.062f, 0.01f, 0.064f), M("PaintOrange"), 0.004f);
+            CBox(g, "Knuckle Guard", new Vector3(0, -0.018f, -0.03f), new Vector3(0.082f, 0.016f, 0.02f), M("Rubber"), 0.006f);
+            CBox(g, "Cuff", new Vector3(0, -0.03f, -0.152f), new Vector3(0.096f, 0.052f, 0.06f), M("PaintWhite"), 0.014f);
+            Part(g, "Cuff Ring", Torus(0.05f, 0.008f, 16, 6), new Vector3(0, -0.03f, -0.125f), M("Steel"), new Vector3(90, 0, 0));
+            Part(g, "Wrist Seal", Torus(0.048f, 0.006f, 16, 6), new Vector3(0, -0.03f, -0.18f), M("PaintOrange"), new Vector3(90, 0, 0));
+            var indexPivots = new List<Transform>();
             var pivots = new List<Transform>();
-            Transform indexPivot = null;
-            float[] fingerX = { 0.03f, 0.01f, -0.01f, -0.03f };
+            float[] fingerX = { 0.031f, 0.0105f, -0.0105f, -0.031f };
+            float[] fingerLen = { 0.04f, 0.044f, 0.041f, 0.034f };
             for (int i = 0; i < 4; i++)
             {
-                var pivot = Empty(glove.transform, "Finger" + i, new Vector3(s * fingerX[i], -0.03f, -0.025f), null, GameLayers.Hand);
-                Prim(pivot.transform, "Segment", PrimitiveType.Cube, new Vector3(0, 0, 0.035f), new Vector3(0.017f, 0.02f, 0.07f), M("Glove"));
-                if (i == 0) indexPivot = pivot.transform;
-                else pivots.Add(pivot.transform);
+                var p1 = Empty(g, "Finger" + i, new Vector3(s * fingerX[i], -0.03f, -0.026f), null, GameLayers.Hand).transform;
+                CBox(p1, "Segment", new Vector3(0, 0, fingerLen[i] * 0.5f), new Vector3(0.0185f, 0.021f, fingerLen[i]), M("PaintWhite"), 0.006f);
+                var p2 = Empty(p1, "Joint2", new Vector3(0, 0, fingerLen[i]), null, GameLayers.Hand).transform;
+                CBox(p2, "Segment", new Vector3(0, 0, 0.017f), new Vector3(0.017f, 0.019f, 0.036f), M("PaintWhite"), 0.006f);
+                CBox(p2, "Pad", new Vector3(0, -0.006f, 0.022f), new Vector3(0.014f, 0.01f, 0.02f), M("Rubber"), 0.004f);
+                var list = i == 0 ? indexPivots : pivots;
+                list.Add(p1);
+                list.Add(p2);
             }
-            var thumbPivot = Empty(glove.transform, "Thumb", new Vector3(s * 0.048f, -0.03f, -0.09f), null, GameLayers.Hand);
-            Prim(thumbPivot.transform, "Segment", PrimitiveType.Cube, new Vector3(s * 0.012f, 0, 0.03f), new Vector3(0.02f, 0.02f, 0.06f), M("Glove"), false, new Vector3(0, s * 25f, 0));
-            var fingertip = Empty(go.transform, "Fingertip", new Vector3(s * 0.03f, -0.03f, 0.05f), null, GameLayers.Hand);
+            var thumbPivot = Empty(g, "Thumb", new Vector3(s * 0.046f, -0.034f, -0.095f), null, GameLayers.Hand);
+            CBox(thumbPivot.transform, "Segment", new Vector3(s * 0.014f, 0, 0.026f), new Vector3(0.022f, 0.022f, 0.05f), M("PaintWhite"), 0.007f, new Vector3(0, s * 28f, 0));
+            CBox(thumbPivot.transform, "Tip", new Vector3(s * 0.03f, 0, 0.058f), new Vector3(0.02f, 0.02f, 0.034f), M("Rubber"), 0.007f, new Vector3(0, s * 18f, 0));
+            var fingertip = Empty(go.transform, "Fingertip", new Vector3(s * 0.031f, -0.03f, 0.055f), null, GameLayers.Hand);
             var wristMount = Empty(go.transform, "Wrist Mount", new Vector3(0, 0.0f, -0.2f),
                 Quaternion.LookRotation(Vector3.down, left ? Vector3.left : Vector3.right), GameLayers.Hand);
 
@@ -671,7 +896,7 @@ namespace TrashAstronauts.EditorTools
 
             var gloveVisual = glove.AddComponent<GloveVisual>();
             gloveVisual.hand = hand;
-            gloveVisual.indexPivot = indexPivot;
+            gloveVisual.indexPivots = indexPivots.ToArray();
             gloveVisual.gripPivots = pivots.ToArray();
             gloveVisual.thumbPivot = thumbPivot.transform;
 

@@ -83,7 +83,7 @@ namespace TrashAstronauts.EditorTools
 
         static void EnsureFolders()
         {
-            foreach (string dir in new[] { Root, GeneratedDir, MaterialDir, TextureDir, AudioDir, PrefabDir, DataDir, DataDir + "/Salvage", SceneDir })
+            foreach (string dir in new[] { Root, GeneratedDir, MaterialDir, TextureDir, AudioDir, MeshDir, PrefabDir, DataDir, DataDir + "/Salvage", SceneDir })
                 EnsureFolder(dir);
         }
 
@@ -100,7 +100,7 @@ namespace TrashAstronauts.EditorTools
         static readonly Dictionary<string, Material> s_Mats = new Dictionary<string, Material>();
         static Material M(string name) => s_Mats[name];
 
-        static Material Lit(string name, Color color, float smoothness = 0.25f, Texture2D texture = null, Color? emission = null)
+        static Material Lit(string name, Color color, float smoothness = 0.25f, Texture2D texture = null, Color? emission = null, Texture2D normal = null)
         {
             string path = MaterialDir + "/" + name + ".mat";
             var shader = Shader.Find("Universal Render Pipeline/Simple Lit");
@@ -116,6 +116,16 @@ namespace TrashAstronauts.EditorTools
             m.SetFloat("_Smoothness", smoothness);
             m.SetColor("_SpecColor", new Color(0.25f, 0.25f, 0.25f, 1f));
             if (texture != null) m.SetTexture("_BaseMap", texture);
+            if (normal != null)
+            {
+                m.SetTexture("_BumpMap", normal);
+                m.EnableKeyword("_NORMALMAP");
+            }
+            else
+            {
+                m.SetTexture("_BumpMap", null);
+                m.DisableKeyword("_NORMALMAP");
+            }
             // A tiny non-black emission keeps the emission keyword alive so hover highlights
             // (set per-renderer through a MaterialPropertyBlock) are visible.
             m.EnableKeyword("_EMISSION");
@@ -162,20 +172,22 @@ namespace TrashAstronauts.EditorTools
             var floor = MakeTexture("FloorGrate", 512, PaintFloor);
             var hazard = MakeTexture("Hazard", 256, PaintHazard);
             var stars = MakeTexture("Stars", 512, PaintStars);
+            var platesN = MakeNormalMap("Plates_N", 512, (x, y) => PlatesHeight(x, y, 512), 2.2f);
+            var floorN = MakeNormalMap("FloorGrate_N", 512, (x, y) => FloorHeight(x, y, 512), 1.6f);
 
-            Lit("Wall", new Color(0.42f, 0.45f, 0.48f), 0.3f, plates);
-            Lit("WallTug", new Color(0.55f, 0.52f, 0.46f), 0.3f, plates);
-            Lit("Floor", new Color(0.3f, 0.32f, 0.34f), 0.2f, floor);
-            Lit("Ceiling", new Color(0.22f, 0.24f, 0.26f), 0.15f, plates);
+            Lit("Wall", new Color(0.42f, 0.45f, 0.48f), 0.3f, plates, null, platesN);
+            Lit("WallTug", new Color(0.55f, 0.52f, 0.46f), 0.3f, plates, null, platesN);
+            Lit("Floor", new Color(0.3f, 0.32f, 0.34f), 0.3f, floor, null, floorN);
+            Lit("Ceiling", new Color(0.22f, 0.24f, 0.26f), 0.15f, plates, null, platesN);
             Lit("Trim", new Color(0.16f, 0.17f, 0.19f), 0.35f);
-            Lit("Container", new Color(0.45f, 0.22f, 0.14f), 0.25f, plates);
-            Lit("ContainerBlue", new Color(0.16f, 0.3f, 0.42f), 0.25f, plates);
+            Lit("Container", new Color(0.45f, 0.22f, 0.14f), 0.25f, plates, null, platesN);
+            Lit("ContainerBlue", new Color(0.16f, 0.3f, 0.42f), 0.25f, plates, null, platesN);
             Lit("Hazard", Color.white, 0.2f, hazard);
             Lit("Rail", new Color(1f, 0.8f, 0.05f), 0.4f, null, new Color(0.35f, 0.26f, 0.0f));
             Lit("Pipe", new Color(0.5f, 0.36f, 0.2f), 0.5f);
             Lit("Cable", new Color(0.06f, 0.06f, 0.07f), 0.1f);
-            Lit("Door", new Color(0.5f, 0.5f, 0.52f), 0.45f, plates);
-            Lit("Plate", new Color(0.62f, 0.6f, 0.52f), 0.4f, plates);
+            Lit("Door", new Color(0.5f, 0.5f, 0.52f), 0.45f, plates, null, platesN);
+            Lit("Plate", new Color(0.62f, 0.6f, 0.52f), 0.4f, plates, null, platesN);
             Lit("CutMarker", new Color(1f, 0.55f, 0.05f), 0.3f, null, new Color(0.6f, 0.33f, 0.03f));
             Lit("Screen", new Color(0.02f, 0.03f, 0.04f), 0.7f);
             Lit("ButtonGreen", new Color(0.15f, 0.6f, 0.25f), 0.4f, null, new Color(0.02f, 0.1f, 0.03f));
@@ -187,23 +199,34 @@ namespace TrashAstronauts.EditorTools
             Lit("ToolBody", new Color(0.2f, 0.21f, 0.24f), 0.5f);
             Lit("ToolAccent", new Color(0.9f, 0.45f, 0.1f), 0.4f);
             Lit("Lens", new Color(0.9f, 0.9f, 0.8f), 0.8f, null, new Color(1.5f, 1.4f, 1.1f));
-            Lit("DroneBody", new Color(0.25f, 0.27f, 0.3f), 0.5f, plates);
+            Lit("DroneBody", new Color(0.25f, 0.27f, 0.3f), 0.5f, plates, null, platesN);
             Lit("DroneEye", new Color(1f, 0.6f, 0.1f), 0.8f, null, new Color(2f, 1.2f, 0.2f));
-            Lit("Scrap", new Color(0.5f, 0.5f, 0.48f), 0.35f, plates);
+            Lit("Scrap", new Color(0.5f, 0.5f, 0.48f), 0.35f, plates, null, platesN);
             Lit("ScrapTraining", new Color(0.95f, 0.85f, 0.2f), 0.3f, hazard);
             Lit("Copper", new Color(0.72f, 0.42f, 0.2f), 0.6f);
             Lit("Pcb", new Color(0.08f, 0.35f, 0.16f), 0.35f);
             Lit("Chip", new Color(0.05f, 0.05f, 0.06f), 0.5f);
             Lit("Led", new Color(0.2f, 1f, 0.4f), 0.6f, null, new Color(0.3f, 2f, 0.6f));
-            Lit("ReactorShell", new Color(0.3f, 0.33f, 0.4f), 0.6f, plates);
+            Lit("ReactorShell", new Color(0.3f, 0.33f, 0.4f), 0.6f, plates, null, platesN);
             Lit("ReactorGlow", new Color(0.2f, 1f, 0.9f), 0.7f, null, new Color(0.3f, 2.2f, 2f));
             Lit("Chrome", new Color(0.82f, 0.84f, 0.88f), 0.85f);
             Lit("Toast", new Color(0.72f, 0.5f, 0.24f), 0.05f);
-            Lit("Junk", new Color(0.4f, 0.3f, 0.25f), 0.2f, plates);
+            Lit("Junk", new Color(0.4f, 0.3f, 0.25f), 0.2f, plates, null, platesN);
             Lit("GlowRed", new Color(1f, 0.15f, 0.1f), 0.3f, null, new Color(2.2f, 0.25f, 0.15f));
             Lit("GlowWhite", new Color(0.9f, 0.95f, 1f), 0.3f, null, new Color(1.6f, 1.8f, 2f));
             Lit("GlowWarm", new Color(1f, 0.85f, 0.6f), 0.3f, null, new Color(2f, 1.5f, 0.9f));
             Lit("GlowTeal", new Color(0.2f, 1f, 0.85f), 0.3f, null, new Color(0.3f, 1.8f, 1.5f));
+            Lit("Carapace", new Color(0.07f, 0.075f, 0.085f), 0.65f, plates, null, platesN);
+            Lit("Sinew", new Color(0.16f, 0.07f, 0.06f), 0.55f);
+            Lit("Bone", new Color(0.62f, 0.58f, 0.5f), 0.35f);
+            Lit("Claw", new Color(0.03f, 0.03f, 0.035f), 0.85f);
+            Lit("CreatureEye", new Color(1f, 0.08f, 0.04f), 0.9f, null, new Color(3f, 0.25f, 0.12f));
+            Lit("Rubber", new Color(0.05f, 0.05f, 0.055f), 0.15f);
+            Lit("Steel", new Color(0.55f, 0.57f, 0.6f), 0.7f, plates, null, platesN);
+            Lit("Brass", new Color(0.72f, 0.56f, 0.24f), 0.7f);
+            Lit("PaintOrange", new Color(0.85f, 0.38f, 0.08f), 0.45f);
+            Lit("PaintWhite", new Color(0.82f, 0.82f, 0.78f), 0.4f);
+            Lit("ScreenGlow", new Color(0.1f, 0.5f, 0.45f), 0.8f, null, new Color(0.15f, 0.9f, 0.8f));
             Unlit("Fade", new Color(0f, 0f, 0f, 0f), true);
             Unlit("Line", Color.white, false, null, "Universal Render Pipeline/Particles/Unlit");
             Unlit("Flame", new Color(0.6f, 0.9f, 1f));

@@ -54,8 +54,11 @@ namespace TrashAstronauts.Tools
 
             var manager = interactable.interactionManager;
             if (manager == null) yield break;
+            // Check the grip before swapping: once the holster is deselected the interactor has no
+            // selection, and XRI only reports select as active on the press frame or while holding something.
+            bool stillGripping = interactable.IsSelected(interactor) && interactor.isSelectActive;
             if (interactable.IsSelected(interactor)) manager.SelectExit(interactor, (IXRSelectInteractable)interactable);
-            if (!interactor.isSelectActive) yield break; // let go already
+            if (!stillGripping) yield break; // let go already
 
             Transform attach = interactor.GetAttachTransform(tool.grab);
             tool.PrepareHandOver(attach.position, attach.rotation);

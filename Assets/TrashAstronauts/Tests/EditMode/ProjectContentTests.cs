@@ -59,6 +59,36 @@ namespace TrashAstronauts.Tests
         }
 
         [Test]
+        public void PlayerRig_FloatsWithZeroGLocomotion()
+        {
+            var rig = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/TrashAstronauts/Prefabs/PlayerRig.prefab");
+            var zeroG = rig.GetComponent<ZeroGLocomotion>();
+            Assert.IsNotNull(zeroG, "The rig should move with the zero-g provider.");
+            Assert.IsNotNull(zeroG.leftHand);
+            Assert.IsNotNull(zeroG.rightHand);
+            Assert.AreSame(zeroG, rig.GetComponent<PlayerLocomotion>().zeroG);
+            Assert.IsNotNull(rig.GetComponentInChildren<TrashAstronauts.UI.TutorialPrompt>(true));
+        }
+
+        [Test]
+        public void Creature_HasAnimatedLimbs_AndAClusterOfEyes()
+        {
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/TrashAstronauts/Prefabs/Drone_Janitor7.prefab");
+            Assert.IsNotNull(prefab);
+            var drone = prefab.GetComponent<EnemyDrone>();
+            var animator = prefab.GetComponent<CreatureAnimator>();
+            Assert.IsNotNull(animator);
+            Assert.AreEqual(4, animator.shoulders.Length);
+            Assert.AreEqual(4, animator.elbows.Length);
+            Assert.GreaterOrEqual(animator.tendrils.Length, 10);
+            Assert.IsNotNull(animator.head);
+            Assert.IsNotNull(animator.jaw);
+            Assert.IsNotNull(drone.eyeRenderer);
+            Assert.GreaterOrEqual(drone.extraEyes.Length, 5);
+            Assert.Greater(prefab.GetComponentsInChildren<MeshRenderer>().Length, 60, "The creature should be a detailed model.");
+        }
+
+        [Test]
         public void RealLevel_AlwaysGeneratesEnoughLoot_ForEverySeed()
         {
             var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);

@@ -45,11 +45,29 @@ namespace TrashAstronauts.EditorTools
             lib.tugAmbience = Wav("tug_ambience", 3.0f, (t, d) => Sine(110f, t) * 0.12f + Sine(220f, t) * 0.04f + Noise(rng) * 0.035f, true);
             lib.oxygenLow = Wav("oxygen_low", 0.6f, (t, d) => Sine(700f, t) * ((t < 0.18f || (t > 0.3f && t < 0.48f)) ? 1f : 0f) * 0.4f);
             lib.oxygenCritical = Wav("oxygen_critical", 0.5f, (t, d) => Square(1000f, t) * (Mathf.Repeat(t, 0.16f) < 0.08f ? 1f : 0f) * 0.25f);
-            lib.droneHum = Wav("drone_hum", 2.0f, (t, d) => (Saw(140f, t) * 0.25f + Sine(70f, t) * 0.3f) * (0.75f + 0.25f * Sine(7f, t)), true);
-            lib.droneAlert = Wav("drone_alert", 0.45f, (t, d) => Sine(400f + 700f * (t / d) * (t / d), t) * Env(t, d, 0.01f, 3f) * 0.5f);
-            lib.droneChase = Wav("drone_chase", 1.0f, (t, d) => Square(Mathf.Repeat(t, 0.25f) < 0.125f ? 620f : 820f, t) * 0.28f, true);
-            lib.droneLost = Wav("drone_lost", 0.6f, (t, d) => Sine(600f - 320f * t / d, t) * Env(t, d, 0.01f, 3f) * 0.45f);
-            lib.droneCatch = Wav("drone_catch", 0.5f, (t, d) => (Saw(110f, t) * 0.5f + Noise(rng) * 0.3f) * Env(t, d, 0.005f, 4f));
+            // The creature: a wet, uneven breathing growl with irregular clicks instead of a machine hum.
+            float lpA = 0f, lpB = 0f;
+            lib.droneHum = Wav("drone_hum", 2.0f, (t, d) =>
+            {
+                lpA += (Noise(rng) - lpA) * 0.06f;
+                float breath = 0.5f + 0.5f * Sine(1f, t);
+                float click = Mathf.Repeat(t * 7.3f + 0.4f * Sine(0.5f, t), 1f) < 0.035f ? Noise(rng) * 0.5f : 0f;
+                return lpA * 2.2f * (0.35f + 0.65f * breath) + Saw(38f, t) * 0.16f * breath + Sine(57f, t) * 0.12f + click * 0.5f;
+            }, true);
+            lib.droneAlert = Wav("drone_alert", 0.7f, (t, d) =>
+            {
+                float f = 240f + 1100f * Mathf.Pow(t / d, 2.2f);
+                return (Sine(f + 90f * Sine(31f, t), t) * 0.45f + Noise(rng) * 0.18f * (t / d)) * Env(t, d, 0.02f, 1.6f);
+            });
+            lib.droneChase = Wav("drone_chase", 1.0f, (t, d) =>
+            {
+                lpB += (Noise(rng) - lpB) * 0.25f;
+                float pulse = 0.55f + 0.45f * Sine(9f, t);
+                return (Saw(64f, t) * 0.3f + Sine(520f + 260f * Sine(13f, t), t) * 0.22f + lpB * 0.9f) * pulse * 0.75f;
+            }, true);
+            lib.droneLost = Wav("drone_lost", 1.0f, (t, d) => (Saw(210f - 150f * t / d, t) * 0.3f + Sine(105f - 60f * t / d, t) * 0.35f) * Env(t, d, 0.03f, 1.8f)
+                + (Mathf.Repeat(t * 11f, 1f) < 0.05f ? Noise(rng) * 0.25f : 0f) * (1f - t / d));
+            lib.droneCatch = Wav("drone_catch", 0.8f, (t, d) => (Saw(140f - 90f * t / d, t) * 0.5f + Noise(rng) * 0.5f + Sine(900f - 700f * t / d, t) * 0.25f) * Env(t, d, 0.004f, 3f));
             lib.resultSuccess = Wav("result_success", 1.2f, (t, d) =>
             {
                 float[] notes = { 392f, 494f, 587f, 784f };

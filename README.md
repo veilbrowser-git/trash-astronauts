@@ -1,13 +1,14 @@
 # Trash Astronauts
 
 A single-player, fully offline VR salvage game for standalone Meta Quest (Quest 3 / 3S, tracked
-controllers). You are an underpaid astronaut: board a derelict hauler from your salvage tug, pull
-yourself along handrails, cut open panels, haul junk back to the tug's collection locker, and get out
-before your oxygen runs out or the ship's malfunctioning janitor drone finds you.
+controllers). You are an underpaid astronaut: board a derelict hauler from your salvage tug, float
+through it by pushing off the walls and swimming, cut open panels, haul junk back to the tug's
+collection locker, and get out before your oxygen runs out or the thing that used to be the ship's
+janitor finds you.
 
 ## Download
 
-**[Download TrashAstronauts.apk](https://github.com/veilbrowser-git/trash-astronauts/raw/builds/TrashAstronauts.apk)** (about 32 MB, Meta Quest 3 / 3S)
+**[Download TrashAstronauts.apk](https://github.com/veilbrowser-git/trash-astronauts/raw/builds/TrashAstronauts.apk)** (version 0.2.0, about 32 MB, Meta Quest 3 / 3S)
 
 That one file is the whole game. To install it:
 
@@ -15,10 +16,10 @@ That one file is the whole game. To install it:
 2. Connect the headset to a computer by USB and install the APK with [Meta Quest Developer Hub](https://developers.meta.com/horizon/documentation/unity/ts-mqdh/), SideQuest, or `adb install -r TrashAstronauts.apk`.
 3. In the headset, open the app library and look under **Unknown Sources**.
 
-This build has not been tested on a headset yet.
+Version 0.2.0 fixes grabbing and cutting, which did not work in 0.1.0, and adds floating movement, a guided tutorial and new models. It has not been run on a headset yet.
 
 > **Verification status, read this first.** The project compiles, the scene and all assets are
-> generated, 66 automated tests pass in the Unity editor on macOS, and a Quest APK builds
+> generated, 77 automated tests pass in the Unity editor on macOS, and a Quest APK builds
 > (`Builds/Quest/TrashAstronauts.apk`). It has **not** been installed or run on a headset. Comfort,
 > hand/controller alignment, text legibility in the headset, haptic strength and frame rate are all
 > **unverified on hardware**. See [What was and was not tested](#what-was-and-was-not-tested).
@@ -52,8 +53,11 @@ audio, prefabs and the scene in place, and it never overwrites the balancing ass
 
 ## The loop
 
-1. **Tug (safe hub).** Read the mission board for the quota, bonus and oxygen. A short orientation
-   checklist is on the wall. No oxygen drains and the drone is powered down until you start.
+1. **Tug (safe hub) and tutorial.** A guided tutorial teaches one thing at a time and only moves on
+   when you have done it: push off a wall, swim, stop, draw a tool, bank the practice scrap, cut the
+   practice plate. The current step shows on the wall board and on a small panel that floats with
+   you. Any step, or all of it, can be skipped, and it can be replayed later from the board. No
+   oxygen drains and the creature is dormant until you start a contract.
 2. **START CONTRACT** opens the hatch. Your flashlight (chest), scanner and plasma cutter (hips) are already on your suit.
 3. **Airlock > corridor > cargo bay / maintenance / reactor.** Loot is placed at random among 20 curated spots each run.
 4. **Cut** the marked welds on access panels: the reactor housing (the high-value core), the secure
@@ -69,13 +73,15 @@ audio, prefabs and the scene in place, and it never overwrites the balancing ass
 | Action | Input |
 |---|---|
 | Grab / hold / drop / throw | **Grip**. Works on salvage, junk, tools and handrails. Release while moving your hand to throw. |
-| Handrail traversal | Grip a **yellow rail** and move your hand; you are pulled the opposite way. Movement stops when you let go. |
-| Teleport (comfort) | Push a **thumbstick forward** to aim an arc, release to teleport. Works while carrying things. |
+| Float: grab and push off | You are weightless. Hold **grip** with an empty hand next to any wall, floor, ceiling, prop or yellow rail to grab it. Move your hand to pull your body the other way; **let go while moving** and you keep gliding. Grabbing a surface stops a drift. |
+| Float: swim | In open space, hold **grip** and sweep your arm; you are pushed the opposite way. Open your hand on the way back. A hand that is carrying something cannot paddle. |
+| Teleport (comfort) | Push a **thumbstick forward** to aim an arc, release to teleport. Works while carrying things, and the whole mission can be done this way. |
+| Drift on/off (comfort) | **DRIFT** in the suit menu. Off = you stop almost as soon as you let go, with no gliding. |
 | Snap turn | **Thumbstick left / right** (30 / 45 / 60 / 90 degrees, set in the suit menu). |
 | Use tool | **Trigger** while holding it: flashlight on/off, scanner ping, cutter flame. |
 | Draw / recall a tool | Grip at the **chest** (flashlight) or **hips** (cutter on your main-hand side, scanner on the other). Gripping an empty holster pulls the tool to your hand from anywhere. Dropped tools reel themselves back after a few seconds. |
 | Press buttons | Touch with a fingertip, **or** point at a button and pull the trigger (up to 3.5 m). |
-| Suit menu | **B / Y** (or the left menu button): height +/-, snap-turn angle, left/right hand, unstuck, recall tools. The same panel is on the tug's rear wall. |
+| Suit menu | **B / Y** (or the left menu button): height +/-, snap-turn angle, left/right hand, drift on/off, unstuck, recall tools. The same panel is on the tug's rear wall. |
 
 Left-handed play: switch **HAND** in the suit menu. Holsters mirror and the wrist display moves to the other wrist. The setting is saved.
 
@@ -152,19 +158,19 @@ and performance testing on the headset.
 | Kind | Status |
 |---|---|
 | **Compilation** | All assemblies compile with no errors in 6000.6.8f1. |
-| **Automated tests, rules (EditMode, 45)** | Pass. Mission outcomes, duplicate-deposit prevention, bank-exactly-once, failure keeps old credits, restart cleanup, save/load including missing and corrupt files, oxygen upgrade, loot generation over hundreds of seeds, drone state machine, noise thresholds, cutter heat. |
-| **Automated tests, real scene (PlayMode, 21)** | Pass. Fresh launch state, settings and handedness, loot worth more than the quota, every spawn point and the locker reachable from a teleport landing spot, teleport and unstuck, locker counts each item once, cutting opens the reactor compartment and the core can be recovered, mounted salvage releases when cut, drone investigates noise and returns to patrol, drone never enters the tug/airlock/duct, drone catches an exposed player and the run fails without touching banked credits, hazard pause, oxygen warnings and failure, both extraction payouts, clean restart, oxygen upgrade persists and applies. |
-| **Editor simulation** | Simulator enabled; not exercised by hand. The PlayMode tests call the same public methods the VR interactions call, but they do **not** simulate controller input, so grabbing, poking, rail pulling and trigger use through XRI are unverified. |
+| **Automated tests, rules and content (EditMode, 48)** | Pass. Mission outcomes, duplicate-deposit prevention, bank-exactly-once, failure keeps old credits, restart cleanup, save/load including missing and corrupt files, oxygen upgrade, loot generation over hundreds of seeds, drone state machine, noise thresholds, cutter heat. |
+| **Automated tests, real scene (PlayMode, 29)** | Pass. Three of these drive the game through a simulated tracked controller with the real input bindings and grab interactor: the hand follows the controller, salvage can be picked up, carried and released, and the cutter can be drawn from its holster, fired and used to cut a panel open. Zero-g drift keeps momentum and is stopped by the hull, grabbing a wall pulls the body and letting go pushes off, swim strokes propel the player, the drift comfort option, the tutorial advancing on real actions and being replayable. Also: fresh launch state, settings and handedness, loot worth more than the quota, every spawn point and the locker reachable from a teleport landing spot, teleport and unstuck, locker counts each item once, cutting opens the reactor compartment and the core can be recovered, mounted salvage releases when cut, drone investigates noise and returns to patrol, drone never enters the tug/airlock/duct, drone catches an exposed player and the run fails without touching banked credits, hazard pause, oxygen warnings and failure, both extraction payouts, clean restart, oxygen upgrade persists and applies. |
+| **Editor simulation** | Simulator enabled; not exercised by hand. The PlayMode tests call the same public methods the VR interactions call, most of them do **not** simulate controller input (the zero-g tests move the hand transforms directly). Grabbing and tool use are covered by the simulated-controller tests; button poking and how the floating feels are unverified. |
 | **Android build** | Succeeds. `Builds/Quest/TrashAstronauts.apk` was built in batch mode; its manifest, ARM64 libraries, OpenXR loader and signature were inspected. It was not installed or launched on a device. |
-| **Headset** | Not tested. No claims about comfort, performance or feel. |
+| **Headset** | Version 0.1.0 was played on a Quest by the project owner: it launched and tracked, but nothing could be grabbed, so tools and cutting were unusable. That was a bug in the grab detector's setup and is fixed in 0.2.0, verified with the simulated-controller tests. Version 0.2.0 itself has not been run on a headset yet. No claims about comfort or performance. |
 
 ## Assumptions and design decisions
 
 - **New project.** The session started with no project folder, so this is a fresh project built from Unity's bundled URP template.
-- **Zero-g feel, fixed "up".** The player has no gravity and can drift up while pulling on rails; teleporting puts feet back on the floor. No camera roll, no camera shake, fades for forced moves.
+- **Weightless movement, fixed "up".** The player floats with momentum: pushing off surfaces and swimming strokes set a drift that decays slowly, capped at 3.2 m/s, and stops on contact with the hull. Teleport and a no-drift option remain for comfort. No camera roll, no camera shake, fades for forced moves.
 - **Menus are physical buttons**, not a canvas UI: fingertip poke or point-and-trigger.
 - **Tools are tethered** to the suit so an essential tool can never be lost or left behind a barrier.
-- **The drone travels a hand-authored waypoint graph.** It cannot enter the tug, airlock or service duct, and it opens the reactor door slowly and audibly.
+- **The creature travels a hand-authored waypoint graph.** It cannot enter the tug, airlock or service duct, and it opens the reactor door slowly and audibly. It is a spined black carapace with a cluster of red eyes, a jaw, four long clawed limbs and trailing cables, all animated procedurally; ship lights stutter when it is close. No gore.
 - **One oxygen upgrade level**, as specified. Costs and values are in `Assets/TrashAstronauts/Data/MissionConfig.asset`.
 - **Saves** are a JSON file in `Application.persistentDataPath` with temp-file writes and a backup copy. Nothing is saved mid-mission.
 - **Performance choices made up front:** Simple Lit materials, MSAA 4x, no HDR, no shadows, about a dozen unshadowed point lights, no post-processing, primitive colliders on everything that moves, around 25 active rigidbodies, pooled audio. Lighting is realtime, not baked.
@@ -173,11 +179,12 @@ and performance testing on the headset.
 
 - Controller-relative offsets (glove, grab point, wrist display, holsters) were set by reasoning, not by trying them on. Expect to tune them on the first headset session.
 - Target is a sustained 72 FPS on Quest 3/3S; this has not been measured.
-- Art is Unity primitives with procedural textures; all audio is synthesized placeholder.
+- Art is generated in-project: chamfered and lathed meshes with normal-mapped procedural textures. It is a clear step up from raw primitives but still programmer art; all audio is synthesized placeholder.
+- Free-floating movement with momentum is more likely to cause motion sickness than teleporting. This has not been comfort-tested on a headset; the drift toggle and teleport are there for that reason.
 - Audio uses Unity's built-in 3D panning, no spatializer plugin.
 - Held tools are kinematic and can poke through walls; held salvage is physical and cannot.
-- The drone passes over loose junk rather than steering around it.
-- Hand tracking, continuous locomotion and free 6-DoF flight are out of scope.
+- The creature passes over loose junk rather than steering around it, and its long limbs can clip through door frames.
+- Hand tracking and thumbstick-driven continuous locomotion are out of scope.
 - Co-op is not implemented. See `Docs/MULTIPLAYER_NOTES.md` for where it would attach.
 
 ## Terms of Use

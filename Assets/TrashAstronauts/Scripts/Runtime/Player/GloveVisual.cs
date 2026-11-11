@@ -9,10 +9,10 @@ namespace TrashAstronauts.Player
     public sealed class GloveVisual : MonoBehaviour
     {
         public HandRig hand;
-        public Transform indexPivot;
+        public Transform[] indexPivots;
         public Transform[] gripPivots;
         public Transform thumbPivot;
-        public float curlDegrees = 75f;
+        public float curlDegrees = 48f;
         public float thumbDegrees = 40f;
         public float smoothing = 18f;
 
@@ -26,7 +26,13 @@ namespace TrashAstronauts.Player
             m_Index = Mathf.Lerp(m_Index, hand.Trigger, t);
             m_Grip = Mathf.Lerp(m_Grip, Mathf.Max(hand.Grip, hand.IsHolding ? 1f : 0f), t);
 
-            if (indexPivot != null) indexPivot.localRotation = Quaternion.Euler(m_Index * curlDegrees, 0f, 0f);
+            if (indexPivots != null)
+            {
+                for (int i = 0; i < indexPivots.Length; i++)
+                {
+                    if (indexPivots[i] != null) indexPivots[i].localRotation = Quaternion.Euler(Mathf.Max(m_Index, m_Grip * 0.6f) * curlDegrees, 0f, 0f);
+                }
+            }
             if (gripPivots != null)
             {
                 for (int i = 0; i < gripPivots.Length; i++)

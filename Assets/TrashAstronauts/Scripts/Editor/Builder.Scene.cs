@@ -12,7 +12,6 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Interactables;
-using UnityEngine.XR.Interaction.Toolkit.Locomotion.Climbing;
 
 namespace TrashAstronauts.EditorTools
 {
@@ -109,17 +108,18 @@ namespace TrashAstronauts.EditorTools
 
             var locker = BuildLocker(director);
             var board = BuildMissionBoard(director);
-            var tutorialText = BuildTutorialBoard();
+            var tutorialText = BuildTutorialBoard(out var skipStep, out var skipAll);
             var settings = BuildSettingsPanel(s_Props, "Suit Settings Console", new Vector3(1.0f, 1.35f, -2.88f), Facing(Vector3.forward), 1.6f);
             settings.director = director;
 
             // --- tutorial practice item
+            var practiceSpawn = Empty(missionGo.transform, "Practice Scrap Spawn", new Vector3(0.9f, 1.15f, 0.4f));
             var practice = (GameObject)PrefabUtility.InstantiatePrefab(s_TrainingScrapPrefab, salvageRoot.transform);
-            practice.transform.position = new Vector3(0.9f, 1.15f, 0.4f);
+            practice.transform.position = practiceSpawn.transform.position;
 
             // --- drone
             var droneGo = (GameObject)PrefabUtility.InstantiatePrefab(s_DronePrefab);
-            var dock = Empty(missionGo.transform, "Drone Dock", new Vector3(3.4f, 1.35f, 28.4f), Quaternion.Euler(0, 200f, 0));
+            var dock = Empty(missionGo.transform, "Drone Dock", new Vector3(3.4f, 1.45f, 28.4f), Quaternion.Euler(0, 200f, 0));
             droneGo.transform.SetPositionAndRotation(dock.transform.position, dock.transform.rotation);
             var drone = droneGo.GetComponent<EnemyDrone>();
             drone.director = director;
@@ -138,7 +138,12 @@ namespace TrashAstronauts.EditorTools
             tutorial.director = director;
             tutorial.locker = locker;
             tutorial.practicePanel = practicePanel;
-            tutorial.text = tutorialText;
+            tutorial.boardText = tutorialText;
+            tutorial.skipStepButton = skipStep;
+            tutorial.skipAllButton = skipAll;
+            tutorial.prompt = rig.GetComponentInChildren<TutorialPrompt>(true);
+            tutorial.practiceScrapPrefab = s_TrainingScrapPrefab;
+            tutorial.practiceScrapSpawn = practiceSpawn.transform;
 
             // --- wire the director
             var so = new SerializedObject(director);
@@ -207,6 +212,15 @@ namespace TrashAstronauts.EditorTools
                 float along = s1 - s0;
                 Box(parent, "Segment", new Vector3(mid.x, (y0 + y1) * 0.5f, mid.y),
                     alongX ? new Vector3(along, y1 - y0, T) : new Vector3(T, y1 - y0, along), mat);
+
+                // Trim: a dark kick-plate along the floor and a band under the ceiling, both sides at once.
+                const float proud = 0.035f;
+                if (y0 <= 0.001f)
+                    Box(parent, "Skirting", new Vector3(mid.x, 0.07f, mid.y),
+                        alongX ? new Vector3(along - 0.02f, 0.14f, T + proud) : new Vector3(T + proud, 0.14f, along - 0.02f), M("Trim"), GameLayers.Default, false);
+                if (y1 >= height - 0.001f)
+                    Box(parent, "Cornice", new Vector3(mid.x, height - 0.05f, mid.y),
+                        alongX ? new Vector3(along - 0.02f, 0.1f, T + proud) : new Vector3(T + proud, 0.1f, along - 0.02f), M("Trim"), GameLayers.Default, false);
             }
 
             const float ext = T * 0.5f - 0.01f;
@@ -288,15 +302,15 @@ namespace TrashAstronauts.EditorTools
             // Lights: a handful of unshadowed point lights plus emissive strips.
             PointLight(s_Lights, "Tug Light A", new Vector3(0, 2.4f, -1.5f), new Color(1f, 0.9f, 0.75f), 5f, 6f);
             PointLight(s_Lights, "Tug Light B", new Vector3(0, 2.4f, 1f), new Color(1f, 0.9f, 0.75f), 3.5f, 5f);
-            PointLight(s_Lights, "Airlock Light", new Vector3(0, 2.4f, 5.6f), new Color(1f, 0.25f, 0.2f), 3.5f, 6f);
-            PointLight(s_Lights, "Corridor Light S", new Vector3(0, 2.4f, 10.5f), new Color(0.7f, 0.85f, 1f), 2.5f, 6.5f);
-            PointLight(s_Lights, "Corridor Light N", new Vector3(0, 2.4f, 18f), new Color(0.7f, 0.85f, 1f), 2.2f, 6.5f);
-            PointLight(s_Lights, "Cargo Light A", new Vector3(-4.2f, 2.4f, 12.5f), new Color(1f, 0.6f, 0.3f), 3f, 7f);
-            PointLight(s_Lights, "Cargo Light B", new Vector3(-8f, 2.4f, 16f), new Color(1f, 0.3f, 0.2f), 2.5f, 7f);
-            PointLight(s_Lights, "Maintenance Light", new Vector3(4.8f, 2.4f, 12f), new Color(1f, 0.85f, 0.6f), 3.5f, 7.5f);
-            PointLight(s_Lights, "Reactor Light", new Vector3(0, 2.3f, 23.6f), new Color(0.3f, 1f, 0.85f), 3.5f, 8f);
-            PointLight(s_Lights, "Reactor Light Back", new Vector3(0, 2.3f, 28.4f), new Color(0.3f, 0.9f, 1f), 2.5f, 7f);
-            PointLight(s_Lights, "Duct Light", new Vector3(6.8f, 1.9f, 20f), new Color(1f, 0.5f, 0.2f), 1.8f, 5f);
+            PointLight(s_Lights, "Airlock Light", new Vector3(0, 2.4f, 5.6f), new Color(1f, 0.25f, 0.2f), 3.5f, 6f).gameObject.AddComponent<ProximityFlicker>();
+            PointLight(s_Lights, "Corridor Light S", new Vector3(0, 2.4f, 10.5f), new Color(0.7f, 0.85f, 1f), 2.5f, 6.5f).gameObject.AddComponent<ProximityFlicker>();
+            PointLight(s_Lights, "Corridor Light N", new Vector3(0, 2.4f, 18f), new Color(0.7f, 0.85f, 1f), 2.2f, 6.5f).gameObject.AddComponent<ProximityFlicker>();
+            PointLight(s_Lights, "Cargo Light A", new Vector3(-4.2f, 2.4f, 12.5f), new Color(1f, 0.6f, 0.3f), 3f, 7f).gameObject.AddComponent<ProximityFlicker>();
+            PointLight(s_Lights, "Cargo Light B", new Vector3(-8f, 2.4f, 16f), new Color(1f, 0.3f, 0.2f), 2.5f, 7f).gameObject.AddComponent<ProximityFlicker>();
+            PointLight(s_Lights, "Maintenance Light", new Vector3(4.8f, 2.4f, 12f), new Color(1f, 0.85f, 0.6f), 3.5f, 7.5f).gameObject.AddComponent<ProximityFlicker>();
+            PointLight(s_Lights, "Reactor Light", new Vector3(0, 2.3f, 23.6f), new Color(0.3f, 1f, 0.85f), 3.5f, 8f).gameObject.AddComponent<ProximityFlicker>();
+            PointLight(s_Lights, "Reactor Light Back", new Vector3(0, 2.3f, 28.4f), new Color(0.3f, 0.9f, 1f), 2.5f, 7f).gameObject.AddComponent<ProximityFlicker>();
+            PointLight(s_Lights, "Duct Light", new Vector3(6.8f, 1.9f, 20f), new Color(1f, 0.5f, 0.2f), 1.8f, 5f).gameObject.AddComponent<ProximityFlicker>();
 
             Strip("Tug Strip", new Vector3(0, H - 0.03f, -0.5f), new Vector3(0.12f, 0.03f, 3.6f), "GlowWarm");
             Strip("Airlock Strip", new Vector3(0, H - 0.03f, 5.6f), new Vector3(2.4f, 0.03f, 0.1f), "GlowRed");
@@ -311,6 +325,7 @@ namespace TrashAstronauts.EditorTools
         static void Strip(string name, Vector3 center, Vector3 size, string mat)
         {
             Box(s_Lights, name, center, size, M(mat), GameLayers.Default, false);
+            Box(s_Lights, name + " Housing", center + Vector3.up * 0.012f, new Vector3(size.x + 0.08f, size.y, size.z + 0.08f), M("Trim"), GameLayers.Default, false);
         }
 
         // ------------------------------------------------------------------ doors
@@ -324,6 +339,12 @@ namespace TrashAstronauts.EditorTools
             body.isKinematic = true;
             body.useGravity = false;
             Box(leafGo.transform, "Stripe", floorCenter + new Vector3(0, 1.1f, 0), new Vector3(width + 0.07f, 0.16f, 0.11f), M("Hazard"), GameLayers.Environment, false, false);
+            foreach (float y in new[] { 0.55f, 1.65f })
+            {
+                Box(leafGo.transform, "Panel", floorCenter + new Vector3(0, y, 0), new Vector3(width - 0.3f, 0.62f, 0.125f), M("Steel"), GameLayers.Environment, false, false);
+                Box(leafGo.transform, "Panel Inset", floorCenter + new Vector3(0, y, 0), new Vector3(width - 0.5f, 0.42f, 0.135f), M("Trim"), GameLayers.Environment, false, false);
+            }
+            Box(root.transform, "Frame Top", floorCenter + new Vector3(0, height + 0.05f, 0), new Vector3(width + 0.3f, 0.1f, T + 0.06f), M("Hazard"), GameLayers.Default, false);
 
             // Hazard frame so doorways read clearly in the dark.
             Box(root.transform, "Frame L", floorCenter + new Vector3(-width * 0.5f - 0.05f, height * 0.5f, 0), new Vector3(0.1f, height, T + 0.06f), M("Hazard"), GameLayers.Default, false);
@@ -361,15 +382,18 @@ namespace TrashAstronauts.EditorTools
             float length = d.magnitude;
             var go = Empty(s_Rails, "Rail", (a + b) * 0.5f, Quaternion.LookRotation(d / length, Vector3.up), GameLayers.Rail);
             Prim(go.transform, "Bar", PrimitiveType.Cylinder, Vector3.zero, new Vector3(0.04f, length * 0.5f, 0.04f), M("Rail"), false, new Vector3(90, 0, 0));
-            Prim(go.transform, "Cap A", PrimitiveType.Cube, new Vector3(0, 0, -length * 0.5f), new Vector3(0.06f, 0.06f, 0.05f), M("Trim"));
-            Prim(go.transform, "Cap B", PrimitiveType.Cube, new Vector3(0, 0, length * 0.5f), new Vector3(0.06f, 0.06f, 0.05f), M("Trim"));
+            // Brackets at each end and along the span.
+            int brackets = Mathf.Max(2, Mathf.RoundToInt(length / 1.4f) + 1);
+            for (int i = 0; i < brackets; i++)
+            {
+                float z = Mathf.Lerp(-length * 0.5f, length * 0.5f, i / (float)(brackets - 1));
+                CBox(go.transform, "Bracket", new Vector3(0, 0, z), new Vector3(0.062f, 0.062f, 0.05f), M("Steel"), 0.012f);
+            }
             var col = go.AddComponent<BoxCollider>();
             col.size = new Vector3(0.11f, 0.11f, length);
 
-            var climb = go.AddComponent<ClimbInteractable>();
-            climb.selectMode = InteractableSelectMode.Multiple;
-            climb.filterInteractionByDistance = false;
-            climb.climbTransform = go.transform;
+            // The zero-g locomotion grabs anything on the Rail or Environment layers; the highlight
+            // lights the rail up when a hand is close enough to take hold.
             var highlight = go.AddComponent<HoverHighlight>();
             highlight.renderers = new Renderer[] { go.transform.Find("Bar").GetComponent<MeshRenderer>() };
             highlight.hoverEmission = new Color(0.9f, 0.7f, 0.1f);
@@ -637,7 +661,57 @@ namespace TrashAstronauts.EditorTools
 
         static void Container(Vector3 floorCenter, Vector3 size, string mat = "Container")
         {
-            Box(s_Props, "Container", floorCenter + Vector3.up * (size.y * 0.5f), size, M(mat));
+            var root = Box(s_Props, "Container", floorCenter + Vector3.up * (size.y * 0.5f), size, M(mat)).transform;
+            Vector3 c = floorCenter + Vector3.up * (size.y * 0.5f);
+            // Corrugation ribs on the two long sides, posts on the corners, a frame top and bottom.
+            bool longX = size.x >= size.z;
+            float longLen = longX ? size.x : size.z, shortLen = longX ? size.z : size.x;
+            int ribs = Mathf.Max(3, Mathf.RoundToInt(longLen / 0.28f));
+            for (int i = 0; i < ribs; i++)
+            {
+                float along = -longLen * 0.5f + (i + 0.5f) * longLen / ribs;
+                foreach (float side in new[] { -1f, 1f })
+                {
+                    Vector3 offset = longX ? new Vector3(along, 0, side * (shortLen * 0.5f + 0.012f)) : new Vector3(side * (shortLen * 0.5f + 0.012f), 0, along);
+                    Vector3 ribSize = longX ? new Vector3(0.07f, size.y - 0.16f, 0.024f) : new Vector3(0.024f, size.y - 0.16f, 0.07f);
+                    Box(root, "Rib", c + offset, ribSize, M(mat), GameLayers.Default, false);
+                }
+            }
+            foreach (float sx in new[] { -1f, 1f })
+                foreach (float sz in new[] { -1f, 1f })
+                    Box(root, "Post", c + new Vector3(sx * (size.x * 0.5f - 0.02f), 0, sz * (size.z * 0.5f - 0.02f)), new Vector3(0.09f, size.y + 0.02f, 0.09f), M("Trim"), GameLayers.Default, false);
+            Box(root, "Top Frame", c + Vector3.up * (size.y * 0.5f - 0.03f), new Vector3(size.x + 0.04f, 0.07f, size.z + 0.04f), M("Trim"), GameLayers.Default, false);
+            Box(root, "Bottom Frame", c - Vector3.up * (size.y * 0.5f - 0.03f), new Vector3(size.x + 0.04f, 0.07f, size.z + 0.04f), M("Trim"), GameLayers.Default, false);
+        }
+
+        /// <summary>A round pipe between two points with flange rings along it.</summary>
+        static void Pipe(string name, Vector3 a, Vector3 b, float radius, string mat)
+        {
+            Vector3 d = b - a;
+            float length = d.magnitude;
+            var root = Empty(s_Props, name, (a + b) * 0.5f, Quaternion.FromToRotation(Vector3.up, d / length), GameLayers.Default).transform;
+            Part(root, "Pipe", Tube(radius, length, 10), Vector3.zero, M(mat)).isStatic = true;
+            int flanges = Mathf.Max(2, Mathf.RoundToInt(length / 2.2f) + 1);
+            for (int i = 0; i < flanges; i++)
+            {
+                float y = Mathf.Lerp(-length * 0.5f + 0.05f, length * 0.5f - 0.05f, i / (float)(flanges - 1));
+                Part(root, "Flange", Tube(radius * 1.45f, 0.05f, 10), new Vector3(0, y, 0), M("Steel")).isStatic = true;
+            }
+        }
+
+        /// <summary>Angled screen and a row of lit keys on top of a console block.</summary>
+        static void ConsoleDetail(Vector3 topCentre, float width, Vector3 userSide)
+        {
+            var root = Empty(s_Props, "Console Detail", topCentre, Quaternion.LookRotation(-userSide, Vector3.up), GameLayers.Default).transform;
+            CBox(root, "Screen Housing", new Vector3(0, 0.16f, 0.12f), new Vector3(width * 0.8f, 0.3f, 0.05f), M("Trim"), 0.012f, new Vector3(-20, 0, 0));
+            CBox(root, "Screen", new Vector3(0, 0.165f, 0.092f), new Vector3(width * 0.72f, 0.23f, 0.006f), M("ScreenGlow"), 0.002f, new Vector3(-20, 0, 0));
+            int keys = Mathf.Max(4, Mathf.RoundToInt(width / 0.12f));
+            for (int i = 0; i < keys; i++)
+            {
+                string mat = i % 5 == 0 ? "GlowRed" : i % 3 == 0 ? "ButtonAmber" : "Steel";
+                CBox(root, "Key", new Vector3(-width * 0.36f + i * (width * 0.72f / (keys - 1)), 0.012f, -0.12f), new Vector3(0.05f, 0.02f, 0.05f), M(mat), 0.006f);
+            }
+            CBox(root, "Keyboard Tray", new Vector3(0, 0.004f, -0.12f), new Vector3(width * 0.82f, 0.012f, 0.1f), M("Chip"), 0.003f);
         }
 
         static void Junk(GameObject prefab, Vector3 position)
@@ -654,6 +728,7 @@ namespace TrashAstronauts.EditorTools
             Box(s_Props, "Pilot Console", new Vector3(-0.7f, 0.45f, -2.55f), new Vector3(1.6f, 0.9f, 0.6f), M("Trim"));
             Sign("SALVAGE TUG 'PAYCHEQUE'", new Vector3(0, 2.45f, 2f - T * 0.5f - 0.02f), Vector3.back, 1.3f);
             Sign("WRECK >>", new Vector3(1.35f, 1.7f, 2f - T * 0.5f - 0.02f), Vector3.back, 1.2f);
+            Sign("GRIP ANY SURFACE TO HOLD ON", new Vector3(-1.35f, 1.7f, 2f - T * 0.5f - 0.02f), Vector3.back, 0.7f, new Color(1f, 0.85f, 0.3f));
             Sign("AIRLOCK\nOXYGEN DRAINS BEYOND THE TUG", new Vector3(0, 2.5f, 3.6f + T * 0.5f + 0.02f), Vector3.forward, 1.0f, new Color(1f, 0.5f, 0.4f));
             Sign("<< TUG (SAFE)", new Vector3(-1.3f, 1.7f, 3.6f + T * 0.5f + 0.02f), Vector3.forward, 1.1f, new Color(0.5f, 1f, 0.6f));
 
@@ -664,16 +739,33 @@ namespace TrashAstronauts.EditorTools
             Sign("<< EXIT TO TUG", new Vector3(0, 2.45f, 7.6f + T * 0.5f + 0.02f), Vector3.forward, 1.2f, new Color(0.5f, 1f, 0.6f));
             Sign("SERVICE DUCT\nTO REACTOR", new Vector3(5.6f, 1.9f, 15.6f - T * 0.5f - 0.02f), Vector3.back, 1.0f);
             Sign("SERVICE DUCT\nTO MAINTENANCE", new Vector3(4.5f - T * 0.5f - 0.02f, 2.35f, 24f), Vector3.left, 0.9f);
-            Sign("JANITOR-7 DOCK\nDO NOT WAKE", new Vector3(3.4f, 2.2f, 29.6f - T * 0.5f - 0.02f), Vector3.back, 0.9f, new Color(1f, 0.5f, 0.4f));
+            Sign("MAINTENANCE UNIT DOCK\nDO NOT WAKE IT", new Vector3(3.4f, 2.2f, 29.6f - T * 0.5f - 0.02f), Vector3.back, 0.9f, new Color(1f, 0.5f, 0.4f));
             for (int i = 0; i < 6; i++)
             {
                 float z = 8.6f + i * 2.4f;
                 if (Mathf.Abs(z - 12f) > 1.2f) Box(s_Props, "Rib W", new Vector3(-1.3f + T * 0.5f + 0.04f, H * 0.5f, z), new Vector3(0.08f, H, 0.16f), M("Trim"), GameLayers.Default, false);
                 if (Mathf.Abs(z - 10.5f) > 1.1f) Box(s_Props, "Rib E", new Vector3(1.3f - T * 0.5f - 0.04f, H * 0.5f, z), new Vector3(0.08f, H, 0.16f), M("Trim"), GameLayers.Default, false);
             }
-            Box(s_Props, "Corridor Pipe A", new Vector3(-0.85f, H - 0.18f, 14.6f), new Vector3(0.1f, 0.1f, 13.8f), M("Pipe"), GameLayers.Default, false);
-            Box(s_Props, "Corridor Pipe B", new Vector3(-0.68f, H - 0.14f, 14.6f), new Vector3(0.06f, 0.06f, 13.8f), M("Cable"), GameLayers.Default, false);
-            Box(s_Props, "Corridor Cable", new Vector3(0.9f, H - 0.12f, 14.6f), new Vector3(0.05f, 0.05f, 13.8f), M("Cable"), GameLayers.Default, false);
+            Pipe("Corridor Pipe A", new Vector3(-0.85f, H - 0.2f, 7.8f), new Vector3(-0.85f, H - 0.2f, 21.4f), 0.06f, "Pipe");
+            Pipe("Corridor Pipe B", new Vector3(-0.66f, H - 0.15f, 7.8f), new Vector3(-0.66f, H - 0.15f, 21.4f), 0.035f, "Steel");
+            Pipe("Corridor Cable Run", new Vector3(0.9f, H - 0.13f, 7.8f), new Vector3(0.9f, H - 0.13f, 21.4f), 0.028f, "Cable");
+            Pipe("Cargo Pipe", new Vector3(-10.0f, H - 0.25f, 9.9f), new Vector3(-10.0f, H - 0.25f, 18.3f), 0.07f, "Pipe");
+            Pipe("Maintenance Pipe", new Vector3(1.6f, H - 0.22f, 8.9f), new Vector3(8.0f, H - 0.22f, 8.9f), 0.05f, "Pipe");
+            Pipe("Reactor Coolant W", new Vector3(-3.3f, 2.0f, 25.2f), new Vector3(-3.3f, H, 25.2f), 0.09f, "Steel");
+            Pipe("Reactor Coolant E", new Vector3(3.3f, 2.0f, 26.4f), new Vector3(3.3f, H, 26.4f), 0.09f, "Steel");
+            Pipe("Reactor Feed W", new Vector3(-0.9f, 2.25f, 25.9f), new Vector3(-3.3f, 2.25f, 25.4f), 0.05f, "Pipe");
+            Pipe("Reactor Feed E", new Vector3(0.9f, 2.25f, 25.9f), new Vector3(3.3f, 2.25f, 26.2f), 0.05f, "Pipe");
+
+            // Consoles get lit screens and key rows so they read as equipment, not blocks.
+            ConsoleDetail(new Vector3(-0.7f, 0.9f, -2.55f), 1.5f, Vector3.forward);
+            ConsoleDetail(new Vector3(-3.6f, 1.0f, 28.4f), 1.1f, Vector3.back);
+            ConsoleDetail(new Vector3(5.2f, 0.9f, 14.9f), 2.0f, Vector3.back);
+
+            // Reactor housing: containment bands and warning beacons.
+            for (int i = 0; i < 3; i++)
+                Box(s_Props, "Containment Band", new Vector3(0, 0.45f + i * 0.85f, 25.9f), new Vector3(1.9f, 0.09f, 1.9f), M("Steel"), GameLayers.Default, false);
+            foreach (float sx in new[] { -1f, 1f })
+                Box(s_Props, "Reactor Beacon", new Vector3(sx * 0.78f, 2.05f, 24.97f), new Vector3(0.1f, 0.1f, 0.05f), M("GlowRed"), GameLayers.Default, false);
 
             // --- cargo bay: containers make cover to hide behind
             Container(new Vector3(-4.6f, 0, 11.2f), new Vector3(1.3f, 2.1f, 2.2f));
@@ -794,11 +886,14 @@ namespace TrashAstronauts.EditorTools
             return board;
         }
 
-        static TextMeshPro BuildTutorialBoard()
+        static TextMeshPro BuildTutorialBoard(out PushButton skipStep, out PushButton skipAll)
         {
             var root = Empty(s_Props, "Tutorial Board", new Vector3(-2f + T * 0.5f + 0.02f, 1.5f, 0.95f), Facing(Vector3.right), GameLayers.Default);
-            Prim(root.transform, "Back", PrimitiveType.Cube, new Vector3(0, 0, 0.012f), new Vector3(1.7f, 1.3f, 0.02f), M("Screen"));
-            return Text(root.transform, "Text", "", new Vector3(0, 0, -0.002f), Quaternion.identity, 0.5f, new Vector2(1.6f, 1.2f), new Color(0.75f, 1f, 0.8f), TextAlignmentOptions.TopLeft);
+            Prim(root.transform, "Back", PrimitiveType.Cube, new Vector3(0, 0, 0.012f), new Vector3(1.7f, 1.5f, 0.02f), M("Screen"));
+            CBox(root.transform, "Header Bar", new Vector3(0, 0.735f, 0.006f), new Vector3(1.7f, 0.03f, 0.03f), M("GlowWarm"), 0.006f);
+            skipStep = Button(root.transform, "Skip Step", new Vector3(-0.42f, -0.6f, 0), Quaternion.identity, new Vector2(0.72f, 0.16f), "SKIP STEP", M("ButtonBlue"), 0.5f);
+            skipAll = Button(root.transform, "Skip All", new Vector3(0.42f, -0.6f, 0), Quaternion.identity, new Vector2(0.72f, 0.16f), "SKIP ALL", M("ButtonAmber"), 0.5f);
+            return Text(root.transform, "Text", "", new Vector3(0, 0.1f, -0.002f), Quaternion.identity, 0.5f, new Vector2(1.6f, 1.15f), new Color(0.75f, 1f, 0.8f), TextAlignmentOptions.TopLeft);
         }
     }
 }

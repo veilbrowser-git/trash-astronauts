@@ -6,14 +6,13 @@ using TrashAstronauts.World;
 using Unity.XR.CoreUtils;
 using UnityEngine;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion;
-using UnityEngine.XR.Interaction.Toolkit.Locomotion.Climbing;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
 
 namespace TrashAstronauts.Player
 {
     /// <summary>
-    /// The single place that moves the player. All movement (handrail pulling, teleport, snap turn,
+    /// The single place that moves the player. All movement (zero-g drifting, teleport, snap turn,
     /// unstuck, return-to-tug) is queued through XRI's LocomotionMediator / XRBodyTransformer, which
     /// moves the XR Origin and never touches the tracked camera, so head tracking is always preserved.
     /// </summary>
@@ -22,7 +21,7 @@ namespace TrashAstronauts.Player
         public XROrigin origin;
         public TeleportationProvider teleportation;
         public SnapTurnProvider snapTurn;
-        public ClimbProvider climb;
+        public ZeroGLocomotion zeroG;
         [Tooltip("Transform between the origin and the camera offset. Raised for seated play.")]
         public Transform heightAdjust;
         public BodyAnchor bodyAnchor;
@@ -35,18 +34,19 @@ namespace TrashAstronauts.Player
         void OnEnable()
         {
             if (teleportation != null) teleportation.locomotionEnded += OnLocomotionEnded;
-            if (climb != null) climb.locomotionEnded += OnLocomotionEnded;
+            if (zeroG != null) zeroG.PushedOff += OnZeroGMoved;
             if (snapTurn != null) snapTurn.locomotionEnded += OnTurnEnded;
         }
 
         void OnDisable()
         {
             if (teleportation != null) teleportation.locomotionEnded -= OnLocomotionEnded;
-            if (climb != null) climb.locomotionEnded -= OnLocomotionEnded;
+            if (zeroG != null) zeroG.PushedOff -= OnZeroGMoved;
             if (snapTurn != null) snapTurn.locomotionEnded -= OnTurnEnded;
         }
 
         void OnLocomotionEnded(LocomotionProvider provider) => Moved?.Invoke();
+        void OnZeroGMoved(float speed) => Moved?.Invoke();
 
         void OnTurnEnded(LocomotionProvider provider)
         {
@@ -57,6 +57,7 @@ namespace TrashAstronauts.Player
         {
             if (data == null) return;
             if (snapTurn != null) snapTurn.turnAmount = data.snapTurnDegrees;
+            if (zeroG != null) zeroG.momentumEnabled = data.zeroGDrift;
             SetHeightOffset(data.seatedHeightOffset);
         }
 
@@ -71,6 +72,7 @@ namespace TrashAstronauts.Player
         public bool TeleportTo(Vector3 feetPosition)
         {
             if (teleportation == null) return false;
+            if (zeroG != null) zeroG.Stop();
             return teleportation.QueueTeleportRequest(new TeleportRequest
             {
                 destinationPosition = feetPosition,
@@ -84,6 +86,7 @@ namespace TrashAstronauts.Player
         public bool TeleportTo(Vector3 feetPosition, Quaternion facing)
         {
             if (teleportation == null) return false;
+            if (zeroG != null) zeroG.Stop();
             if (bodyAnchor != null) bodyAnchor.SnapToHead();
             return teleportation.QueueTeleportRequest(new TeleportRequest
             {

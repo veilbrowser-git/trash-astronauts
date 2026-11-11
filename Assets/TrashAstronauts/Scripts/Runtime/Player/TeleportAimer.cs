@@ -63,7 +63,7 @@ namespace TrashAstronauts.Player
 
             if (!m_Aiming)
             {
-                if (forward && !hand.IsHoldingRail)
+                if (forward && !hand.IsAnchored)
                 {
                     m_Aiming = true;
                     SetVisible(true);
@@ -71,7 +71,7 @@ namespace TrashAstronauts.Player
                 else return;
             }
 
-            if (hand.IsHoldingRail)
+            if (hand.IsAnchored)
             {
                 Cancel();
                 return;

@@ -22,6 +22,8 @@ namespace TrashAstronauts.Core
         public int handedness;
         public float snapTurnDegrees = 45f;
         public float seatedHeightOffset;
+        /// <summary>Comfort option: keep drifting after letting go in zero-g (true) or stop at once (false).</summary>
+        public bool zeroGDrift = true;
         public bool tutorialCompleted;
         public int runsStarted;
         public int contractsCompleted;

@@ -5,6 +5,7 @@
         "TrashAstronauts.Core",
         "TrashAstronauts.Runtime",
         "Unity.XR.Interaction.Toolkit",
+        "Unity.InputSystem",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

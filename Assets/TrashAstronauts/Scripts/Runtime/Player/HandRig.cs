@@ -5,7 +5,6 @@ using UnityEngine.InputSystem;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Inputs.Haptics;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
-using UnityEngine.XR.Interaction.Toolkit.Locomotion.Climbing;
 
 namespace TrashAstronauts.Player
 {
@@ -37,22 +36,14 @@ namespace TrashAstronauts.Player
         public PlayerContext Player { get; private set; }
         public bool IsHolding => interactor != null && interactor.hasSelection;
 
-        public bool IsHoldingRail
-        {
-            get
-            {
-                if (!IsHolding) return false;
-                var selected = interactor.interactablesSelected;
-                for (int i = 0; i < selected.Count; i++)
-                {
-                    if (selected[i] is ClimbInteractable) return true;
-                }
-                return false;
-            }
-        }
+        /// <summary>True while this hand is holding on to the ship (wall, rail, prop). Set by ZeroGLocomotion.</summary>
+        public bool IsAnchored { get; set; }
+
+        /// <summary>Replaces the grip input when set (editor simulation and tests). Null = use the controller.</summary>
+        public float? GripOverride { get; set; }
 
         public Vector2 Thumbstick => Read(thumbstick, Vector2.zero);
-        public float Grip => Read(gripValue, 0f);
+        public float Grip => GripOverride ?? Read(gripValue, 0f);
         public float Trigger => Read(triggerValue, 0f);
         public bool TriggerPressedThisFrame => triggerButton != null && triggerButton.action != null && triggerButton.action.WasPressedThisFrame();
         public bool MenuPressedThisFrame => menuButton != null && menuButton.action != null && menuButton.action.WasPressedThisFrame();

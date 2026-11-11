@@ -49,6 +49,26 @@ namespace TrashAstronauts.Tests
         }
 
         [Test]
+        public void DriftComfortOption_RoundTrips_AndDefaultsToOnForOlderSaves()
+        {
+            var storage = new MemorySaveStorage();
+            var a = new ProfileService(storage);
+            a.Load();
+            Assert.IsTrue(a.Data.zeroGDrift);
+            a.Data.zeroGDrift = false;
+            a.Save();
+            var b = new ProfileService(storage);
+            b.Load();
+            Assert.IsFalse(b.Data.zeroGDrift);
+
+            // A save written before the option existed.
+            var old = new ProfileService(new MemorySaveStorage { Contents = "{\"totalCredits\":50,\"oxygenUpgradeLevel\":1}" });
+            old.Load();
+            Assert.AreEqual(50, old.Data.totalCredits);
+            Assert.IsTrue(old.Data.zeroGDrift);
+        }
+
+        [Test]
         public void MissingSave_StartsFromDefaults()
         {
             var profile = new ProfileService(new MemorySaveStorage());
