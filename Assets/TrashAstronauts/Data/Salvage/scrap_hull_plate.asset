@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ce0d7706ec6a14dab83ea86a278c8453, type: 3}
+  m_Name: scrap_hull_plate
+  m_EditorClassIdentifier: TrashAstronauts.Core::TrashAstronauts.Core.SalvageDefinition
+  id: scrap_hull_plate
+  displayName: Bent Hull Plate
+  category: 0
+  creditValue: 40
+  mass: 1.2
+  bulky: 0
+  scannerBlurb: Scrap metal. Sold by weight.
+  prefab: {fileID: 6820685943294489192, guid: 1771f1d58f5a14143bbe2ebf2698d50a, type: 3}

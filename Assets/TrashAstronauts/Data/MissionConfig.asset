@@ -1,0 +1,58 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 885e255869f4e4e14bad3301f6452c2e, type: 3}
+  m_Name: MissionConfig
+  m_EditorClassIdentifier: TrashAstronauts.Core::TrashAstronauts.Core.MissionConfig
+  quotaCredits: 900
+  contractBonusCredits: 150
+  quotaSafetyMargin: 1.3
+  baseOxygenSeconds: 600
+  oxygenLowFraction: 0.3
+  oxygenCriticalFraction: 0.12
+  oxygenUpgradeCost: 600
+  oxygenUpgradeBonusSeconds: 180
+  maxOxygenUpgradeLevel: 1
+  smallScrapCount: 6
+  electronicsCount: 3
+  reactorComponentCount: 1
+  noveltyCount: 1
+  scannerRange: 9
+  scannerHighlightSeconds: 5
+  scannerCooldownSeconds: 2.5
+  cutter:
+    secondsToOverheat: 7
+    secondsToCool: 5
+    restartHeatFraction: 0.35
+    secondsPerCutPoint: 0.55
+  enemy:
+    sightRange: 9
+    sightHalfAngle: 60
+    sightAcquireSeconds: 0.9
+    hearingRadiusAtFullLoudness: 16
+    patrolSpeed: 0.9
+    investigateSpeed: 1.5
+    chaseSpeed: 2.2
+    searchSpeed: 1.1
+    investigateLingerSeconds: 4
+    chaseLoseSightSeconds: 3
+    searchSeconds: 7
+    catchRadius: 0.95
+    wakeDelaySeconds: 20
+  noise:
+    impactSpeedThreshold: 2.2
+    impactSpeedForFullLoudness: 7
+    perObjectCooldown: 1
+    cuttingLoudness: 0.85
+    cutterIdleLoudness: 0.3
+    cuttingNoiseInterval: 0.8
+    panelBreakLoudness: 1
+    doorLoudness: 0.45

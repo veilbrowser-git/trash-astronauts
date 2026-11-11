@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ce0d7706ec6a14dab83ea86a278c8453, type: 3}
+  m_Name: elec_nav_board
+  m_EditorClassIdentifier: TrashAstronauts.Core::TrashAstronauts.Core.SalvageDefinition
+  id: elec_nav_board
+  displayName: Nav Computer Board
+  category: 1
+  creditValue: 150
+  mass: 1.5
+  bulky: 0
+  scannerBlurb: Still knows the way home.
+  prefab: {fileID: 7654965998540258398, guid: 4a64f15adc50242d091b8e896594bd56, type: 3}

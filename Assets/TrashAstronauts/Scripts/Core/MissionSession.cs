@@ -1,0 +1,287 @@
+using System;
+using System.Collections.Generic;
+
+namespace TrashAstronauts.Core
+{
+    public enum MissionPhase
+    {
+        /// <summary>Safe in the tug, no contract running. Tutorial, shop and settings live here.</summary>
+        Hub = 0,
+        /// <summary>Contract running: oxygen drains outside the tug and the threat is awake.</summary>
+        Active = 1,
+        /// <summary>Contract ended (extracted or failed). Waiting for the player to start again.</summary>
+        Results = 2,
+    }
+
+    public enum MissionOutcome
+    {
+        None = 0,
+        ContractComplete = 1,
+        QuotaMissed = 2,
+        FailedOxygen = 3,
+        FailedCaught = 4,
+    }
+
+    public enum FailureReason
+    {
+        OxygenDepleted = 0,
+        Caught = 1,
+    }
+
+    public enum SalvageState
+    {
+        InWreck = 0,
+        Collected = 1,
+        Deposited = 2,
+    }
+
+    public enum DepositResult
+    {
+        Accepted = 0,
+        MissionNotActive = 1,
+        UnknownItem = 2,
+        AlreadyDeposited = 3,
+    }
+
+    public sealed class SalvageRecord
+    {
+        public string Id;
+        public string DefinitionId;
+        public int Value;
+        public SalvageState State;
+        public PlayerId CollectedBy = PlayerId.None;
+        public PlayerId DepositedBy = PlayerId.None;
+    }
+
+    public sealed class MissionResult
+    {
+        public MissionOutcome Outcome;
+        public int Quota;
+        public int DepositedValue;
+        public int DepositedCount;
+        public int Bonus;
+        /// <summary>Credits this run pays out. Zero on failure.</summary>
+        public int Payout;
+        public float OxygenRemainingSeconds;
+        public float ElapsedSeconds;
+
+        public bool IsFailure => Outcome == MissionOutcome.FailedOxygen || Outcome == MissionOutcome.FailedCaught;
+        public bool QuotaMet => DepositedValue >= Quota;
+    }
+
+    /// <summary>
+    /// The authoritative rules for one salvage run: salvage ledger, panels, oxygen, outcome and payout.
+    ///
+    /// This class has no scene, input or headset knowledge. Every shared-state change goes through one of
+    /// its methods (Begin, TryCollect, TryDeposit, TryOpenPanel, Extract, Fail, BankInto). In co-op the
+    /// host would own the only writable MissionSession and clients would send these calls as requests.
+    /// </summary>
+    public sealed class MissionSession
+    {
+        readonly Dictionary<string, SalvageRecord> m_Items = new Dictionary<string, SalvageRecord>();
+        readonly HashSet<string> m_OpenPanels = new HashSet<string>();
+        readonly int m_ContractBonus;
+        readonly float m_LowFraction;
+        readonly float m_CriticalFraction;
+
+        public MissionPhase Phase { get; private set; } = MissionPhase.Hub;
+        public int RunIndex { get; private set; }
+        public int Seed { get; private set; }
+        public int Quota { get; private set; }
+        public int DepositedValue { get; private set; }
+        public int DepositedCount { get; private set; }
+        public float ElapsedSeconds { get; private set; }
+        public OxygenTank Oxygen { get; }
+        public MissionResult Result { get; private set; }
+        /// <summary>True once this run's payout has been added to the profile. Guards against double payment.</summary>
+        public bool Banked { get; private set; }
+
+        public IReadOnlyCollection<SalvageRecord> Items => m_Items.Values;
+        public bool QuotaMet => DepositedValue >= Quota;
+
+        public event Action<MissionPhase> PhaseChanged;
+        public event Action<SalvageRecord> SalvageCollected;
+        public event Action<SalvageRecord> SalvageDeposited;
+        public event Action<string, PlayerId> PanelOpened;
+        public event Action<MissionResult> Ended;
+
+        public MissionSession(int contractBonus = 0, float oxygenLowFraction = 0.3f, float oxygenCriticalFraction = 0.12f)
+        {
+            m_ContractBonus = Math.Max(0, contractBonus);
+            m_LowFraction = oxygenLowFraction;
+            m_CriticalFraction = oxygenCriticalFraction;
+            Oxygen = new OxygenTank(1f, m_LowFraction, m_CriticalFraction);
+        }
+
+        public static MissionSession FromConfig(MissionConfig config)
+        {
+            return new MissionSession(config.contractBonusCredits, config.oxygenLowFraction, config.oxygenCriticalFraction);
+        }
+
+        /// <summary>Starts a fresh run. Allowed from Hub or Results; clears every trace of the previous run.</summary>
+        public bool Begin(int seed, int quota, float oxygenCapacitySeconds)
+        {
+            if (Phase == MissionPhase.Active) return false;
+
+            ClearRunState();
+            RunIndex++;
+            Seed = seed;
+            Quota = Math.Max(0, quota);
+            Oxygen.Refill(oxygenCapacitySeconds, m_LowFraction, m_CriticalFraction);
+            SetPhase(MissionPhase.Active);
+            return true;
+        }
+
+        /// <summary>Registers a spawned salvage item. Ids must be unique within the run.</summary>
+        public bool RegisterSalvage(string id, string definitionId, int value)
+        {
+            if (Phase != MissionPhase.Active || string.IsNullOrEmpty(id) || m_Items.ContainsKey(id)) return false;
+            m_Items.Add(id, new SalvageRecord
+            {
+                Id = id,
+                DefinitionId = definitionId,
+                Value = Math.Max(0, value),
+                State = SalvageState.InWreck,
+            });
+            return true;
+        }
+
+        public bool TryGetSalvage(string id, out SalvageRecord record)
+        {
+            if (id == null) { record = null; return false; }
+            return m_Items.TryGetValue(id, out record);
+        }
+
+        public int TotalRegisteredValue
+        {
+            get
+            {
+                int total = 0;
+                foreach (var item in m_Items.Values) total += item.Value;
+                return total;
+            }
+        }
+
+        /// <summary>Marks an item as picked up for the first time. Returns false if nothing changed.</summary>
+        public bool TryCollect(string id, PlayerId by)
+        {
+            if (Phase != MissionPhase.Active) return false;
+            if (!TryGetSalvage(id, out var record) || record.State != SalvageState.InWreck) return false;
+            record.State = SalvageState.Collected;
+            record.CollectedBy = by;
+            SalvageCollected?.Invoke(record);
+            return true;
+        }
+
+        /// <summary>Secures an item in the tug locker. Each item is accepted, and counted, exactly once.</summary>
+        public DepositResult TryDeposit(string id, PlayerId by)
+        {
+            if (Phase != MissionPhase.Active) return DepositResult.MissionNotActive;
+            if (!TryGetSalvage(id, out var record)) return DepositResult.UnknownItem;
+            if (record.State == SalvageState.Deposited) return DepositResult.AlreadyDeposited;
+
+            record.State = SalvageState.Deposited;
+            record.DepositedBy = by;
+            DepositedValue += record.Value;
+            DepositedCount++;
+            SalvageDeposited?.Invoke(record);
+            return DepositResult.Accepted;
+        }
+
+        public bool IsPanelOpen(string panelId) => panelId != null && m_OpenPanels.Contains(panelId);
+
+        /// <summary>Opens a cuttable panel or mount. Returns false if it was already open.</summary>
+        public bool TryOpenPanel(string panelId, PlayerId by)
+        {
+            if (Phase != MissionPhase.Active || string.IsNullOrEmpty(panelId)) return false;
+            if (!m_OpenPanels.Add(panelId)) return false;
+            PanelOpened?.Invoke(panelId, by);
+            return true;
+        }
+
+        /// <summary>
+        /// Advances mission time. Oxygen only drains when the player is outside the safe tug.
+        /// Returns the failure result if oxygen ran out on this tick, otherwise null.
+        /// </summary>
+        public MissionResult Tick(float deltaSeconds, bool playerInSafeZone)
+        {
+            if (Phase != MissionPhase.Active || deltaSeconds <= 0f) return null;
+            ElapsedSeconds += deltaSeconds;
+            if (playerInSafeZone) return null;
+            return Oxygen.Drain(deltaSeconds) ? Fail(FailureReason.OxygenDepleted) : null;
+        }
+
+        /// <summary>Manual extraction from the tug. Pays for whatever was deposited; adds the bonus if the quota was met.</summary>
+        public MissionResult Extract(PlayerId by)
+        {
+            if (Phase != MissionPhase.Active) return null;
+            bool met = QuotaMet;
+            int bonus = met ? m_ContractBonus : 0;
+            return End(met ? MissionOutcome.ContractComplete : MissionOutcome.QuotaMissed, DepositedValue + bonus, bonus);
+        }
+
+        /// <summary>Fails the run. This run's earnings are forfeited; banked credits are untouched.</summary>
+        public MissionResult Fail(FailureReason reason)
+        {
+            if (Phase != MissionPhase.Active) return null;
+            return End(reason == FailureReason.Caught ? MissionOutcome.FailedCaught : MissionOutcome.FailedOxygen, 0, 0);
+        }
+
+        MissionResult End(MissionOutcome outcome, int payout, int bonus)
+        {
+            Result = new MissionResult
+            {
+                Outcome = outcome,
+                Quota = Quota,
+                DepositedValue = DepositedValue,
+                DepositedCount = DepositedCount,
+                Bonus = bonus,
+                Payout = Math.Max(0, payout),
+                OxygenRemainingSeconds = Oxygen.Remaining,
+                ElapsedSeconds = ElapsedSeconds,
+            };
+            SetPhase(MissionPhase.Results);
+            Ended?.Invoke(Result);
+            return Result;
+        }
+
+        /// <summary>
+        /// Adds this run's payout to the profile exactly once. Returns the credits added (0 if already banked,
+        /// not finished, or failed).
+        /// </summary>
+        public int BankInto(ProfileService profile)
+        {
+            if (Phase != MissionPhase.Results || Result == null || Banked || profile == null) return 0;
+            Banked = true;
+            profile.RecordRunFinished(Result.Payout, !Result.IsFailure);
+            return Result.Payout;
+        }
+
+        /// <summary>Leaves the results screen and returns to the hub with no run state.</summary>
+        public bool ReturnToHub()
+        {
+            if (Phase != MissionPhase.Results) return false;
+            ClearRunState();
+            SetPhase(MissionPhase.Hub);
+            return true;
+        }
+
+        void ClearRunState()
+        {
+            m_Items.Clear();
+            m_OpenPanels.Clear();
+            DepositedValue = 0;
+            DepositedCount = 0;
+            ElapsedSeconds = 0f;
+            Result = null;
+            Banked = false;
+        }
+
+        void SetPhase(MissionPhase phase)
+        {
+            if (Phase == phase) return;
+            Phase = phase;
+            PhaseChanged?.Invoke(phase);
+        }
+    }
+}
