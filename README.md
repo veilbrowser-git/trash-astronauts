@@ -5,6 +5,18 @@ controllers). You are an underpaid astronaut: board a derelict hauler from your 
 yourself along handrails, cut open panels, haul junk back to the tug's collection locker, and get out
 before your oxygen runs out or the ship's malfunctioning janitor drone finds you.
 
+## Download
+
+**[Download TrashAstronauts.apk](https://github.com/veilbrowser-git/trash-astronauts/raw/builds/TrashAstronauts.apk)** (about 32 MB, Meta Quest 3 / 3S)
+
+That one file is the whole game. To install it:
+
+1. Turn on **Developer Mode** for your headset in the Meta Horizon phone app (required for any app that is not from the Meta store).
+2. Connect the headset to a computer by USB and install the APK with [Meta Quest Developer Hub](https://developers.meta.com/horizon/documentation/unity/ts-mqdh/), SideQuest, or `adb install -r TrashAstronauts.apk`.
+3. In the headset, open the app library and look under **Unknown Sources**.
+
+This build has not been tested on a headset yet.
+
 > **Verification status, read this first.** The project compiles, the scene and all assets are
 > generated, 66 automated tests pass in the Unity editor on macOS, and a Quest APK builds
 > (`Builds/Quest/TrashAstronauts.apk`). It has **not** been installed or run on a headset. Comfort,
