@@ -193,6 +193,7 @@ namespace TrashAstronauts.EditorTools
             SettingsShot();
             SuitColourShots();
             RemoteToolShots();
+            CutSeamShots(); // PreviewRenderer.Cutting.cs
             HeadLampShots(); // PreviewRenderer.HeadLamp.cs
 
             Shot("08_top_down", new Vector3(-2f, 64f, 32f), new Vector3(-2f, 0f, 32.01f), true);

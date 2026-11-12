@@ -18,6 +18,8 @@ That one file is the whole game. To install it:
 2. Connect the headset to a computer by USB and install the APK with [Meta Quest Developer Hub](https://developers.meta.com/horizon/documentation/unity/ts-mqdh/), SideQuest, or `adb install -r TrashAstronauts.apk`.
 3. In the headset, open the app library and look under **Unknown Sources**.
 
+Version 0.13.0 makes the wrecks **1.5 times bigger** in each direction (more lamps, more places to search, a bigger oxygen tank to match), replaces welds with **seams you cut along** with the plasma cutter, and adds a **salvage claw** in the tug's supply bay to pass the time between contracts. In co-op, a crew mate the spider catches is now **downed** instead of the contract failing, and the rest of the crew can **revive** them; you can **shove** each other; and **the Mimic** can now be the crew's spider. Co-op has still not been tried on two real headsets.
+
 Version 0.10.0 is the **first co-op build**, and it is deliberately small: on the same Wi-Fi, one headset presses **HOST CO-OP** on the new CO-OP CREW panel in the tug, the others press **FIND CREW** and **JOIN** (or ENTER CODE), and up to four players **see each other** in the tug as suited astronauts with moving heads, arms and gloved hands, each in their own colour. Contracts cannot be started while a crew link is open yet; the shared contract comes next, and online play after that. The game now asks for the network permission, and contacts nothing until one of those buttons is pressed. It has never been tried on two real headsets: whether they find each other on your network is exactly what this build is for.
 
 The source in this repository has moved on from the 0.10.0 download: crews can now also form **online**, and the host can start a **shared contract** that the whole crew rides along in (see **Co-op** below). No build of that has been published yet.
@@ -90,17 +92,31 @@ audio, prefabs and the scene in place, and it never overwrites the balancing ass
    practice plate. The current step shows on the wall board and on a small panel that floats with
    you. Any step, or all of it, can be skipped, and it can be replayed later from the board. No
    oxygen drains and the creature is dormant until you start a contract.
-2. **START CONTRACT** docks **one of three wrecks**, chosen at random: the hauler *Margin Call* (a long spine corridor with rooms off it), the ore barge *Slow Dividend* (a tall central hold you can float over, rooms on three sides) or the survey ship *Due Diligence* (a ring corridor around the lab and reactor, so there are always two ways round). It opens the hatch and puts **one of four creatures** aboard, chosen at random: **JANITOR-7** (sees and hears about equally), **THE LISTENER** (blind, but hears everything, including your thruster), **THE WARDEN** (slow and half deaf, but sees a long way) or **THE MIMIC** (answers you with your own voice a couple of seconds after you speak, and repeats older phrases while it wanders; it needs MIC on, otherwise it is silent). The mission board tells you which one and how it hunts. Your flashlight (chest), scanner and plasma cutter (hips) are already on your suit.
+2. **START CONTRACT** docks **one of three wrecks** (or the Moon cave), chosen at random, each 1.5 times longer and wider than before 0.13.0 with ceilings up to 3.4 m (doors, buttons, panels, rails and lockers keep their real size): the hauler *Margin Call* (a long spine corridor with rooms off it), the ore barge *Slow Dividend* (a tall central hold you can float over, rooms on three sides) or the survey ship *Due Diligence* (a ring corridor around the lab and reactor, so there are always two ways round). It opens the hatch and puts **one of four creatures** aboard, chosen at random: **JANITOR-7** (sees and hears about equally), **THE LISTENER** (blind, but hears everything, including your thruster), **THE WARDEN** (slow and half deaf, but sees a long way) or **THE MIMIC** (answers you with your own voice a couple of seconds after you speak, and repeats older phrases while it wanders; it needs MIC on, otherwise it is silent). The mission board tells you which one and how it hunts. Your flashlight (chest), scanner and plasma cutter (hips) are already on your suit.
 3. **Airlock > the wreck.** Every wreck has a reactor or drive core sealed in a housing, a locked store, a clamped electronics rack and a sealed shortcut the creature cannot use. Loot is placed at random among 20 curated spots per wreck each run.
-4. **Cut** the marked welds on access panels: the reactor housing (the high-value core), the secure
+4. **Cut** the orange seams that hold access panels shut: the reactor housing (the high-value core), the secure
    cargo locker, the rack clamp (mounted electronics) and the service-duct cover (a shortcut from
-   maintenance to the reactor that the drone cannot use).
+   maintenance to the reactor that the drone cannot use). Hold the cutter's flame a few centimetres off the
+   seam and drag it steadily: a white-hot line follows the flame and cools through orange and red to a dark
+   kerf. A steady pass at a careful drawing speed cuts clean and keeps the cutter cool, too fast only scores
+   the metal (a thinner glow to go over again), and holding still just burns heat; the buzz in your hand, the
+   pitch of the flame and the cutter's screen (`SEAM 5/12 GOOD`, `TOO FAST`, `MOVE ON`, `CLOSER`) tell you
+   how it is going. The plate works loose on the side you have cut and pops free with glowing edges when the
+   last stretch goes.
 5. **Handle it carefully.** Electronics, the toaster and the reactor core are delicate: every hard knock (above about 2 m/s) takes value off, down to a third of what they started at. Scrap does not care. The scan tag shows the loss.
 6. **Carry salvage back** and let go of it in the collection locker. It is counted once and locked away. **Throw it in from more than 2.2 m away for a TRICK SHOT**: +25% of its value, and the bonus counts toward the quota.
    Somewhere in the wreck there is also a **rubber duck**. Squeeze the trigger while holding it and it squeaks, loudly enough to draw the creature, so it can be thrown as a decoy. It is worth 75 cr at the locker.
 7. **Risk another trip or EXTRACT** (press twice to confirm) from the mission board.
 8. **Results:** contract complete (salvage + bonus), quota missed (salvage only), or failed (nothing).
-9. **Buy the O2 TANK+ upgrade** (600 cr, +3:00 oxygen, permanent) and start the next contract.
+9. **Buy the O2 TANK+ upgrade** (600 cr, +4:00 oxygen, permanent) and start the next contract. The tank
+   itself holds 13:20 (it was 10:00 before the wrecks grew in 0.13.0).
+10. **Between contracts, work the salvage claw.** Step up to the SALVAGE CLAW console under the observation
+   window in the supply bay: grip the stick to swing the huge hull arm (pull back to raise it, push to lower
+   it), hold EXTEND or RETRACT to change its reach, and pull the trigger (or press CLAW) to close the claw on
+   cargo drifting past outside. Carry what you catch to the INTAKE hatch beside the window and it pays into
+   your own save: 10 cr for scrap, 14 for a crate, 24 for a long container (grab it by the striped middle)
+   and 60 for the rare gold-striped strongbox, up to 150 cr per shift until you fly another contract. The
+   claw is local to each headset, sends nothing over the network, and is locked while a contract is running.
 
 ## Controls (Quest Touch controllers, either hand)
 
@@ -122,6 +138,9 @@ audio, prefabs and the scene in place, and it never overwrites the balancing ass
 | Drift on/off (comfort) | **DRIFT** in the suit menu. Off = you stop almost as soon as you let go, with no gliding. |
 | Snap turn | **Thumbstick left / right** (30 / 45 / 60 / 90 degrees, set in the suit menu). |
 | Use tool | **Trigger** while holding it: flashlight on/off, scanner ping, cutter flame, tranquilizer dart. |
+| Cut a seam | Hold the cutter's flame a few centimetres off the orange seam and drag it along at a steady, careful drawing speed (see **The loop**, step 4). |
+| Shove a crew mate (co-op) | Swing an empty hand (open or a fist) into a crew mate's suit to shove them, or press slowly to nudge them along: they drift away and you drift back a little, and you both feel a thud. **CREW SHOVES** in the suit settings, beside VOICE CHAT, turns it off for you: then you neither shove nor get shoved. |
+| Revive a crew mate (co-op) | Hold a hand closed on a downed crew mate's glowing **chest beacon** for about 5 seconds (see **Co-op**). |
 | Shop | The **COMPANY STORE** panel on the tug wall: tranquilizer darts (each puts the creature to sleep for about 8 seconds), a scanner range upgrade, a cutter coolant upgrade and a **HELMET LAMP** (250 credits, bought once and kept). Closed during a contract. |
 | Helmet lamp | Once bought: a wide, soft light on the right of your helmet that follows your head and leaves both hands free. Switch it with the yellow **LAMP** button on your wrist display, or by tapping the side of your helmet with a fingertip. It has its own battery that drains only on a contract outside the tug, recharges in the tug (or slowly while off), dims and stutters when low, and is shown on the wrist next to the flashlight's note. It stays on in a blackout, as the flashlight does, and goes dark with the flashlight when the creature strikes. Crew mates see it glowing with a soft cone. |
 | Hand tracking (experimental) | Put the controllers down. **Close your fist** = grip, **pinch thumb and index** = trigger, **left palm toward your face + pinch** = suit menu. Teleport, snap turn and the brake need a thumbstick, so with bare hands you move by pushing off, swimming and the thruster (point and pinch). Written without a headset to test on. |
@@ -172,16 +191,38 @@ them), one oxygen tank (the host's size; it drains while anyone who is not away 
 cut panels (anyone's cutter counts; the host opens the panel), the collection locker, and the contract
 clock. EXTRACT works only when everyone who is not away is inside the tug; otherwise the board says who is
 missing, for example `NOT ABOARD: CREW 2, 3`. When the contract ends everyone is brought back to the tug
-and **everyone is paid the full payout into their own save**. Shop, settings and the crew record stay on
+and **everyone is paid the payout into their own save** (less any revive deductions of their own; see
+**Downed and revived**). Shop, settings and the crew record stay on
 each headset.
 
-**The spider is shared.** There is **one spider for the whole crew** (never the Mimic in co-op), and the
+**The spider is shared.** There is **one spider for the whole crew** (any of the four, the Mimic too), and the
 blackouts come with it. It lives on the host's headset and everyone sees the same spider in the same
 place. It can hunt **anyone**: noises any player makes draw it, and the hunted player's suit buzzes and their
 wrist says `DRONE HUNTING YOU` while the others' wrists say who it is after (`DRONE HUNTING CREW 2`).
-**Anyone's tranquilizer works on it.** **If it catches one of you, the contract fails for everyone**: the
-caught player sees the usual jumpscare, the others see it happen to that player's suit, and everyone is
-brought home with nothing banked. Webs are not strung in co-op contracts.
+**Anyone's tranquilizer works on it.** Webs are not strung in co-op contracts.
+
+**Downed and revived.** A player the spider catches still gets the full jumpscare (the others see it happen to
+that player's suit), but afterwards they are **DOWNED** where they were caught instead of the contract
+failing, as long as someone else in the crew is still up; if nobody else is up, getting caught fails the
+contract for everyone as before (single-player is unchanged). A downed player cannot move, grab, use tools,
+press buttons or shove and cannot be shoved, but can look around, talk and listen; anything in their hands is
+let go. Their suit shows a glowing beacon on the chest that the crew can find in the dark, and the spider leaves
+them alone and wanders off. To revive them, hold a hand closed on that chest beacon for about 5 seconds (the
+ring on the beacon and on both wrists shows how far it is; letting go drains it, and the spider can hear you
+working). Every down costs that player 10% of their own pay for the contract (at most 40%), and anyone still
+down when the crew extracts is brought home by the company for a further 35%; oxygen running out still fails
+everyone.
+
+**Crew shoves.** Swing an empty hand (open or a fist) into a crew mate's suit and they are shoved away, or
+press slowly to nudge them along; they drift away and you drift back a little, as two people in zero-g would,
+and you both feel a thud. A shove gives the other player at most 1.5 m/s and the pusher at most 0.8 m/s back,
+works inside the tug and (along the ground) in the Moon cave, and never goes through walls. If being pushed
+around is not for you, turn **CREW SHOVES** off in the suit settings: then you neither shove nor get shoved.
+
+**The Mimic in a crew.** The Mimic can be the crew's spider. It plays back things any of the crew said
+(preferring someone who is not the player it is stalking and is more than 8 m from them), lowered, slowed and
+wobbled, from where the spider is, and everyone hears it. It is quiet in a blackout and while darted. While it
+may be keeping your words, the wrist display shows **REC** (see **Privacy**).
 
 **Suit colours.** Pick the colour of your suit at the **SUIT LOCKER** in the supply bay, next to the company
 store: press one of twelve colour swatches (or **CREW COLOUR** to go back to your crew slot's colour) and
@@ -192,11 +233,11 @@ if you change it in the middle of a session), and the CO-OP CREW panel names eve
 **Seeing each other's tools.** Each crew member's suit shows its four tools on the chest and hips, and a tool
 someone draws appears in that glove as it sits in their own hand. A crew mate's flashlight shows a lit lens and
 a soft beam (the nearest one or two also really light the walls), their plasma cutter shows its flame, glow and
-sparks with its sound coming from their hand, a weld they are burning visibly heats up on everyone's headset
-before it gives, and everyone sees the trail of the host's tranquilizer darts and of any other crew member's dart that hits
+sparks with its sound coming from their hand, a seam they are cutting shows on everyone's headset as the same
+glowing line moving along it, and everyone sees the trail of the host's tranquilizer darts and of any other crew member's dart that hits
 the spider (a crew member's miss is seen only by that player). These copies
-are only for looking at: they cannot be grabbed, collide or cut anything, and finishing a weld still goes
-through the host.
+are only for looking at: they cannot be grabbed, collide or cut anything, and finishing each stretch of a seam
+still goes through the host.
 
 **Voice chat.** In a crew you can talk to each other. A crew member's voice comes from their helmet:
 clear up close, quieter with distance (silent beyond about 18 m) and muffled through walls. A small teal
@@ -205,7 +246,8 @@ out. **VOICE CHAT** in the suit settings switches it on or off (on by default; o
 hear nobody); **MIC** off means the game uses no microphone at all. Your microphone also hears your friends
 from your speakers; the game tries not to send that back or let the spider hear it as you, so talking very
 quietly while someone else talks can be cut until they stop. The spider hears your real voice wherever you
-are, on the host's headset or your own. Sound quality is like a suit radio, and nothing is recorded.
+are, on the host's headset or your own. Sound quality is like a suit radio. Nothing is recorded, except that
+with the Mimic aboard the host's headset keeps a few short snippets in memory for it (see **Privacy**).
 
 **Everyone grabs.** Every crew member can grab, carry, hand over, throw and deposit salvage, and the item
 is in your hand the moment you close it, without waiting for the host. If two of you reach for the same
@@ -375,7 +417,7 @@ The online buttons are in `Assets/TrashAstronauts/Scripts/Runtime/Net/Online/` (
 - Players sign in **anonymously** (no account, no name, no email). Unity gives the device a random player id.
 - It contacts Unity's servers **only after you press HOST ONLINE or FIND ONLINE**. Automated tests in the editor check that a player who never does that never asks Unity Services to start, never initialises them and opens no Relay connection while playing a whole contract in the real game scene. This has not been verified by capturing network traffic on a headset. LEAVE closes the Relay connection and removes a hosted game from the list.
 - The lobby entry carries the tug number, the crew count, whether the crew is in the hub, on the results screen or on a contract, and a fingerprint of the game version (so different versions never see each other). The Relay join code is readable only by players who join the lobby.
-- Voice chat goes the same way as every other co-op message: online, your compressed voice passes through Unity's Relay servers while you talk (see **Privacy**). Nothing else from the microphone is sent, and nothing is recorded.
+- Voice chat goes the same way as every other co-op message: online, your compressed voice passes through Unity's Relay servers while you talk (see **Privacy**). Nothing else from the microphone is sent, and nothing is written to storage (with the Mimic aboard the host keeps a few short snippets in memory; see **Privacy**).
 - Tested on a Mac only, against the live service: the game scene hosts through its own panel, a second simulated player finds it in the Lobby list, joins through Relay, sees the crew and the start of a contract, and everything closes on LEAVE. It has **not been run on a headset**. Measured over Relay with DTLS encryption, one datagram can carry 1315 bytes; the game's datagrams are at most 1200.
 - Relay severs a connection that sends nothing for 10 seconds (the game pings it every 2 seconds while running, but a headset that is taken off or asleep sends nothing). An online game therefore does not survive a pause much longer than that, where a Wi-Fi one survives 45 seconds. When it happens the game notices at once: a player whose own connection dropped is told `LINK LOST` and plays on alone instead of waiting 60 seconds; the host lets that one player go at once and keeps the game open and listed for the rest; a host whose own connection died closes the game and takes it off the list. This has been tested with a simulated connection, not on a headset.
 - Release builds keep the Unity Services code the online buttons need from being stripped (`Assets/TrashAstronauts/link.xml`); whether anything else is missing in a stripped Quest build can only be confirmed on a device.
@@ -400,17 +442,33 @@ the buttons on the tug's CO-OP CREW panel**, and closes it when you press LEAVE.
   for next time; the game itself stores nothing about it.
 
 In a crew, each headset sends the others (through the host) its head and hand positions, finger curl,
-handedness, a few suit states (thruster, flashlight, cutter, away) and a fingerprint of the game version,
-and the host sends the contract (wreck, salvage, positions of the items it moves, oxygen, doors, panels,
-locker, results). Your save, credits and settings are never sent.
+handedness and suit colour (two of your settings, so your crew sees your avatar as you set it), a few suit
+states (thruster, flashlight, helmet lamp, cutter, away), the shoves your hands give, and a fingerprint of the
+game version, and the host sends the contract (wreck, salvage, positions of the items it moves, oxygen, doors,
+panels, locker, who is downed and how far their revive is, results). Your save, credits and other settings are
+never sent.
 
 **Voice chat.** In a crew (and only in a crew), while you talk, your voice is compressed (about 6 to 7.5 kB
 per second of talking) and sent to the other players in your crew: through the host's headset, and in an
 online game also through Unity's Relay servers. When you are quiet nothing is sent. It is played from your
-suit's helmet on their headsets and is **not recorded or stored** anywhere, on either end. **MIC off** (the
-game uses no microphone at all) or **VOICE CHAT off** (in the suit settings) stops it; with VOICE CHAT off you
-also hear nobody. Phrases recorded for the Mimic are never sent. In single-player nothing of voice chat
-exists.
+suit's helmet on their headsets and is not written to storage anywhere, on either end; except as described
+under **The Mimic in a crew** below, it is not kept either. **MIC off** (the game uses no microphone at all) or
+**VOICE CHAT off** (in the suit settings) stops it; with VOICE CHAT off you also hear nobody. In single-player
+nothing of voice chat exists.
+
+**The Mimic in a crew.** In a co-op contract with the Mimic aboard, the host's headset keeps short snippets of
+the crew's voice chat in its memory: at most the last four things each crew member said, up to four seconds
+each. The host's own snippets come from the host's microphone, exactly as in single-player. The Mimic may play
+any of these snippets back, lowered, slowed and wobbled, from where the spider is: every headset in the crew
+hears that playback (it travels to them like voice chat, through the host and, online, Unity's Relay). The
+snippets themselves are never sent anywhere, never written to storage and never analysed for words. They are
+erased when the contract ends, when you leave the crew or the connection is lost, when the crew member they
+belong to leaves, and when that crew member switches **MIC** or **VOICE CHAT** off. With **MIC off** or
+**VOICE CHAT off** your voice is not sent to the crew, so nothing of it is kept or played back. (The host
+player's own microphone follows the single-player rule: it is used for the Mimic only with **MIC on**, whatever
+VOICE CHAT says.) While this may be happening the wrist display shows **REC**, on the host and on every crew
+member whose voice chat is on. With VOICE CHAT off you also do not hear the Mimic play back the voices of
+other crew members.
 
 If you allow microphone access, the microphone is normally read only to measure how loud you are, so the creature can react to your voice: up to one second of audio is held in memory at a time and overwritten.
 
@@ -452,11 +510,13 @@ Relay), which receive your device's IP address (as any internet service does), a
 by Unity, the listing of a hosted game and the game data exchanged with your crew; other players looking up
 the game list can see the random player ids of a listed game's members. Their use is subject to Unity's
 terms and privacy policy. Co-op sends the position
-of your head and hands, finger curl, two of your settings (handedness and suit colour, so your crew sees
+of your head and hands, finger curl, the shoves your hands give, whether you are downed, two of your settings (handedness and suit colour, so your crew sees
 your avatar as you set it), a few suit states, a game-version fingerprint and the
 shared contract's state and, while you talk in a crew with voice chat on, your compressed voice (to the
-players in your crew only, through the host and, online, Unity's Relay; never recorded or stored; MIC off or
-VOICE CHAT off stops it). It never sends Mimic recordings, your save or any of your other settings. Online services may be
+players in your crew only, through the host and, online, Unity's Relay; never written to storage, and kept in
+memory only as short snippets for the Mimic while it is aboard; MIC off or VOICE CHAT off stops it), and, with the Mimic aboard, the Mimic's altered playback of snippets of the crew's
+voice chat (the snippets themselves stay in the host's memory; see **Privacy**). It never sends your save
+or any of your other settings. Online services may be
 unavailable, changed or withdrawn at any time. Progress (credits, the oxygen upgrade and comfort settings)
 is stored only in a file on your own device and is removed when you uninstall the Game.
 

@@ -201,6 +201,33 @@ namespace TrashAstronauts.Tests
             Assert.AreEqual(0, crew.Bank.Count, "and every crew phrase is forgotten");
         }
 
+        /// <summary>
+        /// Revive meets the Mimic: a downed crew member can still talk, so the Mimic may still keep their phrases, while
+        /// their voice reaches the spider's ears only at the downed noise cap.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator Host_ADownedCrewMember_StillFeedsTheMimic_ButTheirVoiceIsCappedForTheSpider()
+        {
+            m_Player.voice.LevelOverride = 0.0005f;
+            yield return HostContract(MimicIndex());
+            var creature = m_Director.ActiveEnemy;
+            var crew = VoiceChat.Active.Mimic;
+            Assert.IsTrue(m_Net.HostRules.Revive.TryDown(new PlayerId(1), creature), "the host is up, so the bot is downed");
+            var downed = m_Net.Crew(1).context;
+            yield return Frames(2);
+            Assert.IsTrue(downed.IsDowned);
+
+            yield return BotSays(m_Bot, Speech(1.2), 100);
+            Assert.AreEqual(1, crew.Bank.CountOf(1), "a downed player's voice chat still becomes a phrase for the Mimic");
+
+            creature.WakeNow();
+            creature.transform.position = downed.DownedPosition + Vector3.forward * 6f;
+            for (int i = 0; i < 3; i++) creature.Step(0.05f);
+            float heardBefore = creature.LastHeardNoiseTime;
+            m_Director.noise.Emit(new NoiseEvent(downed.DownedPosition, 1f, NoiseKind.Voice, new PlayerId(1)));
+            Assert.AreEqual(heardBefore, creature.LastHeardNoiseTime, "their shout from 6 m is capped at ReviveRules.DownedNoiseCap");
+        }
+
         [UnityTest]
         public IEnumerator Host_ItGoesQuiet_InABlackout_AndWhenTranquilized()
         {
