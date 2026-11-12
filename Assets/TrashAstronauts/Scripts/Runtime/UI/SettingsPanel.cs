@@ -26,6 +26,7 @@ namespace TrashAstronauts.UI
         public PushButton voiceChat;
         public PushButton unstuck;
         public PushButton recallTools;
+        public PushButton crewShoves;
         public float heightStep = 0.1f;
 
         void OnEnable()
@@ -40,6 +41,7 @@ namespace TrashAstronauts.UI
             Hook(voiceChat, OnVoiceChat, true);
             Hook(unstuck, OnUnstuck, true);
             Hook(recallTools, OnRecall, true);
+            Hook(crewShoves, OnCrewShoves, true);
             if (director != null) director.ProfileChanged += Refresh;
             Refresh();
         }
@@ -55,6 +57,7 @@ namespace TrashAstronauts.UI
             Hook(voiceChat, OnVoiceChat, false);
             Hook(unstuck, OnUnstuck, false);
             Hook(recallTools, OnRecall, false);
+            Hook(crewShoves, OnCrewShoves, false);
             if (director != null) director.ProfileChanged -= Refresh;
         }
 
@@ -138,6 +141,8 @@ namespace TrashAstronauts.UI
             if (player != null) player.RecallTools();
         }
 
+        void OnCrewShoves(PushButton b, HandRig hand) { if (Data == null) return; Data.crewShoves = !Data.crewShoves; director.ApplyAndSaveSettings(); }
+
         public void Refresh()
         {
             var data = Data;
@@ -162,6 +167,7 @@ namespace TrashAstronauts.UI
             if (voiceChat != null) voiceChat.SetLabel(data.voiceChat ? "VOICE CHAT: ON" : "VOICE CHAT: OFF");
             if (unstuck != null) unstuck.SetLabel("UNSTUCK");
             if (recallTools != null) recallTools.SetLabel("RECALL TOOLS");
+            if (crewShoves != null) crewShoves.SetLabel(data.crewShoves ? "CREW SHOVES: ON" : "CREW SHOVES: OFF");
         }
     }
 }

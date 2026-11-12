@@ -554,6 +554,7 @@ namespace TrashAstronauts.Core.Net
             }
             m_NoiseCount = 0;
             WriteCutProgress(ref w, time);
+            WriteCrewPush(ref w, time);
         }
 
         // ================================================================== receiving
@@ -729,6 +730,7 @@ namespace TrashAstronauts.Core.Net
                 case NetMsg.Clock: return ClockMsg.Read(ref r, out _);
                 case NetMsg.Voice: return VoiceMsg.Read(ref r, ref m_VoiceRead);
                 case CutProgressMsg.Id: return CutProgressMsg.Read(ref r, out _);
+                case CrewPushMsg.Id: return CrewPushMsg.Read(ref r, out _);
                 default: return false;
             }
         }
@@ -791,6 +793,7 @@ namespace TrashAstronauts.Core.Net
                     return true;
                 }
                 case CutProgressMsg.Id: return DispatchCutProgress(ref r);
+                case CrewPushMsg.Id: return DispatchCrewPush(ref r);
 
                 // ---------------- session
                 case NetMsg.Welcome:

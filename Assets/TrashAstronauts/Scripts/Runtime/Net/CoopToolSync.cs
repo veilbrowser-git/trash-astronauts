@@ -42,6 +42,7 @@ namespace TrashAstronauts.Net
             if (sync == null) sync = session.gameObject.AddComponent<CoopToolSync>();
             sync.session = session;
             sync.Bind();
+            CrewShove.Attach(session); // crew shoves start with the first stand-in too
             return sync;
         }
 

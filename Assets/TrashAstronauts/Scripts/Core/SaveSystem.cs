@@ -46,6 +46,11 @@ namespace TrashAstronauts.Core
         /// suit colours load as), 1..12 = PlayerAvatar.SuitColors[suitColor - 1]. Shared with the network (Net.SuitLook).
         /// </summary>
         public int suitColor;
+        /// <summary>
+        /// CREW SHOVES (co-op): this player's hands can shove crew mates and crew mates can shove this player. Off: neither
+        /// (a shove still thuds, without moving anybody). Saves from before it existed load as on.
+        /// </summary>
+        public bool crewShoves = true;
 
         public Handedness Handedness
         {
