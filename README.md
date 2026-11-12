@@ -2,11 +2,11 @@
 
 This branch holds only the built APK, so the `main` branch stays source-only.
 
-- `TrashAstronauts.apk` - version 0.8.2, built from commit a20fa5f on `main`
+- `TrashAstronauts.apk` - version 0.8.3, built from commit b5f6a8d on `main`
 - Meta Quest 3 / 3S, ARM64, OpenXR, minimum Android API 32
 - Signed with the Android debug key (fine for sideloading, not for a store)
-- SHA-256: `f9d1feaa606c055b5b5abf674f70a62bb30c48599e58ff0f7e539ddf1a0e3258`
-- 0.8.2: the player now has a head and a body, a space suit modelled in Blender (helmet, torso with a life-support pack, arms that follow your hands, legs). You see your own body but not your own helmet. Co-op is not in this build. Not yet run on a headset.
+- SHA-256: `8ac0ae74676a8e4c2371006be9b15335c6d2e85a5dc3ed47b673e9e6af56dc81`
+- 0.8.3: the webs strung across corridors and the hanging cocoons are gone; only the corner webs remain. Infested contracts now mean livelier small spiders instead of more webs. Not yet run on a headset.
 
 Install with developer mode on and the headset connected by USB:
 
