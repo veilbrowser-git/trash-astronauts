@@ -27,6 +27,11 @@ namespace TrashAstronauts.Player
 
         /// <summary>True while the player is locked down.</summary>
         public bool On { get; private set; }
+        /// <summary>
+        /// The visor was kept cracked by a downing this contract (it stays cracked after a revive, as a scar of the
+        /// contract). MissionDirector.ClearCrewDowned clears it when the contract is over.
+        /// </summary>
+        public bool VisorKeptCracked { get; set; }
         /// <summary>The dimmed view is showing.</summary>
         public bool VignetteShown => m_Vignette != null && m_Vignette.enabled;
 
@@ -79,9 +84,14 @@ namespace TrashAstronauts.Player
             // The visor the jumpscare cracked stays cracked (the jumpscare clears it as it ends; put every crack back).
             var visor = m_Player.visor;
             if (visor != null && visor.cracks != null)
+            {
                 for (int i = visor.Stage; i < visor.cracks.Length; i++) visor.Crack(0f);
+                VisorKeptCracked = true;
+            }
             var vignette = Vignette;
             if (vignette != null) vignette.enabled = true;
+            // The one control left: GIVE UP on the wrist (a held fingertip, not a button), for a crew that wandered off.
+            TrashAstronauts.Net.DownedGiveUp.For(m_Player);
             // Out of the jumpscare's black, slowly, into the dim view.
             if (m_Player.fader != null && m_Player.fader.Alpha > 0f) m_Player.fader.FadeIn(LiftSeconds);
         }

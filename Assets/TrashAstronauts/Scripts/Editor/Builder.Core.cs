@@ -591,6 +591,35 @@ namespace TrashAstronauts.EditorTools
             return tmp;
         }
 
+        /// <summary>Name of the text material that is drawn from the front only (wall signs, panel labels).</summary>
+        public const string SingleSidedTextMaterial = "TextSingleSided";
+
+        /// <summary>
+        /// Wall signs and panel labels are read from the front only: seen from behind (through an open doorway, from
+        /// inside a compartment) they are not drawn, instead of showing mirrored. TextMeshPro's font material draws
+        /// both sides, so these share a copy of it with back faces culled.
+        /// </summary>
+        static void SingleSided(TextMeshPro tmp)
+        {
+            if (tmp == null || tmp.fontSharedMaterial == null) return;
+            if (!s_Mats.TryGetValue(SingleSidedTextMaterial, out Material m) || m == null)
+            {
+                string path = MaterialDir + "/" + SingleSidedTextMaterial + ".mat";
+                m = AssetDatabase.LoadAssetAtPath<Material>(path);
+                if (m == null)
+                {
+                    m = new Material(tmp.fontSharedMaterial);
+                    AssetDatabase.CreateAsset(m, path);
+                }
+                else m.CopyPropertiesFromMaterial(tmp.fontSharedMaterial);
+                m.shader = tmp.fontSharedMaterial.shader;
+                if (m.HasProperty("_CullMode")) m.SetFloat("_CullMode", (float)UnityEngine.Rendering.CullMode.Back);
+                EditorUtility.SetDirty(m);
+                s_Mats[SingleSidedTextMaterial] = m;
+            }
+            tmp.fontSharedMaterial = m;
+        }
+
         /// <summary>
         /// A physical push button. Its +Z points into the surface it is mounted on (same convention as
         /// text), so pressing pushes the cap along +Z.

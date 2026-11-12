@@ -629,6 +629,7 @@ namespace TrashAstronauts.EditorTools
             foreach (var stretch in SeamStretches(plateSize, cutLocal)) points.Add(MakeCutPoint(root.transform, stretch.a, stretch.b));
 
             var label = Text(root.transform, "Label", displayName, new Vector3(0, plateSize.y * 0.5f + 0.14f, 0.03f), Facing(Vector3.forward), 0.5f, new Vector2(1.2f, 0.22f), new Color(1f, 0.8f, 0.3f));
+            SingleSided(label);
             label.fontStyle = FontStyles.Bold;
 
             var cuttable = root.AddComponent<Cuttable>();
@@ -703,6 +704,7 @@ namespace TrashAstronauts.EditorTools
         {
             var t = Text(s_Signs, "Sign " + text.Replace('\n', ' '), text, position, Facing(outward), fontSize, new Vector2(3f, 0.6f), color ?? new Color(1f, 0.85f, 0.4f));
             t.fontStyle = FontStyles.Bold;
+            SingleSided(t);
         }
 
         static void Container(Vector3 floorCenter, Vector3 size, string mat = "Container")

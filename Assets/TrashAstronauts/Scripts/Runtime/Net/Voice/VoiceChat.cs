@@ -158,6 +158,7 @@ namespace TrashAstronauts.Net.Voice
             m_Mimic = new MimicCrewVoice(this, link, m_Session != null && m_Session.IsOnline);
             m_HadConsent = false;
             m_NoticesLeft = 0;
+            m_ConsentLost = false;
             Active = this;
         }
 
@@ -301,7 +302,10 @@ namespace TrashAstronauts.Net.Voice
 
         /// <summary>
         /// A client that switches MIC or VOICE CHAT off (or loses the microphone setting) tells the host a few times,
-        /// so the host's Mimic drops anything of its voice. Nothing is sent while both stay on, or while off.
+        /// so the host's Mimic drops anything of its voice. The notice is unreliable, so after that first burst it is
+        /// repeated every <see cref="OffNoticeKeepSeconds"/> for as long as it stays off while a Mimic is aboard and
+        /// the session is open (one byte; the host forgetting twice changes nothing). Nothing is sent while both
+        /// stay on, or when voice was never on in this session.
         /// </summary>
         void UpdateOffNotice(bool live, double now)
         {
@@ -312,15 +316,37 @@ namespace TrashAstronauts.Net.Voice
             {
                 m_NoticesLeft = OffNoticeRepeats;
                 m_NextNoticeAt = now;
+                m_ConsentLost = true;
             }
-            if (consent) m_NoticesLeft = 0;
+            if (consent)
+            {
+                m_NoticesLeft = 0;
+                m_ConsentLost = false;
+            }
             m_HadConsent = consent;
-            if (m_NoticesLeft > 0 && now >= m_NextNoticeAt && m_Link.IsOpen)
+            if (!m_Link.IsOpen || now < m_NextNoticeAt) return;
+            if (m_NoticesLeft > 0)
             {
                 m_NoticesLeft--;
                 m_NextNoticeAt = now + OffNoticeSpacing;
                 if (m_Link.Send(0, VoiceMsg.OffNotice, 0, VoiceMsg.OffNoticeLength, 1)) OffNoticesSent++;
             }
+            else if (m_ConsentLost && MimicAboard(d))
+            {
+                m_NextNoticeAt = now + OffNoticeKeepSeconds;
+                if (m_Link.Send(0, VoiceMsg.OffNotice, 0, VoiceMsg.OffNoticeLength, 1)) OffNoticesSent++;
+            }
+        }
+
+        /// <summary>After the first burst, the "voice off" notice is repeated this often while a Mimic is aboard (s).</summary>
+        public const double OffNoticeKeepSeconds = 0.5;
+        bool m_ConsentLost;
+
+        static bool MimicAboard(MissionDirector d)
+        {
+            if (d == null || d.Phase != TrashAstronauts.Core.MissionPhase.Active) return false;
+            var enemy = d.ActiveEnemy;
+            return enemy != null && enemy.GetComponent<VoiceMimic>() != null;
         }
 
         void OnFrame(byte slot, ushort sequence, byte[] buffer, int offset, int length)

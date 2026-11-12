@@ -77,7 +77,8 @@ namespace TrashAstronauts.Net
             if (local.IsDowned)
             {
                 return "DOWNED - CREW MUST REVIVE YOU\nREVIVE " + Bar(local.ReviveProgress)
-                    + (local.ReviveProgress > 0f ? " " + Mathf.FloorToInt(local.ReviveProgress * 100f) + "%" : "");
+                    + (local.ReviveProgress > 0f ? " " + Mathf.FloorToInt(local.ReviveProgress * 100f) + "%" : "")
+                    + "\n" + DownedGiveUp.WristLine(local);
             }
             StringBuilder text = null;
             var players = director.Players;

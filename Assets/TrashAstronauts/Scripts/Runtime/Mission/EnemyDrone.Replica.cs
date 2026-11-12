@@ -254,8 +254,8 @@ namespace TrashAstronauts.Mission
         Action m_HeldAfterScare;
 
         /// <summary>
-        /// Co-op revive: the host settled this client's own catch without ending the run (this player is downed). The
-        /// wait for a RunEnded stops, so the run is not dropped as a lost link.
+        /// Co-op revive: the host settled a catch without ending the run (the victim, here or on another headset, is
+        /// downed). The wait for a RunEnded stops, so the run is not dropped as a lost link.
         /// </summary>
         public void CatchSettledHere()
         {
