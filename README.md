@@ -2,11 +2,11 @@
 
 This branch holds only the built APK, so the `main` branch stays source-only.
 
-- `TrashAstronauts.apk` - version 0.12.0, built from commit 5d276b7 on `main`
+- `TrashAstronauts.apk` - version 0.12.1, built from commit 9f2d514 on `main`
 - Meta Quest 3 / 3S, ARM64, OpenXR, minimum Android API 32
 - Signed with the Android debug key (fine for sideloading, not for a store)
-- SHA-256: `c868298dd02f7c8ce940a323baa43e311c890bd39a799ee3862c0029b1786c85`
-- 0.12.0: every player can grab, carry, throw, catch and deposit salvage; picking up is easier (larger grab reach and a short-range pull to the palm); a helmet lamp is for sale in the company store. Includes online play, shared contracts, the co-op spider, voice chat, visible crew tools and suit colours. New parts tested with simulated players only.
+- SHA-256: `406006e914d9c22994bf3291eddffd1bf57e7fd20cc4275759c148c9af04c7b1`
+- 0.12.1: fixes for 0.12.0. The pickup pull no longer steals rail or wall grabs or swim strokes, and thrown salvage keeps flying forward instead of jumping or sliding back when the host takes it over. Same features as 0.12.0.
 
 Install with developer mode on and the headset connected by USB:
 
