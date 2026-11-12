@@ -2,11 +2,11 @@
 
 This branch holds only the built APK, so the `main` branch stays source-only.
 
-- `TrashAstronauts.apk` - version 0.9.1, built from commit 78cada0 on `main`
+- `TrashAstronauts.apk` - version 0.9.2, built from commit 903843a on `main`
 - Meta Quest 3 / 3S, ARM64, OpenXR, minimum Android API 32
 - Signed with the Android debug key (fine for sideloading, not for a store)
-- SHA-256: `0041cfdfe03d7c200ec8eab4796e92ed624a8b2932902b0b2b38ddc5dc85ca24`
-- 0.9.1: a fourth map, the Lava Tube Outpost, a mining camp in a Moon cave with lunar gravity; the three ships redecorated (riveted panels, tread-plate floors, pipes, light fixtures, dust, a planet outside); rounder gloves. Includes the 0.9.0 physics. Not yet run on a headset.
+- SHA-256: `a241ddc9fba661112f8da9ca6c967467e4c340eda25b909359aa9355eb3109ff`
+- 0.9.2: carry heavy items with two hands; the spider knocks junk aside and flinches when hit hard with something heavy; delicate items crack; a real thruster hop in the Moon cave; more ship wall detail. Includes the 0.9.1 cave and interiors and the 0.9.0 gloves and physics. Not yet run on a headset.
 
 Install with developer mode on and the headset connected by USB:
 
