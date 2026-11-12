@@ -111,17 +111,17 @@ namespace TrashAstronauts.EditorTools
             }
             beacon.ring = ring;
 
-            var lampGo = Empty(visuals.transform, "Locator Light", new Vector3(0f, 0f, 0.12f), null, GameLayers.Hand);
+            var lampGo = Empty(visuals.transform, "Locator Light", new Vector3(0f, 0f, 0.3f), null, GameLayers.Hand);
             var lamp = lampGo.AddComponent<Light>();
             lamp.type = LightType.Point;
             lamp.range = 3.5f;
-            lamp.intensity = 1.3f;
+            lamp.intensity = 0.8f;
             lamp.color = new Color(1f, 0.42f, 0.22f);
             lamp.shadows = LightShadows.None;
             lamp.renderMode = LightRenderMode.Auto;
             lamp.enabled = false; // ReviveBeacon.Show switches it on while the player is down
             beacon.lamp = lamp;
-            beacon.lampIntensity = 1.3f;
+            beacon.lampIntensity = 0.8f;
             visuals.SetActive(false);
             return beacon;
         }
