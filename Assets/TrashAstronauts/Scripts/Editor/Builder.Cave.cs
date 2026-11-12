@@ -417,6 +417,12 @@ namespace TrashAstronauts.EditorTools
             EndMap(map, dock, new[] { habDoor }, new[] { hum }, sharedLights, sharedGlow,
                 "D3", "D0", "T4", "T3", "T2", "T1", "T0", "M0", "ME", "H0", "H1", "H0", "H2", "H3", "H4", "H3", "H2", "H0", "ME", "M0", "MW", "S1", "KS",
                 "KE", "T2", "KE", "KNW", "KW", "KS", "KW", "KNW", "P2", "P1", "P0", "D1", "D2", "D3");
+
+            // The Moon: weak gravity everywhere beyond the airlock door, none in the airlock or the tug.
+            var moon = map.gameObject.AddComponent<MapGravity>();
+            moon.gravity = new Vector3(0f, -LunarGravity, 0f);
+            moon.center = new Vector3(-1.25f, 3.5f, 24.7f);
+            moon.size = new Vector3(23.5f, 9f, 33.9f); // x[-13,10.5] y[-1,8] z[7.75,41.65]
             return map;
         }
     }

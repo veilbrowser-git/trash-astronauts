@@ -242,10 +242,13 @@ namespace TrashAstronauts.Player
             {
                 float k = momentumEnabled ? drag : comfortDrag;
                 m_Velocity *= Mathf.Exp(-k * dt);
+                // In a map with gravity (the lava tube) the drift also falls, gently, and rests on the ground.
+                Vector3 gravity = TrashAstronauts.Mission.MapGravity.GravityAt(origin.position);
+                bool falling = gravity != Vector3.zero && TrashAstronauts.Mission.MapGravity.StepPlayer(ref m_Velocity, origin.position, gravity, dt);
                 // Come to rest once nearly stopped, but never while a stroke or shove is adding speed:
                 // each frame of a stroke adds only a little, and zeroing it here would stop swimming
                 // from ever building up (this was why swimming did nothing on the headset).
-                if (!m_ThrustThisFrame && m_Velocity.sqrMagnitude < 0.015f * 0.015f) m_Velocity = Vector3.zero;
+                if (!m_ThrustThisFrame && !falling && m_Velocity.sqrMagnitude < 0.015f * 0.015f) m_Velocity = Vector3.zero;
             }
 
             Vector3 motion = anchoredMotion + m_Velocity * dt;
@@ -499,7 +502,10 @@ namespace TrashAstronauts.Player
         {
             float into = Vector3.Dot(m_Velocity, hit.normal);
             if (into >= 0f) return;
-            m_Velocity -= hit.normal * (into * (1f + bounce));
+            // Landing on the ground under gravity: no bounce, you just come down on your feet.
+            Vector3 gravity = TrashAstronauts.Mission.MapGravity.GravityAt(hit.point);
+            bool landing = gravity != Vector3.zero && Vector3.Dot(hit.normal, -gravity.normalized) > 0.6f;
+            m_Velocity -= hit.normal * (into * (1f + (landing ? 0f : bounce)));
 
             // A solid bump: a thud and a tap on both hands, scaled by how hard the hull was hit.
             float impact = -into;
