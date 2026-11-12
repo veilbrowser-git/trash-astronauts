@@ -7,8 +7,9 @@ using UnityEngine;
 namespace TrashAstronauts.Net
 {
     /// <summary>
-    /// Weld progress for the whole crew (<see cref="CutProgressMsg"/>). While this player's cutter flame is on a weld,
-    /// its progress goes out about 5 times a second through the open session (client -> host -> the others, or host ->
+    /// Weld progress for the whole crew (<see cref="CutProgressMsg"/>). While this player's cutter flame is on a weld
+    /// (one stretch of a seam), its progress goes out about 5 times a second, and once more when the flame moves on
+    /// to the next stretch, through the open session (client -> host -> the others, or host ->
     /// clients); progress heard from the others is shown on the same weld with <see cref="Cuttable.ApplyRemoteProgress"/>,
     /// which never completes it (a finished weld still travels the reliable PointCut path).
     ///
@@ -24,6 +25,7 @@ namespace TrashAstronauts.Net
         NetSessionHost m_Host;
         NetSessionClient m_Client;
         CutPoint m_LastPoint;
+        byte m_LastSentProgress;
         double m_NextSend;
         Action<byte, byte, byte, byte> m_OnProgress;
 
@@ -124,6 +126,15 @@ namespace TrashAstronauts.Net
                     if (local.tools[i] is PlasmaCutterTool cutter && cutter.IsCutting) point = cutter.CurrentPoint;
                 }
             }
+            if (point != m_LastPoint && m_LastPoint != null)
+            {
+                // The flame moved on along the seam: the stretch it left gets its last progress, so the crew see the
+                // line reach where it really stopped (a finished stretch goes by the reliable PointCut instead).
+                var left = m_LastPoint;
+                byte final = CutProgressMsg.ToByte(left.Progress);
+                if (!left.IsCut && left.Owner != null && !left.Owner.IsOpen && final != m_LastSentProgress) Send(director, left, final);
+                m_LastPoint = null;
+            }
             if (point == null || point.IsCut || point.Owner == null || point.Owner.isTraining || point.Owner.IsOpen)
             {
                 m_LastPoint = null;
@@ -131,16 +142,24 @@ namespace TrashAstronauts.Net
             }
             if (point == m_LastPoint && now < m_NextSend) return;
 
+            byte progress = CutProgressMsg.ToByte(point.Progress);
+            if (!Send(director, point, progress)) return;
+            m_LastPoint = point;
+            m_LastSentProgress = progress;
+            m_NextSend = now + CutProgressMsg.Interval;
+        }
+
+        bool Send(MissionDirector director, CutPoint point, byte progress)
+        {
+            if (point.Owner == null || point.Owner.isTraining) return false;
             int panel = director.NetIds.Panels.IndexOf(point.Owner.panelId);
             int index = Array.IndexOf(point.Owner.cutPoints, point);
-            if (panel < 0 || panel > 255 || index < 0 || index > 255) return;
-            byte progress = CutProgressMsg.ToByte(point.Progress);
+            if (panel < 0 || panel > 255 || index < 0 || index > 255) return false;
             if (m_Host != null) m_Host.SendCutProgress((byte)panel, (byte)index, progress);
             else if (m_Client != null && m_Client.Welcomed) m_Client.SendCutProgress((byte)panel, (byte)index, progress);
-            else return;
+            else return false;
             Sent++;
-            m_LastPoint = point;
-            m_NextSend = now + CutProgressMsg.Interval;
+            return true;
         }
 
         void OnCutProgress(byte slot, byte panel, byte index, byte progress)

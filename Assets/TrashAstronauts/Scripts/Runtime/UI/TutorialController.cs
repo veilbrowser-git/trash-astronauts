@@ -23,7 +23,7 @@ namespace TrashAstronauts.UI
     /// <summary>
     /// A guided tutorial that runs in the tug before any contract. It teaches one thing at a time and
     /// only moves on when the player has actually done it: push off a wall, swim, stop, draw a tool,
-    /// bank salvage, cut a weld. Oxygen does not drain and the creature is dormant throughout.
+    /// bank salvage, cut open a seam. Oxygen does not drain and the creature is dormant throughout.
     /// The current instruction is shown on the wall board and on a small panel that floats with the
     /// player. Any step, or the whole thing, can be skipped, and it can be replayed later.
     /// </summary>
@@ -71,7 +71,7 @@ namespace TrashAstronauts.UI
             "To stop: GRAB any surface, or CLICK a thumbstick\nto brake. Hands are solid: push off walls.\nThumbstick FORWARD teleports. Left / right turns.",
             "Grip at your CHEST: flashlight, and the tranq\nlauncher beside it. HIPS: scanner and cutter.\nTRIGGER uses a tool. Let go and it returns.",
             "Grab the yellow PRACTICE SCRAP floating nearby.\nCarry it to the collection locker and\nLET GO of it inside the open hopper.",
-            "Draw the PLASMA CUTTER from your hip.\nHold TRIGGER and keep the flame on each orange\nweld of the PRACTICE PLATE. Watch the heat gauge.",
+            "Draw the PLASMA CUTTER. Hold TRIGGER and drag the\nflame slowly along the orange SEAM of the PRACTICE\nPLATE, close to the metal. Watch the heat gauge.",
             "Orientation complete. The COMPANY STORE on the\nwall sells tranq darts and tool upgrades.\nPress START CONTRACT when you are ready.",
         };
 

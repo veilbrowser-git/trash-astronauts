@@ -587,22 +587,96 @@ namespace TrashAstronauts.EditorTools
 
         // ------------------------------------------------------------------ cuttables
 
-        static CutPoint MakeCutPoint(Transform parent, Vector3 localPos)
+        /// <summary>
+        /// One stretch of seam from <paramref name="a"/> to <paramref name="b"/> (panel-local, on the plate's face): a
+        /// CutPoint whose local X runs along the stretch and local Z out of the face, with a trigger the cutter's
+        /// overlap finds from a little in front of the metal and just past the stretch's ends.
+        /// </summary>
+        static CutPoint MakeCutPoint(Transform parent, Vector2 a, Vector2 b)
         {
-            var go = Empty(parent, "Cut Point", localPos, null, GameLayers.CutPoint);
-            var col = go.AddComponent<SphereCollider>();
+            Vector2 dir2 = (b - a).normalized;
+            Vector3 dir = new Vector3(dir2.x, dir2.y, 0f);
+            Vector2 mid = (a + b) * 0.5f;
+            var rotation = Quaternion.LookRotation(Vector3.forward, Vector3.Cross(Vector3.forward, dir));
+            var go = Empty(parent, "Cut Point", new Vector3(mid.x, mid.y, SeamFaceZ), rotation, GameLayers.CutPoint);
+            float length = Vector2.Distance(a, b);
+            var col = go.AddComponent<BoxCollider>();
             col.isTrigger = true;
-            col.radius = 0.075f;
-            var marker = Prim(go.transform, "Marker", PrimitiveType.Sphere, Vector3.zero, new Vector3(0.07f, 0.07f, 0.05f), M("CutMarker"), false, null, GameLayers.CutPoint);
+            col.size = new Vector3(length + 0.05f, 0.09f, 0.14f);
+            col.center = new Vector3(0f, 0f, 0.04f);
             var point = go.AddComponent<CutPoint>();
-            point.marker = marker.GetComponent<MeshRenderer>();
-            point.markerTransform = marker.transform;
+            point.length = length;
             return point;
+        }
+
+        /// <summary>Panel-local depth of the plate's front face, where the seam runs (the sheet is 4 cm thick, centred).</summary>
+        const float SeamFaceZ = 0.021f;
+        /// <summary>Longest stretch of seam that is one network cut point.</summary>
+        const float SeamStretch = 0.34f;
+
+        /// <summary>
+        /// The seam that holds a plate, from the weld anchors a panel was designed with. Each side of the plate with
+        /// two or more anchors near it is welded between its outermost anchors (along the anchors' line); an anchor
+        /// near no welded side is a clamp, cut straight across the plate's short way. Runs go round the plate in
+        /// order (top, right, bottom, left) and are split into stretches of at most <see cref="SeamStretch"/>.
+        /// </summary>
+        static List<(Vector2 a, Vector2 b)> SeamStretches(Vector2 plateSize, Vector2[] anchors)
+        {
+            float hx = plateSize.x * 0.5f, hy = plateSize.y * 0.5f;
+            float tol = Mathf.Min(0.06f, 0.3f * Mathf.Min(hx, hy));
+            var runs = new List<(Vector2 a, Vector2 b)>();
+            var used = new bool[anchors.Length];
+            // side: 0 top (+y, runs -x to +x), 1 right (+x, +y to -y), 2 bottom (-y, +x to -x), 3 left (-x, -y to +y)
+            for (int side = 0; side < 4; side++)
+            {
+                bool horizontal = side == 0 || side == 2;
+                float edge = side == 0 ? hy : side == 1 ? hx : side == 2 ? -hy : -hx;
+                float min = float.MaxValue, max = float.MinValue, perp = 0f;
+                int near = 0;
+                for (int i = 0; i < anchors.Length; i++)
+                {
+                    float d = horizontal ? anchors[i].y : anchors[i].x;
+                    if (Mathf.Abs(d - edge) > tol) continue;
+                    float t = horizontal ? anchors[i].x : anchors[i].y;
+                    min = Mathf.Min(min, t);
+                    max = Mathf.Max(max, t);
+                    perp += d;
+                    near++;
+                }
+                if (near < 2 || max - min < 0.05f) continue;
+                perp /= near;
+                for (int i = 0; i < anchors.Length; i++)
+                {
+                    float d = horizontal ? anchors[i].y : anchors[i].x;
+                    if (Mathf.Abs(d - edge) <= tol) used[i] = true;
+                }
+                Vector2 from = horizontal ? new Vector2(min, perp) : new Vector2(perp, max);
+                Vector2 to = horizontal ? new Vector2(max, perp) : new Vector2(perp, min);
+                if (side == 2 || side == 3) (from, to) = (to, from);
+                runs.Add((from, to));
+            }
+            for (int i = 0; i < anchors.Length; i++)
+            {
+                if (used[i]) continue;
+                // A clamp: cut across the plate's short way through the anchor.
+                Vector2 p = anchors[i];
+                runs.Add(hx >= hy ? (new Vector2(p.x, hy), new Vector2(p.x, -hy)) : (new Vector2(-hx, p.y), new Vector2(hx, p.y)));
+            }
+
+            var stretches = new List<(Vector2 a, Vector2 b)>();
+            foreach (var run in runs)
+            {
+                float len = Vector2.Distance(run.a, run.b);
+                int n = Mathf.Max(1, Mathf.CeilToInt(len / SeamStretch - 0.001f));
+                for (int k = 0; k < n; k++) stretches.Add((Vector2.Lerp(run.a, run.b, (float)k / n), Vector2.Lerp(run.a, run.b, (float)(k + 1) / n)));
+            }
+            return stretches;
         }
 
         /// <summary>
         /// A cuttable plate. The root's +Z points out of the surface toward the player, so the freed
-        /// plate drifts toward them. Cut points sit on the plate edge and are reachable from both faces.
+        /// plate drifts toward them. <paramref name="cutLocal"/> are the weld anchors the panel was designed with;
+        /// the seam that is actually cut runs between them along the plate's edges (<see cref="SeamStretches"/>).
         /// </summary>
         static Cuttable MakeCuttable(string name, string id, string displayName, Vector3 position, Vector3 outward,
             Vector2 plateSize, Vector2[] cutLocal, bool training = false, bool hazardFrame = true)
@@ -628,7 +702,7 @@ namespace TrashAstronauts.EditorTools
             impact.surface = SurfaceKind.PaintedMetal;
 
             var points = new List<CutPoint>();
-            foreach (var p in cutLocal) points.Add(MakeCutPoint(root.transform, new Vector3(p.x, p.y, 0.01f)));
+            foreach (var stretch in SeamStretches(plateSize, cutLocal)) points.Add(MakeCutPoint(root.transform, stretch.a, stretch.b));
 
             var label = Text(root.transform, "Label", displayName, new Vector3(0, plateSize.y * 0.5f + 0.14f, 0.03f), Facing(Vector3.forward), 0.5f, new Vector2(1.2f, 0.22f), new Color(1f, 0.8f, 0.3f));
             label.fontStyle = FontStyles.Bold;
@@ -640,6 +714,7 @@ namespace TrashAstronauts.EditorTools
             cuttable.plate = body;
             cuttable.progressLabel = label;
             cuttable.isTraining = training;
+            cuttable.seamMaterial = M("SeamLine");
             if (!training) s_Cuttables.Add(cuttable);
             return cuttable;
         }
