@@ -1,9 +1,9 @@
 {
  "id": "glove",
  "smoothness": 0.25,
- "vertexTotal": 2515,
- "indexTotal": 10152,
- "triangles": 3384,
+ "vertexTotal": 2937,
+ "indexTotal": 12174,
+ "triangles": 4058,
  "palmCentre": [
   0.0,
   -0.03,
@@ -56,10 +56,10 @@
    "length": 0.0,
    "material": "glove",
    "vertexStart": 0,
-   "vertexCount": 720,
+   "vertexCount": 613,
    "indexStart": 0,
-   "indexCount": 2952,
-   "triangles": 984
+   "indexCount": 2454,
+   "triangles": 818
   },
   {
    "name": "index_1",
@@ -71,17 +71,17 @@
    ],
    "rotation": [
     0.0,
-    -0.03489949670250097,
+    -0.052335956242943835,
     0.0,
-    0.9993908270190958
+    0.9986295347545738
    ],
    "length": 0.04,
    "material": "glove",
-   "vertexStart": 720,
-   "vertexCount": 128,
-   "indexStart": 2952,
-   "indexCount": 480,
-   "triangles": 160
+   "vertexStart": 613,
+   "vertexCount": 167,
+   "indexStart": 2454,
+   "indexCount": 648,
+   "triangles": 216
   },
   {
    "name": "index_2",
@@ -99,11 +99,11 @@
    ],
    "length": 0.026,
    "material": "glove",
-   "vertexStart": 848,
-   "vertexCount": 108,
-   "indexStart": 3432,
-   "indexCount": 480,
-   "triangles": 160
+   "vertexStart": 780,
+   "vertexCount": 141,
+   "indexStart": 3102,
+   "indexCount": 648,
+   "triangles": 216
   },
   {
    "name": "index_3",
@@ -121,11 +121,11 @@
    ],
    "length": 0.022,
    "material": "glove",
-   "vertexStart": 956,
-   "vertexCount": 127,
-   "indexStart": 3912,
-   "indexCount": 480,
-   "triangles": 160
+   "vertexStart": 921,
+   "vertexCount": 162,
+   "indexStart": 3750,
+   "indexCount": 648,
+   "triangles": 216
   },
   {
    "name": "middle_1",
@@ -137,17 +137,17 @@
    ],
    "rotation": [
     0.0,
+    -0.008726535498373935,
     0.0,
-    0.0,
-    1.0
+    0.9999619230641713
    ],
    "length": 0.044,
    "material": "glove",
    "vertexStart": 1083,
-   "vertexCount": 128,
-   "indexStart": 4392,
-   "indexCount": 480,
-   "triangles": 160
+   "vertexCount": 167,
+   "indexStart": 4398,
+   "indexCount": 648,
+   "triangles": 216
   },
   {
    "name": "middle_2",
@@ -165,11 +165,11 @@
    ],
    "length": 0.028,
    "material": "glove",
-   "vertexStart": 1211,
-   "vertexCount": 108,
-   "indexStart": 4872,
-   "indexCount": 480,
-   "triangles": 160
+   "vertexStart": 1250,
+   "vertexCount": 141,
+   "indexStart": 5046,
+   "indexCount": 648,
+   "triangles": 216
   },
   {
    "name": "middle_3",
@@ -187,11 +187,11 @@
    ],
    "length": 0.023,
    "material": "glove",
-   "vertexStart": 1319,
-   "vertexCount": 127,
-   "indexStart": 5352,
-   "indexCount": 480,
-   "triangles": 160
+   "vertexStart": 1391,
+   "vertexCount": 162,
+   "indexStart": 5694,
+   "indexCount": 648,
+   "triangles": 216
   },
   {
    "name": "ring_1",
@@ -203,17 +203,17 @@
    ],
    "rotation": [
     0.0,
-    0.030538513209822662,
+    0.0392598157590686,
     0.0,
-    0.9995335908367129
+    0.999229036240723
    ],
    "length": 0.041,
    "material": "glove",
-   "vertexStart": 1446,
-   "vertexCount": 128,
-   "indexStart": 5832,
-   "indexCount": 480,
-   "triangles": 160
+   "vertexStart": 1553,
+   "vertexCount": 167,
+   "indexStart": 6342,
+   "indexCount": 648,
+   "triangles": 216
   },
   {
    "name": "ring_2",
@@ -231,11 +231,11 @@
    ],
    "length": 0.027,
    "material": "glove",
-   "vertexStart": 1574,
-   "vertexCount": 108,
-   "indexStart": 6312,
-   "indexCount": 480,
-   "triangles": 160
+   "vertexStart": 1720,
+   "vertexCount": 141,
+   "indexStart": 6990,
+   "indexCount": 648,
+   "triangles": 216
   },
   {
    "name": "ring_3",
@@ -253,11 +253,11 @@
    ],
    "length": 0.022,
    "material": "glove",
-   "vertexStart": 1682,
-   "vertexCount": 127,
-   "indexStart": 6792,
-   "indexCount": 480,
-   "triangles": 160
+   "vertexStart": 1861,
+   "vertexCount": 162,
+   "indexStart": 7638,
+   "indexCount": 648,
+   "triangles": 216
   },
   {
    "name": "little_1",
@@ -269,17 +269,17 @@
    ],
    "rotation": [
     0.0,
-    0.06975647374412529,
+    0.09584575252022398,
     0.0,
-    0.9975640502598243
+    0.9953961983671789
    ],
    "length": 0.032,
    "material": "glove",
-   "vertexStart": 1809,
-   "vertexCount": 128,
-   "indexStart": 7272,
-   "indexCount": 480,
-   "triangles": 160
+   "vertexStart": 2023,
+   "vertexCount": 167,
+   "indexStart": 8286,
+   "indexCount": 648,
+   "triangles": 216
   },
   {
    "name": "little_2",
@@ -297,11 +297,11 @@
    ],
    "length": 0.021,
    "material": "glove",
-   "vertexStart": 1937,
-   "vertexCount": 108,
-   "indexStart": 7752,
-   "indexCount": 480,
-   "triangles": 160
+   "vertexStart": 2190,
+   "vertexCount": 141,
+   "indexStart": 8934,
+   "indexCount": 648,
+   "triangles": 216
   },
   {
    "name": "little_3",
@@ -319,33 +319,33 @@
    ],
    "length": 0.019,
    "material": "glove",
-   "vertexStart": 2045,
-   "vertexCount": 127,
-   "indexStart": 8232,
-   "indexCount": 480,
-   "triangles": 160
+   "vertexStart": 2331,
+   "vertexCount": 162,
+   "indexStart": 9582,
+   "indexCount": 648,
+   "triangles": 216
   },
   {
    "name": "thumb_1",
    "parent": "palm",
    "pivot": [
-    -0.029,
-    -0.037,
-    -0.11
+    -0.031,
+    -0.043,
+    -0.112
    ],
    "rotation": [
-    0.028893671725281386,
-    -0.3711016811173283,
-    0.47921762838359305,
-    0.7948579512419367
+    -0.08660701877474236,
+    -0.4036019238328332,
+    0.44299471082958775,
+    0.7958394295047194
    ],
    "length": 0.042,
    "material": "glove",
-   "vertexStart": 2172,
-   "vertexCount": 108,
-   "indexStart": 8712,
-   "indexCount": 480,
-   "triangles": 160
+   "vertexStart": 2493,
+   "vertexCount": 141,
+   "indexStart": 10230,
+   "indexCount": 648,
+   "triangles": 216
   },
   {
    "name": "thumb_2",
@@ -356,18 +356,18 @@
     0.042
    ],
    "rotation": [
-    0.10237494939320096,
-    0.05225310313513816,
-    0.01295944786242903,
-    0.9932879923066569
+    0.09100662107688047,
+    0.04951820646669323,
+    0.026856598420120902,
+    0.9942557343409147
    ],
    "length": 0.032,
    "material": "glove",
-   "vertexStart": 2280,
-   "vertexCount": 108,
-   "indexStart": 9192,
-   "indexCount": 480,
-   "triangles": 160
+   "vertexStart": 2634,
+   "vertexCount": 141,
+   "indexStart": 10878,
+   "indexCount": 648,
+   "triangles": 216
   },
   {
    "name": "thumb_3",
@@ -378,18 +378,18 @@
     0.032
    ],
    "rotation": [
-    0.07152872751492656,
-    0.01648540891376209,
-    0.001136053795525557,
-    0.9973016503620231
+    0.06521865303982728,
+    0.026062818551260396,
+    0.00923079222100149,
+    0.9974878692293994
    ],
    "length": 0.027,
    "material": "glove",
-   "vertexStart": 2388,
-   "vertexCount": 127,
-   "indexStart": 9672,
-   "indexCount": 480,
-   "triangles": 160
+   "vertexStart": 2775,
+   "vertexCount": 162,
+   "indexStart": 11526,
+   "indexCount": 648,
+   "triangles": 216
   }
  ]
 }
