@@ -67,6 +67,30 @@ namespace TrashAstronauts.Mission
             LastGrabbedBy = player != null ? player.Id : director != null ? director.LocalPlayerId : PlayerId.Local;
         }
 
+        /// <summary>Momentum (kg m/s) of the last hit on a creature, along the contact normal.</summary>
+        public float LastCreatureHitMomentum { get; private set; }
+        /// <summary>How many times this body has hit a creature.</summary>
+        public int CreatureHits { get; private set; }
+
+        /// <summary>
+        /// Something heavy thrown hard into the creature knocks it off balance. Momentum is the body's
+        /// mass times its closing speed along the contact normal, so a glancing blow counts for less.
+        /// Only the machine that simulates this body, and never a client (the host runs the creature).
+        /// </summary>
+        void TryStaggerCreature(Collision collision)
+        {
+            if (collision.collider == null || collision.collider.gameObject.layer != TrashAstronauts.World.GameLayers.Enemy) return;
+            var drone = collision.collider.GetComponentInParent<EnemyDrone>();
+            if (drone == null || !SimulatedHere || OnAClient(MissionDirector.Active)) return;
+            if (m_Body == null) m_Body = GetComponent<Rigidbody>();
+            Vector3 normal = collision.contactCount > 0 ? collision.GetContact(0).normal : -collision.relativeVelocity.normalized;
+            float closing = Mathf.Abs(Vector3.Dot(collision.relativeVelocity, normal));
+            LastCreatureHitMomentum = m_Body.mass * closing;
+            CreatureHits++;
+            float seconds = EnemyDrone.StaggerSecondsFor(LastCreatureHitMomentum);
+            if (seconds > 0f) drone.Stagger(seconds);
+        }
+
         static bool OnAClient(MissionDirector director) => director != null && director.Net != null && director.Net.IsClient;
 
         /// <summary>
@@ -103,6 +127,7 @@ namespace TrashAstronauts.Mission
 
         void OnCollisionEnter(Collision collision)
         {
+            TryStaggerCreature(collision);
             if (Time.time - m_SpawnTime < 1f) return;
             float speed = collision.relativeVelocity.magnitude;
             if (speed < audioSpeedThreshold) return;

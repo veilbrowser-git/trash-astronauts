@@ -101,6 +101,40 @@ namespace TrashAstronauts.Mission
         public bool IsRunning => m_Running;
         /// <summary>True while a tranquilizer dart has it asleep.</summary>
         public bool IsSedated => m_SedateTimer > 0f;
+
+        [Header("Stagger")]
+        [Tooltip("After a stagger it cannot be staggered again for this long (s), so it cannot be stun-locked.")]
+        public float staggerCooldown = 6f;
+        float m_StaggerTimer;
+        float m_NextStaggerAt;
+        /// <summary>Reeling from a heavy hit: it keeps its senses and its mind, but does not advance or catch.</summary>
+        public bool IsStaggered => m_StaggerTimer > 0f;
+        public int StaggerCount { get; private set; }
+
+        /// <summary>
+        /// Knocked off balance by something heavy thrown hard. For a moment it stops advancing (and cannot
+        /// catch anyone); what it sees, hears and is chasing are untouched. Not while it is asleep or in
+        /// the middle of a jumpscare, and not again within <see cref="staggerCooldown"/> seconds.
+        /// Returns true if it staggered. Only the machine that runs the creature should call this.
+        /// </summary>
+        public bool Stagger(float seconds)
+        {
+            if (!m_Running || IsScaring || IsSedated || seconds <= 0f) return false;
+            if (Brain == null || Brain.State == EnemyState.Dormant) return false;
+            if (m_Clock < m_NextStaggerAt) return false;
+            m_StaggerTimer = Mathf.Clamp(seconds, 0.1f, 1.5f);
+            m_NextStaggerAt = m_Clock + m_StaggerTimer + staggerCooldown;
+            StaggerCount++;
+            return true;
+        }
+
+        /// <summary>How long (s) a hit with this much momentum (kg m/s) staggers it; 0 below 20 kg m/s.</summary>
+        public static float StaggerSecondsFor(float momentum)
+        {
+            const float threshold = 20f;
+            if (momentum < threshold) return 0f;
+            return Mathf.Lerp(0.5f, 1f, Mathf.Clamp01((momentum - threshold) / 140f));
+        }
         public float SedatedSecondsLeft => Mathf.Max(0f, m_SedateTimer);
         /// <summary>True during the catch jumpscare.</summary>
         public bool IsScaring { get; private set; }
@@ -142,6 +176,7 @@ namespace TrashAstronauts.Mission
         {
             EnsureBrain();
             Brain.Sleep();
+            m_StaggerTimer = 0f;
             m_Running = true;
             m_WakeTimer = m_Tuning.wakeDelaySeconds * (director != null ? ContractConditions.WakeDelayMultiplier(director.Condition) : 1f);
             m_PatrolIndex = 0;
@@ -153,6 +188,8 @@ namespace TrashAstronauts.Mission
             m_LastSeenTarget = null;
             m_DoorTimer = 0f;
             m_SedateTimer = 0f;
+            m_StaggerTimer = 0f;
+            m_NextStaggerAt = float.MinValue;
             IsScaring = false;
             m_CatchPending = false;
             StopAllCoroutines();
@@ -184,6 +221,7 @@ namespace TrashAstronauts.Mission
             m_Running = false;
             m_SedateTimer = 0f;
             Brain.Sleep();
+            m_StaggerTimer = 0f;
             m_HasPath = false;
             if (voice != null) voice.Stop();
             RefreshPresentation(true);
@@ -209,6 +247,7 @@ namespace TrashAstronauts.Mission
             if (!m_Running || IsScaring || seconds <= 0f) return false;
             m_SedateTimer = Mathf.Max(m_SedateTimer, seconds * Mathf.Max(0.1f, sedationMultiplier));
             Brain.Sleep();
+            m_StaggerTimer = 0f;
             m_HasPath = false;
             if (voice != null) voice.Stop();
             RefreshPresentation(true);
@@ -269,6 +308,9 @@ namespace TrashAstronauts.Mission
                 return;
             }
 
+            bool staggered = m_StaggerTimer > 0f;
+            if (staggered) m_StaggerTimer = Mathf.Max(0f, m_StaggerTimer - dt);
+
             bool sees = Perceive(out Vector3 playerPosition, out bool playerSafe);
             m_SeesNow = sees && !playerSafe;
             if (m_SeesNow)
@@ -299,7 +341,7 @@ namespace TrashAstronauts.Mission
                 atPointOfInterest = arrived,
             });
 
-            if (Brain.State == EnemyState.Chase && sees && !playerSafe && m_Target != null)
+            if (Brain.State == EnemyState.Chase && sees && !playerSafe && m_Target != null && !staggered)
             {
                 Vector3 flat = playerPosition - transform.position;
                 flat.y = 0f;
@@ -310,7 +352,7 @@ namespace TrashAstronauts.Mission
                 }
             }
 
-            Move(dt, destination);
+            if (!staggered) Move(dt, destination);
             RefreshPresentation(false);
         }
 

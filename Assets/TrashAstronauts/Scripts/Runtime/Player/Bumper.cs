@@ -24,6 +24,8 @@ namespace TrashAstronauts.Player
         public float minSpeed;
         public HandRig hand;
         [Range(0f, 1f)] public float bounce = 0.3f;
+        [Tooltip("Mass (kg) of what this pusher belongs to when it is not the player (the creature). 0 = the player's own body, which also takes the reaction.")]
+        public float ownerMass;
 
         Vector3 m_Last;
         bool m_HasLast;
@@ -102,11 +104,11 @@ namespace TrashAstronauts.Player
                 // A collision between two masses: the player (M) and the thing (m). The thing gets
                 // (1+e) c M/(M+m) and the player (1+e) c m/(M+m) back the other way, so nudging a can
                 // costs nothing and shouldering the reactor core slows you right down.
-                float playerMass = Locomotion != null ? Locomotion.TotalMass : RealPhysics.PlayerBodyMass;
+                float playerMass = ownerMass > 0f ? ownerMass : Locomotion != null ? Locomotion.TotalMass : RealPhysics.PlayerBodyMass;
                 float impulse = closing * (1f + bounce) * playerMass * body.mass / (playerMass + body.mass);
                 body.WakeUp();
                 body.AddForce(normal * (impulse / body.mass), ForceMode.VelocityChange);
-                if (Locomotion != null) Locomotion.AddMomentum(-normal * impulse);
+                if (ownerMass <= 0f && Locomotion != null) Locomotion.AddMomentum(-normal * impulse);
                 PushCount++;
             }
         }
