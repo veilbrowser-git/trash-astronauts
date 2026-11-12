@@ -562,8 +562,6 @@ namespace TrashAstronauts.EditorTools
 
             Web(new Vector3(-7.9f, AH - 0.05f, 26.5f), Vector3.right, Vector3.back, Vector3.down, 2.2f);
             Web(new Vector3(7.9f, AH - 0.05f, 11.7f), Vector3.left, Vector3.forward, Vector3.down, 2.0f);
-            Cocoon(new Vector3(-5.0f, H, 36.2f), 1.0f, 71);
-            Cocoon(new Vector3(3.2f, AH, 23.6f), 2.3f, 73);
             EggSacs(new Vector3(6f - T * 0.5f, 1.8f, 35.2f), Vector3.left, 8, 81);
 
             Tripwire("b_vestibule", new Vector3(-1.8f, 1.2f, 10.6f), new Vector3(1.8f, 1.4f, 10.6f));
@@ -773,8 +771,6 @@ namespace TrashAstronauts.EditorTools
 
             Web(new Vector3(-8.9f, H - 0.05f, 7.7f), Vector3.right, Vector3.forward, Vector3.down, 1.4f);
             Web(new Vector3(8.9f, H - 0.05f, 31.5f), Vector3.left, Vector3.back, Vector3.down, 1.5f);
-            Cocoon(new Vector3(-3.9f, H, 35.9f), 1.1f, 91);
-            Cocoon(new Vector3(-3.4f, H, 18.2f), 1.2f, 93);
             EggSacs(new Vector3(-5f + T * 0.5f, 1.9f, 22.4f), Vector3.right, 7, 95);
 
             Tripwire("c_ring_west", new Vector3(-8.8f, 1.2f, 17f), new Vector3(-5.2f, 1.35f, 17f));

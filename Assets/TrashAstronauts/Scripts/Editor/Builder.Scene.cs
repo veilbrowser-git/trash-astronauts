@@ -1227,8 +1227,6 @@ namespace TrashAstronauts.EditorTools
             // --- what lives here has been busy: webs in the corners, things wrapped and hung from the ceiling
             Web(new Vector3(-10.2f, H - 0.05f, 18.5f), Vector3.right, Vector3.back, Vector3.down, 1.5f);
             Web(new Vector3(-4.4f, H - 0.05f, 29.5f), Vector3.right, Vector3.back, Vector3.down, 1.6f);
-            Cocoon(new Vector3(-3.9f, H, 26.3f), 1.25f, 51);
-            Cocoon(new Vector3(-8.3f, H, 12.4f), 1.1f, 53);
             EggSacs(new Vector3(-4.5f + T * 0.5f, 1.9f, 27.6f), Vector3.right, 7, 61);
             EggSacs(new Vector3(8.3f - T * 0.5f, 1.8f, 10.4f), Vector3.left, 6, 63);
             Tripwire("a_corridor_mid", new Vector3(-1.2f, 1.3f, 13.5f), new Vector3(1.2f, 1.1f, 13.5f));

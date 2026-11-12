@@ -12,7 +12,7 @@ namespace TrashAstronauts.Core
         ThinAir = 2,
         /// <summary>The wreck's power keeps failing. Many more blackouts; hazard pay.</summary>
         PowerFault = 3,
-        /// <summary>Webs across every route, and more of the small ones. Hazard pay.</summary>
+        /// <summary>The young are everywhere and far jumpier. Hazard pay.</summary>
         Infested = 4,
         /// <summary>It is already awake when you arrive. Hazard pay.</summary>
         LightSleeper = 5,
@@ -50,7 +50,7 @@ namespace TrashAstronauts.Core
                 case ContractCondition.RichWreck: return "Everything aboard is worth 30% more.";
                 case ContractCondition.ThinAir: return "A fifth less oxygen. Bonus +50%.";
                 case ContractCondition.PowerFault: return "The lights keep failing. Bonus +50%.";
-                case ContractCondition.Infested: return "Webs across every route. Bonus +50%.";
+                case ContractCondition.Infested: return "The young are everywhere. Bonus +50%.";
                 case ContractCondition.LightSleeper: return "It is awake already. Bonus +50%.";
                 case ContractCondition.DeadCalm: return "It will sleep for over a minute.";
                 default: return "Nothing unusual reported.";
@@ -61,8 +61,13 @@ namespace TrashAstronauts.Core
         public static float OxygenMultiplier(ContractCondition c) => c == ContractCondition.ThinAir ? 0.8f : 1f;
         public static float BlackoutDelayMultiplier(ContractCondition c) => c == ContractCondition.PowerFault ? 0.35f : 1f;
         public static float WakeDelayMultiplier(ContractCondition c) => c == ContractCondition.LightSleeper ? 0.15f : c == ContractCondition.DeadCalm ? 3.75f : 1f;
-        /// <summary>Chance (0..1) that each web tripwire is strung this contract.</summary>
-        public static float WebChance(ContractCondition c) => c == ContractCondition.Infested ? 1f : 0.45f;
+        /// <summary>
+        /// Chance (0..1) that each web tripwire is strung this contract. Zero since 0.9.0: webs across the
+        /// routes were removed from play (only the corner webs remain); the tripwire code stays for co-op tests.
+        /// </summary>
+        public static float WebChance(ContractCondition c) => 0f;
+        /// <summary>How much farther the egg-sac young roam and how much sooner they notice you.</summary>
+        public static float SwarmMultiplier(ContractCondition c) => c == ContractCondition.Infested ? 1.8f : 1f;
         public static float BonusMultiplier(ContractCondition c)
         {
             switch (c)

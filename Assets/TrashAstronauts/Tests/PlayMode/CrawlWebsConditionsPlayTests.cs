@@ -160,8 +160,9 @@ namespace TrashAstronauts.Tests
             m_Director.StartMission(PlayerId.Local);
             yield return Frames(3);
             var wires = Object.FindObjectsByType<WebTripwire>(FindObjectsSortMode.None);
-            Assert.That(wires.Length, Is.InRange(2, 4), "A few webs across the routes, not one in every doorway.");
             Assert.IsTrue(wires.All(w => w.visual.activeSelf == w.Armed));
+            Assert.IsTrue(wires.All(w => !w.Armed), "No web is strung across a route any more; only the corner webs remain.");
+            Assert.IsEmpty(Object.FindObjectsByType<Transform>(FindObjectsSortMode.None).Where(t => t.name.StartsWith("Cocoon")).ToArray(), "The hanging cocoons are gone.");
 
             var wire = wires.First(w => w.wireId == "a_corridor_mid");
             wire.SetArmed(true);
@@ -206,7 +207,7 @@ namespace TrashAstronauts.Tests
             Assert.AreEqual(noiseNow, m_Director.noise.EmittedCount, "Burning a web is silent.");
             Assert.IsNotNull(cutter.tip);
 
-            // Infested contracts string every one of them.
+            // Even an infested contract strings none: the young are what changes.
             MissionDirector.ConditionOverride = ContractCondition.Infested;
             m_Director.FailMission(FailureReason.Caught, PlayerId.Local);
             // Back in the tug (otherwise the player is still standing in the web they broke, and breaks it again).
@@ -215,7 +216,8 @@ namespace TrashAstronauts.Tests
             Assert.IsTrue(m_Director.StartMission(PlayerId.Local));
             yield return Frames(3);
             wires = Object.FindObjectsByType<WebTripwire>(FindObjectsSortMode.None);
-            Assert.IsTrue(wires.All(w => w.Armed), "An infested wreck has a web across every route.");
+            Assert.IsTrue(wires.All(w => !w.Armed), "No webs across the routes, infested or not.");
+            Assert.Greater(ContractConditions.SwarmMultiplier(ContractCondition.Infested), ContractConditions.SwarmMultiplier(ContractCondition.Standard));
         }
 
         [UnityTest]

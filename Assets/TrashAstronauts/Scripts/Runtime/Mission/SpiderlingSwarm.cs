@@ -54,11 +54,14 @@ namespace TrashAstronauts.Mission
             float dt = Time.deltaTime;
 
             bool near = false;
+            // An infested wreck: the young notice you from farther off and roam faster.
+            float swarm = director != null ? TrashAstronauts.Core.ContractConditions.SwarmMultiplier(director.Condition) : 1f;
+            dt *= swarm;
             if (director != null)
             {
                 foreach (var player in director.Players)
                 {
-                    if (player != null && Vector3.Distance(player.HeadPosition, transform.position) < alarmRadius) near = true;
+                    if (player != null && Vector3.Distance(player.HeadPosition, transform.position) < alarmRadius * swarm) near = true;
                 }
             }
             if (near && !Alarmed)
