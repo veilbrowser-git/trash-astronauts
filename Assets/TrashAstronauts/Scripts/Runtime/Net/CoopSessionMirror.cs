@@ -121,6 +121,9 @@ namespace TrashAstronauts.Net
         public void CatchStarted(byte victimSlot) => MessageCount++;
         public void BlackoutStarted(float seconds) => MessageCount++;
         public void BlackoutEnded(bool instant) => MessageCount++;
+        // The host's own hand on an item: ownership, not books (deposits and values arrive as their own messages).
+        public bool LocalGrab(byte itemId) => true;
+        public void LocalRelease(byte itemId) { }
 
         /// <summary>The host's Clock (not a broadcast: the session samples it).</summary>
         public bool ApplyClock(float elapsedSeconds, float oxygenRemainingSeconds) => Session.ApplyClock(elapsedSeconds, oxygenRemainingSeconds);

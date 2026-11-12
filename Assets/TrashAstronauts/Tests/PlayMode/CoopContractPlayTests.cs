@@ -205,6 +205,9 @@ namespace TrashAstronauts.Tests
             public void CatchStarted(byte victimSlot) => log.Add("catch " + victimSlot);
             public void BlackoutStarted(float seconds) => log.Add("blackout on");
             public void BlackoutEnded(bool instant) => log.Add("blackout off");
+            // Stage 3: the host player's own hand (these tests have no crew grabs: the host always gets it).
+            public bool LocalGrab(byte itemId) => true;
+            public void LocalRelease(byte itemId) { }
 
             public readonly List<(byte panel, byte by, NetVec3 impulse, NetVec3 torque)> panelsOpened = new List<(byte, byte, NetVec3, NetVec3)>();
 

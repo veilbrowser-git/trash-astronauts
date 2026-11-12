@@ -308,6 +308,12 @@ namespace TrashAstronauts.Tests
             return ok;
         }
         public void LocalRelease(byte itemId) { Log.Add("localrelease " + itemId); Host.LocalRelease(itemId); }
+        // The creature's messages (stage 4), each to the Send method of the same name (no creature in these rigs' contracts).
+        public void CreatureStateChanged(EnemyState state, byte targetSlot) => Host.SendCreatureStateChanged(state, targetSlot);
+        public void Tranquilized(float seconds) => Host.SendTranquilized(seconds);
+        public void CatchStarted(byte victimSlot) => Host.SendCatchStarted(victimSlot);
+        public void BlackoutStarted(float seconds) => Host.SendBlackoutStarted(seconds);
+        public void BlackoutEnded(bool instant) => Host.SendBlackoutEnded(instant);
     }
 
     /// <summary>The scene is a client of a scripted host; CoopClientApply and CoopItemClient behind a real NetSessionClient.</summary>

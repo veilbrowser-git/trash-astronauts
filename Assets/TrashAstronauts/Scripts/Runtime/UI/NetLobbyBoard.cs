@@ -312,7 +312,7 @@ namespace TrashAstronauts.UI
         static string InfoText(LobbyMode mode)
         {
             if (mode == LobbyMode.Hosting || mode == LobbyMode.Connecting || mode == LobbyMode.Joined)
-                return "Contracts are shared: one tank, one locker, one\ncreature hunting all of you; everyone is paid. Only\nthe host can carry salvage. While you talk, your voice\ngoes to the crew (VOICE CHAT off or MIC off stops it);\nit is never recorded.";
+                return "Contracts are shared: one tank, one locker, one\ncreature hunting all of you, and everyone is paid.\nEveryone can carry salvage. While you talk, your\nvoice goes to the crew (VOICE CHAT or MIC off stops\nit); it is never recorded.";
             return "Nothing is sent over the network until you press a\nbutton. Wi-Fi buttons reach only your local network.\nONLINE buttons use Unity's servers (Relay, Lobby and\nan anonymous sign-in), and only once pressed. In a\ncrew your voice is sent to it while you talk.";
         }
 

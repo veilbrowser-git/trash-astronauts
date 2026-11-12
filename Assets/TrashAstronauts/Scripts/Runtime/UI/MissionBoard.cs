@@ -186,7 +186,7 @@ namespace TrashAstronauts.UI
                         + "ONE THING aboard for the whole crew. It can hunt\n"
                         + "anyone; if it catches one of you, the contract\n"
                         + "fails for all. Anyone's tranquilizer works on it.\n"
-                        + "Only the host can carry salvage. Everyone must be\n"
+                        + "Everyone can carry salvage. Everyone must be\n"
                         + "inside the tug to extract. Everyone is paid.\n\n"
                         + (client ? "START asks the host to launch.\n" : "")
                         + "Banked credits: " + profile.totalCredits + " cr" + hostLine + notice);

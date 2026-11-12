@@ -205,9 +205,16 @@ from your speakers; the game tries not to send that back or let the spider hear 
 quietly while someone else talks can be cut until they stop. The spider hears your real voice wherever you
 are, on the host's headset or your own. Sound quality is like a suit radio, and nothing is recorded.
 
-**Not in this version:** only the host can carry salvage (the others see `HOST ONLY` on it and can open
-doors, cut panels and help find things), and there are no webs in a co-op contract. The tutorial pauses
-while a crew is linked.
+**Everyone grabs.** Every crew member can grab, carry, hand over, throw and deposit salvage, and the item
+is in your hand the moment you close it, without waiting for the host. If two of you reach for the same
+item at once, whoever reached the host first gets it, and the other hand gives two short buzzes and comes
+away empty. Nobody can take an item out of someone else's hand, but once they let go or throw it anyone
+can grab or catch it, and the host still decides every deposit and trick shot. If a crew member's headset
+goes to sleep or they leave while holding something, it is dropped where they last had it and anyone can
+pick it up. An item in a crew member's hand or still flying from their throw cannot knock the spider off
+balance until it settles.
+
+**Not in this version:** there are no webs in a co-op contract. The tutorial pauses while a crew is linked.
 
 **Pauses and lost links.** If a crew member takes the headset off, they count as away (not waited for at
 extraction, not using oxygen). If the host pauses, everyone's board shows `HOST PAUSED`. If nothing is
@@ -356,7 +363,7 @@ Everything loose is a real mass obeying Newton's laws, tuned to stay comfortable
 - The three creatures share one skeleton and one patrol route; they differ in senses, speed, size and look. Their balance has not been play-tested.
 - Working hard (swimming, thrusting) uses oxygen up to 40% faster. Breathing and heartbeat audio are synthesized and may want tuning or an off switch.
 - Hand tracking is implemented but experimental: the gesture thresholds and palm alignment are untested on a headset. Thumbstick-driven continuous locomotion is out of scope.
-- Co-op is a preview: a crew (same Wi-Fi or online) can share a contract, with one shared spider, but only the host can carry salvage and there are no webs in a co-op contract. Nobody can join a crew that is out on a contract. It has never been run on two real headsets. See `Docs/MULTIPLAYER_NOTES.md`.
+- Co-op is a preview: a crew (same Wi-Fi or online) can share a contract, with one shared spider and everyone carrying salvage, but there are no webs in a co-op contract. Nobody can join a crew that is out on a contract. It has never been run on two real headsets. See `Docs/MULTIPLAYER_NOTES.md`.
 
 ## Online play: how it works
 

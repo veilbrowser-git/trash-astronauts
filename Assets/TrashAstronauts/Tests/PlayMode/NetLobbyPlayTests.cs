@@ -78,7 +78,7 @@ namespace TrashAstronauts.Tests
             // The mission board offers the shared contract and says what co-op shares in this version.
             m_Mission.Refresh();
             Assert.AreEqual("CO-OP CONTRACT", m_Mission.title.text);
-            StringAssert.Contains("Only the host can carry salvage", m_Mission.body.text);
+            StringAssert.Contains("Everyone can carry salvage", m_Mission.body.text);
             Assert.IsTrue(m_Mission.primaryButton.Interactable, "The host's START launches the contract for the crew.");
             Assert.AreEqual(MissionPhase.Hub, m_Director.Phase);
 

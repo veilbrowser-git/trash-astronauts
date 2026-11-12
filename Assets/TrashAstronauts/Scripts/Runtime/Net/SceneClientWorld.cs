@@ -90,11 +90,8 @@ namespace TrashAstronauts.Net
 
         // ------------------------------------------------------------------ stage 3: items
 
-        /// <summary>
-        /// Stage 3. In this version the host only ever names itself (it locks deposited items, which the
-        /// ItemDeposited that follows applies in full), so there is nothing to act on here.
-        /// </summary>
-        public void OnItemOwner(byte itemId, byte ownerSlot, byte epoch, bool held, bool denied) { }
+        /// <summary>Who simulates an item now (grants, denials, hand-backs): the item client's ItemAuthority acts on it.</summary>
+        public void OnItemOwner(byte itemId, byte ownerSlot, byte epoch, bool held, bool denied) => m_Apply.ApplyItemOwner(itemId, ownerSlot, epoch, held, denied);
 
         // ------------------------------------------------------------------ creature and hazards
 

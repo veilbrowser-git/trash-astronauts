@@ -106,7 +106,9 @@ namespace TrashAstronauts.Net
 
         // the shared contract
         CoopHostRules m_Rules;
+        CoopItemHost m_Items;
         CoopClientApply m_Apply;
+        CoopItemClient m_ItemClient;
         readonly ItemPoseEntry[] m_Poses = new ItemPoseEntry[CoopItemSampler.MaxMovingPerTick + 1];
         double m_LastPoseTick = double.NegativeInfinity;
         double m_NextClock;
@@ -239,7 +241,7 @@ namespace TrashAstronauts.Net
             FlushClient();
         }
 
-        // Stage 3: a client never simulates salvage in this version (every item is HOST ONLY), so it has no damage to report.
+        // A client's item damage goes to the host through its CoopItemClient (ItemDamageReport), not through here.
         public void ReportSalvageDamage(SalvageItem item, int newValue) { }
         // Stage 4: webs are never armed in a co-op contract, so a client has none to report.
         public void ReportWire(WebTripwire wire, WireChange change) { }
@@ -767,7 +769,9 @@ namespace TrashAstronauts.Net
             m_Rules = new CoopHostRules(director, new HostBroadcast(this)) { Clock = () => Now };
             // Co-op contracts carry the shared spider (never the Mimic) and its blackouts; webs stay unstrung.
             m_Rules.CreatureEnabled = true;
-            m_Host = new NetSessionHost(transport, new SceneHostWorld(this, director, m_Rules), config);
+            // Everyone grabs: the host's arbitration of crew grabs, releases, throws and hand-backs.
+            m_Items = new CoopItemHost(director, new HostBroadcast(this));
+            m_Host = new NetSessionHost(transport, new SceneHostWorld(this, director, m_Rules, m_Items), config);
             m_Online = online;
             CoopItemReplica.Delay = InterpolationDelay;
             m_LastPoseTick = double.NegativeInfinity;
@@ -838,8 +842,12 @@ namespace TrashAstronauts.Net
 
         void DisposeContract()
         {
+            if (m_Items != null) m_Items.Dispose();
+            m_Items = null;
             if (m_Rules != null) m_Rules.Dispose();
             m_Rules = null;
+            if (m_ItemClient != null) m_ItemClient.Dispose(); // safe if LeaveSession already disposed it
+            m_ItemClient = null;
             m_Apply = null;
             CoopItemReplica.Delay = SnapshotBuffer<PoseSnapshot>.InterpolationDelay;
         }
@@ -1010,6 +1018,8 @@ namespace TrashAstronauts.Net
             ClearCrew();
             m_Present[localSlot] = true;
             director.Net = this;
+            // Everyone grabs: this headset's hands share the run's items from now on (before any RunStart).
+            if (m_ItemClient == null || m_ItemClient.Disposed) m_ItemClient = new CoopItemClient(director, new ClientItemRequests(this));
             // A headset already off or untracked when the Welcome came: from now on that is Away, not a hazard pause.
             director.MovePausesToAway();
             ApplyLocalSlot(localSlot);
@@ -1199,6 +1209,53 @@ namespace TrashAstronauts.Net
             public void CatchStarted(byte victimSlot) => Host?.SendCatchStarted(victimSlot);
             public void BlackoutStarted(float seconds) => Host?.SendBlackoutStarted(seconds);
             public void BlackoutEnded(bool instant) => Host?.SendBlackoutEnded(instant);
+            /// <summary>The host player's own hand: arbitrated with the crew's grabs; clients see ItemOwner.</summary>
+            public bool LocalGrab(byte itemId) => Host == null || Host.LocalGrab(itemId);
+            public void LocalRelease(byte itemId) => Host?.LocalRelease(itemId);
+        }
+
+        /// <summary>A client's item requests, each to the NetSessionClient method of the same name; input-like ones go out at once.</summary>
+        sealed class ClientItemRequests : ICoopItemRequests
+        {
+            readonly NetSession m_Net;
+            public ClientItemRequests(NetSession net) { m_Net = net; }
+            NetSessionClient Client => m_Net.m_Client;
+
+            public void GrabRequest(byte itemId, byte epochSeen, byte hand)
+            {
+                var c = Client;
+                if (c == null) return;
+                c.SendGrabRequest(itemId, epochSeen, hand);
+                m_Net.FlushClient();
+            }
+
+            public void ItemReleased(byte itemId, byte epoch, NetVec3 position, NetQuat rotation, NetVec3 releasePosition)
+            {
+                var c = Client;
+                if (c == null) return;
+                c.SendItemReleased(itemId, epoch, position, rotation, releasePosition);
+                m_Net.FlushClient();
+            }
+
+            public void ItemThrown(byte itemId, byte epoch, NetVec3 linearVelocity, NetVec3 angularVelocity, float throwSpeed, bool wasThrown)
+            {
+                var c = Client;
+                if (c == null) return;
+                c.SendItemThrown(itemId, epoch, linearVelocity, angularVelocity, throwSpeed, wasThrown);
+                m_Net.FlushClient();
+            }
+
+            public void ItemHandoff(byte itemId, byte epoch, NetVec3 position, NetQuat rotation, NetVec3 linearVelocity, NetVec3 angularVelocity)
+            {
+                var c = Client;
+                if (c == null) return;
+                c.SendItemHandoff(itemId, epoch, position, rotation, linearVelocity, angularVelocity);
+                m_Net.FlushClient();
+            }
+
+            public void ItemDamageReport(byte itemId, int newValue) => Client?.SendItemDamageReport(itemId, newValue);
+
+            public void QueueItemPose(byte itemId, NetVec3 position, NetQuat rotation, byte epoch, bool held) => Client?.QueueItemPose(itemId, position, rotation, epoch, held);
         }
 
         // ================================================================== helpers
