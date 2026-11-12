@@ -189,7 +189,8 @@ namespace TrashAstronauts.EditorTools
 
         static void Rock(Vector3 floorPoint, Vector3 radii, int seed, bool solid)
         {
-            var go = Part(s_Props, "Boulder", Blob("Boulder", radii, Mathf.Min(radii.x, radii.z) * 0.35f, seed, 14, 9), floorPoint + Vector3.up * (radii.y * 0.6f), M("Basalt"),
+            var blob = Blob("Boulder", radii, Mathf.Min(radii.x, radii.z) * 0.35f, seed, 14, 9);
+            var go = Part(s_Props, "Boulder", blob, floorPoint + Vector3.up * (radii.y * 0.6f), M("Basalt"),
                 new Vector3(seed * 17f % 30f, seed * 47f, seed * 23f % 20f), solid ? GameLayers.Environment : GameLayers.Default);
             go.isStatic = true;
             if (solid)
@@ -197,6 +198,14 @@ namespace TrashAstronauts.EditorTools
                 var col = go.AddComponent<SphereCollider>();
                 col.radius = Mathf.Min(radii.x, Mathf.Min(radii.y, radii.z)) * 0.95f;
             }
+            // Loose salvage and dropped tools rest against the rock you see, never inside it where no hand could
+            // find them: the hull of the visible rock, on a layer only loose things collide with (the player and
+            // the creature move as before; the sphere above, where there is one, is what they meet).
+            var hull = Empty(go.transform, "Rubble Hull", Vector3.zero, null, GameLayers.Rubble);
+            var mesh = hull.AddComponent<MeshCollider>();
+            mesh.sharedMesh = blob;
+            mesh.convex = true;
+            hull.isStatic = true;
         }
 
         // ------------------------------------------------------------------ organic rock and combining
@@ -204,15 +213,20 @@ namespace TrashAstronauts.EditorTools
         /// <summary>
         /// A smooth 3D warp of space used to roughen every rock surface. It depends only on the world
         /// position, so neighbouring slabs and wall pieces bend the same way and meet without cracks.
-        /// Small near the floor (the floor stays walkable and matches its flat collider), larger overhead.
+        /// Larger overhead. Near the floor, where salvage comes to rest and hands reach for it, the rock stays
+        /// within a centimetre of its collider and the floor never rises above its own: rock standing out of the
+        /// colliders there would hide an item lying against it (see RestingPlaceTests).
         /// </summary>
         static Vector3 CaveWarp(Vector3 p)
         {
-            float amp = Mathf.Lerp(0.04f, 0.2f, Mathf.InverseLerp(0.05f, 0.9f, p.y));
+            float amp = Mathf.Lerp(0.009f, 0.2f, Mathf.InverseLerp(0.35f, 1.1f, p.y));
             const float f = 0.55f;
             float N(float a, float b, float c, float o) =>
                 (Mathf.PerlinNoise(a * f + o, b * f + c * 0.7f * f + o * 0.37f) + 0.5f * Mathf.PerlinNoise(a * f * 2.3f + c * 0.9f + o, b * f * 2.3f - o)) / 0.75f - 1f;
-            return new Vector3(N(p.x, p.z, p.y, 3.1f), 0.55f * N(p.z, p.y, p.x, 11.3f), N(p.y, p.x, p.z, 17.9f)) * amp;
+            Vector3 warp = new Vector3(N(p.x, p.z, p.y, 3.1f), 0.55f * N(p.z, p.y, p.x, 11.3f), N(p.y, p.x, p.z, 17.9f)) * amp;
+            // At floor level the surface only ever dips below the collider, never lifts above it.
+            warp.y = Mathf.Lerp(-Mathf.Abs(warp.y), warp.y, Mathf.InverseLerp(0.05f, 0.4f, p.y));
+            return warp;
         }
 
         /// <summary>Static scenery of one material in one patch of the cave, merged into one mesh.</summary>

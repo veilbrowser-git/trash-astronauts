@@ -480,6 +480,8 @@ namespace TrashAstronauts.Player
         {
             if (hand.interactor == null) return false;
             if (hand.interactor.hasSelection) return true;
+            // An item the reach assist is showing: the squeeze is for it, not for the wall or a paddle stroke.
+            if (hand.Reach != null && hand.Reach.isActiveAndEnabled && hand.Reach.ClaimsGrip) return true;
             var hovered = hand.interactor.interactablesHovered;
             for (int i = 0; i < hovered.Count; i++)
             {

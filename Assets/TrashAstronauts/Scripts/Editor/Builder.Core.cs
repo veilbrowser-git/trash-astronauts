@@ -260,6 +260,7 @@ namespace TrashAstronauts.EditorTools
             Lit("DartGlow", new Color(0.4f, 1f, 0.5f), 0.6f, null, new Color(0.3f, 1.6f, 0.5f));
             Unlit("Fade", new Color(0f, 0f, 0f, 0f), true);
             Unlit("Line", Color.white, false, null, "Universal Render Pipeline/Particles/Unlit");
+            Unlit("ReachLine", Color.white, true, null, "Universal Render Pipeline/Particles/Unlit");
             Unlit("Flame", new Color(0.6f, 0.9f, 1f));
             Unlit("Reticle", new Color(0.3f, 0.95f, 1f));
             Unlit("Ghost", new Color(0.3f, 0.9f, 1f, 0.25f), true);

@@ -64,7 +64,10 @@ namespace TrashAstronauts.World
         void OnHoverEntered(HoverEnterEventArgs args) { m_HoverCount++; m_Dirty = true; }
         void OnHoverExited(HoverExitEventArgs args) { m_HoverCount = Mathf.Max(0, m_HoverCount - 1); m_Dirty = true; }
 
-        /// <summary>Hover driven by something other than XRI (the button pointer).</summary>
+        /// <summary>True while a hand hovers it (XRI) or something else marks it (the button pointer, the reach assist).</summary>
+        public bool IsHovered => m_HoverCount > 0 || m_ManualHover;
+
+        /// <summary>Hover driven by something other than XRI (the button pointer, the reach assist).</summary>
         public void SetManualHover(bool hovered)
         {
             if (m_ManualHover == hovered) return;

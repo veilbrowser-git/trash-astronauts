@@ -104,7 +104,8 @@ namespace TrashAstronauts.Mission
                 Vector3 p = body.worldCenterOfMass;
                 if (!Contains(p)) continue;
 
-                bool grounded = Physics.Raycast(p, down, m_HalfHeights[i] + 0.08f, GameLayers.EnvironmentMask, QueryTriggerInteraction.Ignore);
+                // Resting on the floor or on fallen rock (rubble collides with loose things only).
+                bool grounded = Physics.Raycast(p, down, m_HalfHeights[i] + 0.08f, GameLayers.RestingMask, QueryTriggerInteraction.Ignore);
                 Vector3 v = body.linearVelocity;
                 float into = Vector3.Dot(v, down);
                 if (body.IsSleeping())
