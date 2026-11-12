@@ -16,7 +16,7 @@ MonoBehaviour:
   displayName: Fusion Regulator Core
   category: 2
   creditValue: 600
-  mass: 14
+  mass: 40
   bulky: 1
   bonusSpawn: 0
   fragility: 0.5

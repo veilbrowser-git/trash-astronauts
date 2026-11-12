@@ -16,7 +16,9 @@ MonoBehaviour:
   displayName: Bent Hull Plate
   category: 0
   creditValue: 40
-  mass: 1.2
+  mass: 3
   bulky: 0
+  bonusSpawn: 0
+  fragility: 0
   scannerBlurb: Scrap metal. Sold by weight.
   prefab: {fileID: 6820685943294489192, guid: 1771f1d58f5a14143bbe2ebf2698d50a, type: 3}

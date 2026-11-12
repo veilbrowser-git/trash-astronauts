@@ -16,7 +16,7 @@ MonoBehaviour:
   displayName: Nav Computer Board
   category: 1
   creditValue: 150
-  mass: 1.5
+  mass: 0.6
   bulky: 0
   bonusSpawn: 0
   fragility: 0.6

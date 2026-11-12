@@ -16,7 +16,9 @@ MonoBehaviour:
   displayName: Copper Cable Coil
   category: 0
   creditValue: 55
-  mass: 1
+  mass: 6
   bulky: 0
+  bonusSpawn: 0
+  fragility: 0
   scannerBlurb: Copper. Mildly chewed.
   prefab: {fileID: 3067528170679135547, guid: 293cf3c7ca9114142aef54762af0df49, type: 3}

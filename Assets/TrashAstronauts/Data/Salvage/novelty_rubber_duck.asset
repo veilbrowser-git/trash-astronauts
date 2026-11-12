@@ -16,8 +16,9 @@ MonoBehaviour:
   displayName: Emergency Rubber Duck
   category: 3
   creditValue: 75
-  mass: 0.15
+  mass: 0.1
   bulky: 0
   bonusSpawn: 1
+  fragility: 0
   scannerBlurb: Squeeze the trigger. It is LOUD.
   prefab: {fileID: 1132016649432705802, guid: 90c5e6beb35d941e09fb2ef3fa63f89b, type: 3}

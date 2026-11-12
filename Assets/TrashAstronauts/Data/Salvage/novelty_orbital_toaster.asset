@@ -16,7 +16,7 @@ MonoBehaviour:
   displayName: Deluxe Orbital Toaster
   category: 3
   creditValue: 350
-  mass: 2
+  mass: 1.8
   bulky: 0
   bonusSpawn: 0
   fragility: 0.8

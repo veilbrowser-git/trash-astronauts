@@ -16,7 +16,7 @@ MonoBehaviour:
   displayName: Comms Relay Module
   category: 1
   creditValue: 190
-  mass: 2.5
+  mass: 3.5
   bulky: 0
   bonusSpawn: 0
   fragility: 0.7

@@ -192,6 +192,7 @@ GameObject:
   - component: {fileID: 7152782061900010694}
   - component: {fileID: 6371439332239398065}
   - component: {fileID: 3585947542749162021}
+  - component: {fileID: 3057199927433195680}
   - component: {fileID: 93023083139021003}
   - component: {fileID: 9063277940441630811}
   - component: {fileID: 3373356317566618435}
@@ -230,9 +231,9 @@ Rigidbody:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1272889785457941657}
   serializedVersion: 5
-  m_Mass: 2.5
-  m_LinearDamping: 0.18
-  m_AngularDamping: 0.2
+  m_Mass: 5
+  m_LinearDamping: 0.02
+  m_AngularDamping: 0.04
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -256,7 +257,7 @@ BoxCollider:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1272889785457941657}
-  m_Material: {fileID: 13400000, guid: 61d9212ebe1ff43c5883197ab41a184d, type: 2}
+  m_Material: {fileID: 13400000, guid: 407956c872c84478db501e0597710aac, type: 2}
   m_IncludeLayers:
     serializedVersion: 2
     m_Bits: 0
@@ -387,8 +388,8 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  m_ThrowVelocityScale: 1.25
-  m_ThrowAngularVelocityScale: 0.9
+  m_ThrowVelocityScale: 1
+  m_ThrowAngularVelocityScale: 1
   m_ForceGravityOnDetach: 0
   m_UnparentTransformOnGrab: 1
   m_RetainTransformParent: 0
@@ -400,6 +401,22 @@ MonoBehaviour:
   m_LimitAngularVelocity: 0
   m_MaxLinearVelocityDelta: 10
   m_MaxAngularVelocityDelta: 20
+--- !u!114 &3057199927433195680
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1272889785457941657}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b968e0e98dfa14e73b883ab3029d1f77, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: TrashAstronauts.Runtime::TrashAstronauts.Player.HeldWeight
+  freeMass: 2
+  slipDistance: 0.45
+  slipSeconds: 0.15
+  maxThrowSpin: 25
 --- !u!114 &93023083139021003
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -435,6 +452,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: TrashAstronauts.Runtime::TrashAstronauts.Mission.ImpactNoiseEmitter
   loudnessScale: 1
   heavy: 0
+  surface: 2
   audioSpeedThreshold: 0.7
   audioCooldown: 0.2
 --- !u!114 &3373356317566618435

@@ -43,7 +43,7 @@ MonoBehaviour:
   trickShotDistance: 2.2
   trickShotBonusFraction: 0.25
   exertionOxygenCost: 0.4
-  playerMass: 90
+  playerMass: 150
   blackoutsEnabled: 1
   blackoutMinDelay: 70
   blackoutMaxDelay: 170
