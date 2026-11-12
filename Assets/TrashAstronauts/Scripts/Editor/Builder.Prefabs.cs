@@ -392,6 +392,8 @@ namespace TrashAstronauts.EditorTools
             ConfigureSpatial(hum, s_Audio != null ? s_Audio.droneHum : null, true, 0.26f, 1.2f, 12f);
             var voice = Empty(go.transform, "Voice", Vector3.zero).AddComponent<AudioSource>();
             ConfigureSpatial(voice, null, true, 0.32f, 1.5f, 16f);
+            AddOcclusion(hum);
+            AddOcclusion(voice);
 
             var drone = go.AddComponent<EnemyDrone>();
             drone.eye = eyePoint.transform;
@@ -471,6 +473,7 @@ namespace TrashAstronauts.EditorTools
             walker.thread.startColor = walker.thread.endColor = new Color(0.85f, 0.87f, 0.9f);
             var stepSource = Empty(surfaceGo.transform, "Footsteps", Vector3.zero).AddComponent<AudioSource>();
             ConfigureSpatial(stepSource, null, true, 0f, 1.2f, warden ? 18f : 15f);
+            AddOcclusion(stepSource);
             walker.steps = stepSource;
             walker.stepVolume = listener ? 0.35f : warden ? 0.75f : mimic ? 0.4f : 0.55f;
 
@@ -498,6 +501,18 @@ namespace TrashAstronauts.EditorTools
             source.minDistance = minDistance;
             source.maxDistance = maxDistance;
             source.dopplerLevel = 0f;
+        }
+
+        /// <summary>Muffles a positional source when a wall stands between it and the listener.</summary>
+        static SoundOcclusion AddOcclusion(AudioSource source)
+        {
+            var lowPass = source.gameObject.AddComponent<AudioLowPassFilter>();
+            lowPass.cutoffFrequency = 22000f;
+            lowPass.lowpassResonanceQ = 1f;
+            lowPass.enabled = false;
+            var occlusion = source.gameObject.AddComponent<SoundOcclusion>();
+            occlusion.lowPass = lowPass;
+            return occlusion;
         }
 
         // ------------------------------------------------------------------ tools
@@ -784,6 +799,17 @@ namespace TrashAstronauts.EditorTools
             camGo.AddComponent<AudioListener>();
             // Everything is heard from inside a helmet: the top end is taken off all of it.
             camGo.AddComponent<AudioLowPassFilter>().cutoffFrequency = 6200f;
+            // Rooms sound their size: one reverb zone that follows the head, sized by a few rays to the walls.
+            var reverbGo = Empty(camGo.transform, "Room Reverb", Vector3.zero, null, GameLayers.Player);
+            var reverb = reverbGo.AddComponent<AudioReverbZone>();
+            reverb.reverbPreset = AudioReverbPreset.User;
+            reverb.minDistance = 500f;
+            reverb.maxDistance = 600f;
+            reverb.reflections = -1400;
+            reverb.reverb = -900;
+            reverb.roomHF = -900;
+            var roomAcoustics = camGo.AddComponent<RoomAcoustics>();
+            roomAcoustics.zone = reverb;
             var headDriver = camGo.AddComponent<TrackedPoseDriver>();
             headDriver.positionInput = new InputActionProperty(Ref("Head/Position"));
             headDriver.rotationInput = new InputActionProperty(Ref("Head/Rotation"));
@@ -978,6 +1004,7 @@ namespace TrashAstronauts.EditorTools
             source.playOnAwake = false;
             source.spatialBlend = 0f;
             source.volume = 0f;
+            source.bypassReverbZones = true; // inside the helmet: no room echo on breathing
             return source;
         }
 
