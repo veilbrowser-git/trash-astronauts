@@ -215,12 +215,46 @@ namespace TrashAstronauts.EditorTools
             return new Vector3(N(p.x, p.z, p.y, 3.1f), 0.55f * N(p.z, p.y, p.x, 11.3f), N(p.y, p.x, p.z, 17.9f)) * amp;
         }
 
-        /// <summary>A box's surface in world space, subdivided about every 0.4 m and warped by CaveWarp.</summary>
-        static Mesh WarpedBox(Vector3 center, Vector3 size)
+        /// <summary>Static scenery of one material in one patch of the cave, merged into one mesh.</summary>
+        sealed class CaveChunk
         {
-            var verts = new List<Vector3>();
-            var uvs = new List<Vector2>();
-            var tris = new List<int>();
+            public readonly List<Vector3> verts = new List<Vector3>();
+            public readonly List<Vector3> normals = new List<Vector3>();
+            public readonly List<Vector2> uvs = new List<Vector2>();
+            public readonly List<int> tris = new List<int>();
+            public readonly List<CombineInstance> parts = new List<CombineInstance>();
+        }
+
+        /// <summary>
+        /// Patches are small enough that each is lit by its own few lights: URP on Quest lights each
+        /// renderer with at most four, so one mesh for the whole cave would leave most of it black.
+        /// </summary>
+        static Vector2Int CaveCell(Vector3 p, float size) =>
+            size >= 1000f ? Vector2Int.zero : new Vector2Int(Mathf.FloorToInt(p.x / size), Mathf.FloorToInt(p.z / size));
+
+        /// <summary>
+        /// Walls and floor cover everything and need their local lights: 10 m patches. The ceiling is seen
+        /// less (14 m), props 24 m. Self-lit things (glow, webs, stars, guide lights) need no lights: one mesh.
+        /// </summary>
+        static float CaveChunkSize(Material mat, HashSet<Material> rock)
+        {
+            if (mat.name == "RockCeiling") return 14f;
+            if (rock.Contains(mat)) return 10f;
+            string n = mat.name;
+            if (n.StartsWith("Glow") || n == "Web" || n == "GuideLight") return 1000f;
+            if (n == "Stars") return 10f; // the sky over the skylight and the habitat window stay apart (previews hide the sky from above)
+            return 24f;
+        }
+
+        static Vector3 Warped(Vector3 p) => p + CaveWarp(p);
+
+        /// <summary>
+        /// A box's surface, subdivided about every 0.4 m and warped by CaveWarp, written quad by quad into the
+        /// chunk each quad falls in. Normals come from the warp itself, so the rock is smooth-shaded across
+        /// quads and chunks alike.
+        /// </summary>
+        static void WarpedBoxInto(Vector3 center, Vector3 size, System.Func<Vector3, CaveChunk> chunkAt)
+        {
             Vector3 h = size * 0.5f;
             void Face(Vector3 normal, Vector3 right, Vector3 up, float w, float ht, float depth)
             {
@@ -229,26 +263,28 @@ namespace TrashAstronauts.EditorTools
                 if (normal.y < -0.5f && c.y < -0.05f) return;
                 if (normal.y > 0.5f && c.y > 1f && size.y < 0.5f) return;
                 int nx = Mathf.Max(1, Mathf.CeilToInt(w / 0.4f)), ny = Mathf.Max(1, Mathf.CeilToInt(ht / 0.4f));
-                int start = verts.Count;
-                for (int j = 0; j <= ny; j++)
-                {
-                    for (int i = 0; i <= nx; i++)
-                    {
-                        float a = -w * 0.5f + w * i / nx, b = -ht * 0.5f + ht * j / ny;
-                        Vector3 p = c + right * a + up * b;
-                        verts.Add(p + CaveWarp(p));
-                        Vector3 world = p;
-                        uvs.Add(new Vector2(Vector3.Dot(world, right), Vector3.Dot(world, up)) * 0.35f);
-                    }
-                }
                 bool flip = Vector3.Dot(Vector3.Cross(up, right), normal) <= 0f;
+                Vector3 Point(int i, int j) => c + right * (-w * 0.5f + w * i / nx) + up * (-ht * 0.5f + ht * j / ny);
+                Vector3 NormalAt(Vector3 p)
+                {
+                    const float e = 0.05f;
+                    Vector3 n = Vector3.Cross(Warped(p + right * e) - Warped(p - right * e), Warped(p + up * e) - Warped(p - up * e)).normalized;
+                    return Vector3.Dot(n, normal) < 0f ? -n : n;
+                }
                 for (int j = 0; j < ny; j++)
                 {
                     for (int i = 0; i < nx; i++)
                     {
-                        int v0 = start + j * (nx + 1) + i, v1 = v0 + nx + 1, v2 = v1 + 1, v3 = v0 + 1;
-                        if (!flip) tris.AddRange(new[] { v0, v1, v2, v0, v2, v3 });
-                        else tris.AddRange(new[] { v0, v2, v1, v0, v3, v2 });
+                        var chunk = chunkAt((Point(i, j) + Point(i + 1, j + 1)) * 0.5f);
+                        int start = chunk.verts.Count;
+                        foreach (var p in new[] { Point(i, j), Point(i, j + 1), Point(i + 1, j + 1), Point(i + 1, j) })
+                        {
+                            chunk.verts.Add(Warped(p));
+                            chunk.normals.Add(NormalAt(p));
+                            chunk.uvs.Add(new Vector2(Vector3.Dot(p, right), Vector3.Dot(p, up)) * 0.35f);
+                        }
+                        if (!flip) chunk.tris.AddRange(new[] { start, start + 1, start + 2, start, start + 2, start + 3 });
+                        else chunk.tris.AddRange(new[] { start, start + 2, start + 1, start, start + 3, start + 2 });
                     }
                 }
             }
@@ -258,12 +294,6 @@ namespace TrashAstronauts.EditorTools
             Face(Vector3.left, Vector3.forward, Vector3.up, size.z, size.y, h.x);
             Face(Vector3.up, Vector3.right, Vector3.forward, size.x, size.z, h.y);
             Face(Vector3.down, Vector3.right, Vector3.forward, size.x, size.z, h.y);
-            var mesh = new Mesh { indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
-            mesh.SetVertices(verts);
-            mesh.SetUVs(0, uvs);
-            mesh.SetTriangles(tris, 0);
-            mesh.RecalculateNormals();
-            return mesh;
         }
 
         static Mesh SaveCaveMesh(string key, Mesh built)
@@ -288,7 +318,7 @@ namespace TrashAstronauts.EditorTools
         /// The cave's finishing pass: rock walls lose their metal trim, every rock slab and wall piece is
         /// replaced by a warped, subdivided, smooth-shaded copy of itself (its box collider stays exactly
         /// where it was, so the play space stays watertight and the creature's surface probes still work),
-        /// and all static scenery is merged into one mesh per material.
+        /// and all static scenery is merged into one mesh per material per patch (see CaveChunkSize).
         /// </summary>
         static void CaveRockAndCombine(Transform root)
         {
@@ -303,9 +333,14 @@ namespace TrashAstronauts.EditorTools
                 if (segment != null && rock.Contains(segment.sharedMaterial)) UnityEngine.Object.DestroyImmediate(r.gameObject);
             }
 
-            var groups = new Dictionary<Material, List<CombineInstance>>();
+            var chunks = new Dictionary<(Material, Vector2Int), CaveChunk>();
+            CaveChunk Chunk(Material mat, Vector3 at)
+            {
+                var key = (mat, CaveCell(at, CaveChunkSize(mat, rock)));
+                if (!chunks.TryGetValue(key, out var chunk)) chunks[key] = chunk = new CaveChunk();
+                return chunk;
+            }
             var merged = new List<MeshRenderer>();
-            var temporary = new List<Mesh>();
             foreach (var r in root.GetComponentsInChildren<MeshRenderer>(true))
             {
                 var go = r.gameObject;
@@ -325,31 +360,42 @@ namespace TrashAstronauts.EditorTools
                 if (scripted) continue;
                 var filter = go.GetComponent<MeshFilter>();
                 if (filter == null || filter.sharedMesh == null) continue;
-                if (!groups.TryGetValue(r.sharedMaterial, out var list)) groups[r.sharedMaterial] = list = new List<CombineInstance>();
+                var mat = r.sharedMaterial;
                 var box = go.GetComponent<BoxCollider>();
-                if (rock.Contains(r.sharedMaterial) && box != null && go.transform.rotation == Quaternion.identity && go.transform.lossyScale == Vector3.one)
-                {
-                    var warped = WarpedBox(go.transform.TransformPoint(box.center), box.size);
-                    temporary.Add(warped);
-                    list.Add(new CombineInstance { mesh = warped, transform = Matrix4x4.identity });
-                }
-                else list.Add(new CombineInstance { mesh = filter.sharedMesh, transform = go.transform.localToWorldMatrix });
+                if (rock.Contains(mat) && box != null && go.transform.rotation == Quaternion.identity && go.transform.lossyScale == Vector3.one)
+                    WarpedBoxInto(go.transform.TransformPoint(box.center), box.size, at => Chunk(mat, at));
+                else
+                    Chunk(mat, r.bounds.center).parts.Add(new CombineInstance { mesh = filter.sharedMesh, transform = go.transform.localToWorldMatrix });
                 merged.Add(r);
             }
 
             var level = root.Find("Level");
             var parent = Empty(level, "Combined Scenery", Vector3.zero, null, GameLayers.Default).transform;
-            foreach (var pair in groups.OrderBy(g => g.Key.name))
+            var temporary = new List<Mesh>();
+            foreach (var pair in chunks.OrderBy(c => c.Key.Item1.name).ThenBy(c => c.Key.Item2.x).ThenBy(c => c.Key.Item2.y))
             {
+                var chunk = pair.Value;
+                var parts = new List<CombineInstance>(chunk.parts);
+                if (chunk.verts.Count > 0)
+                {
+                    var raw = new Mesh { indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
+                    raw.SetVertices(chunk.verts);
+                    raw.SetNormals(chunk.normals);
+                    raw.SetUVs(0, chunk.uvs);
+                    raw.SetTriangles(chunk.tris, 0);
+                    temporary.Add(raw);
+                    parts.Add(new CombineInstance { mesh = raw, transform = Matrix4x4.identity });
+                }
                 var mesh = new Mesh { indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
-                mesh.CombineMeshes(pair.Value.ToArray(), true, true);
+                mesh.CombineMeshes(parts.ToArray(), true, true);
                 mesh.RecalculateBounds();
                 mesh.RecalculateTangents();
-                mesh = SaveCaveMesh("Cave_" + pair.Key.name, mesh);
-                var go = Empty(parent, "Combined " + pair.Key.name, Vector3.zero, null, GameLayers.Default);
+                string cell = pair.Key.Item2.x + "_" + pair.Key.Item2.y;
+                mesh = SaveCaveMesh("Cave_" + pair.Key.Item1.name + "_" + cell, mesh);
+                var go = Empty(parent, "Combined " + pair.Key.Item1.name + " " + cell, Vector3.zero, null, GameLayers.Default);
                 go.AddComponent<MeshFilter>().sharedMesh = mesh;
                 var renderer = go.AddComponent<MeshRenderer>();
-                renderer.sharedMaterial = pair.Key;
+                renderer.sharedMaterial = pair.Key.Item1;
                 Cheap(renderer);
                 go.isStatic = true;
             }
@@ -430,7 +476,7 @@ namespace TrashAstronauts.EditorTools
             // (built as a frame of ceiling around a hole, a shaft above it and a sky cap)
             {
                 var sky = Empty(s_Level, "D Skylight Shaft", Vector3.zero, null, GameLayers.Environment).transform;
-                const float top = 7.5f;
+                const float top = 6.2f; // close enough that the stars are not lost in the fog
                 Box(sky, "Shaft W", new Vector3(-9.1f, (SH + top) * 0.5f, 23f), new Vector3(0.2f, top - SH, 4.4f), M("Basalt"));
                 Box(sky, "Shaft E", new Vector3(-4.9f, (SH + top) * 0.5f, 23f), new Vector3(0.2f, top - SH, 4.4f), M("Basalt"));
                 Box(sky, "Shaft S", new Vector3(-7f, (SH + top) * 0.5f, 20.9f), new Vector3(4.4f, top - SH, 0.2f), M("Basalt"));
