@@ -41,18 +41,19 @@ namespace TrashAstronauts.Net
         void PanelOpened(byte panel, byte by, NetVec3 plateImpulse, NetVec3 plateTorque);
 
         // ---- creature and hazards (stage 4; sent by CoopCreatureHost, all host->all, reliable)
-        // Empty by default so adapters written before stage 4 still compile; the session adapter forwards each to
-        // the NetSessionHost Send* method of the same name.
+        // No default bodies: every implementation must decide what to do with each, so a forward the session
+        // adapter forgot is a compile error, not silence. NetSession forwards each to the NetSessionHost Send*
+        // method of the same name.
         /// <summary>The creature changed state; <paramref name="targetSlot"/> is its quarry or 255.</summary>
-        void CreatureStateChanged(EnemyState state, byte targetSlot) { }
+        void CreatureStateChanged(EnemyState state, byte targetSlot);
         /// <summary>A dart put the creature to sleep for this long.</summary>
-        void Tranquilized(float seconds) { }
+        void Tranquilized(float seconds);
         /// <summary>The creature caught this crew member; every machine plays its side of the jumpscare.</summary>
-        void CatchStarted(byte victimSlot) { }
+        void CatchStarted(byte victimSlot);
         /// <summary>The host's blackout began and is set to last this long.</summary>
-        void BlackoutStarted(float seconds) { }
+        void BlackoutStarted(float seconds);
         /// <summary>The host's blackout ended (instant = no stutter back).</summary>
-        void BlackoutEnded(bool instant) { }
+        void BlackoutEnded(bool instant);
     }
 
     /// <summary>Unity values to and from the core's wire types.</summary>

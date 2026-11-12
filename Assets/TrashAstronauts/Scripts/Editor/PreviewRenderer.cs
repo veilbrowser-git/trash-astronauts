@@ -279,7 +279,7 @@ namespace TrashAstronauts.EditorTools
                 string info = board.info.text;
                 board.status.text = "HOSTING  TUG 4821  ONLINE\nCODE  K7Q2ZD\nCREW 2/4:  ORANGE (YOU)  BLUE";
                 board.notice.text = "";
-                board.info.text = "Contracts are shared: the host launches one and the\nwhole crew rides along, with one oxygen tank and one\nlocker, and everyone is paid. In this version only the\nhost can carry salvage and there is no creature.\nNothing from your microphone is ever sent.";
+                board.info.text = "Contracts are shared: the host launches one and the\nwhole crew rides along, with one oxygen tank and one\nlocker, one creature hunting all of you, and everyone\nis paid. In this version only the host can carry\nsalvage. Nothing from your microphone is ever sent.";
                 board.joinButtons[1].SetInteractable(true);
                 board.joinButtons[3].SetInteractable(true);
                 Shot("57_coop_hosting_online", new Vector3(0.7f, 1.72f, 0.22f), new Vector3(1.9f, 1.8f, 0.22f), false, 70f);

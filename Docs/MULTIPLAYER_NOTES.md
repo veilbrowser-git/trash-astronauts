@@ -7,8 +7,9 @@ Relay, games listed by Unity Lobby, anonymous sign-in; `Scripts/Runtime/Net/Onli
 everyone's suit, head and hands, and the host can start a real contract that the whole crew rides along in:
 the host simulates the salvage and streams it, there is one shared oxygen tank, doors and cut panels are
 shared, there is one locker, extraction needs everyone who is not away inside the tug, and everyone banks
-the payout into their own save. Not yet: only the host can carry salvage (stage 3), and a co-op contract
-has no creature, blackouts or webs (stage 4). Adapters: `Runtime/Net/NetSession.cs` (the one MonoBehaviour),
+the payout into their own save. The spider is shared (stage 4): simulated on the host, shown everywhere,
+hunting anyone, with the crew's noises and darts reported to the host; being caught fails the contract for
+all; blackouts are the host's. Not yet: only the host can carry salvage (stage 3), and no webs in co-op. Adapters: `Runtime/Net/NetSession.cs` (the one MonoBehaviour),
 `SceneHostWorld` + `CoopHostRules` on the host, `SceneClientWorld` + `CoopClientApply` on a client.
 Nothing opens a socket or contacts a service until one of the panel's buttons is pressed; single-player
 opens none. The notes below are the original seam survey and are kept for reference.

@@ -290,7 +290,7 @@ namespace TrashAstronauts.Mission
             if (m_RepSedateTimer > 0f && !(director != null && director.HazardsPaused))
                 m_RepSedateTimer = Mathf.Max(0f, m_RepSedateTimer - dt);
 
-            if (!IsScaring && m_RepBuffer.Count > 0 && m_RepBuffer.Sample(SnapshotBuffer<CreatureSnapshot>.RenderTime(localNow), out CreatureSnapshot s))
+            if (!IsScaring && m_RepBuffer.Count > 0 && m_RepBuffer.Sample(localNow - CoopItemReplica.Delay, out CreatureSnapshot s))
             {
                 transform.SetPositionAndRotation(CoopConvert.ToUnity(s.position), Quaternion.Euler(0f, s.yawDegrees, 0f));
                 m_RepFlags = s.flags;

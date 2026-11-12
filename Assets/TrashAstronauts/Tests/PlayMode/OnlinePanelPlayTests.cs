@@ -117,6 +117,13 @@ namespace TrashAstronauts.Tests
             public int ConnectionCount { get; set; }
             public int Flushes;
             public void Flush() => Flushes++;
+            public readonly Queue<NetEndpoint> Dropped = new Queue<NetEndpoint>();
+            public bool TryTakeDropped(out NetEndpoint peer)
+            {
+                if (Dropped.Count == 0) { peer = default(NetEndpoint); return false; }
+                peer = Dropped.Dequeue();
+                return true;
+            }
             public NetEndpoint Local => Inner.Local;
             public bool Send(NetEndpoint to, byte[] data, int length) => Inner.Send(to, data, length);
             public bool Receive(out NetEndpoint from, byte[] buffer, out int length) => Inner.Receive(out from, buffer, out length);
@@ -455,25 +462,7 @@ namespace TrashAstronauts.Tests
             bot.Frozen = true;
             yield return Frames(100, 0.05);
 
-            // Every crew member's connection dropped at once while the roster still lists them: the same.
-            yield return Press(m_Board.hostOnlineButton);
-            var again = new FakeRelay(m_Hub.Create(), true);
-            m_Link.Host.SetResult(new OnlineHostResult { Ok = true, Transport = again, TugNumber = 4822, Code = "K7Q2ZE", Listed = true });
-            yield return Until(() => m_Net.Mode == LobbyMode.Hosting);
-            var bot2 = AddBot(again.Local);
-            yield return Until(() => m_Net.Crew(1) != null);
-            again.ConnectionCount = 1;
-            yield return Frames(3);
-            Assert.AreEqual(LobbyMode.Hosting, m_Net.Mode, "Healthy: still hosting.");
-            bot2.Frozen = true; // the client's side went silent...
-            again.ConnectionCount = 0; // ...and Relay dropped its connection
-            again.Disconnects = 1;
-            yield return Frames(2);
-            Assert.AreEqual(LobbyMode.Offline, m_Net.Mode);
-            StringAssert.StartsWith("LINK LOST", Notice);
-
             // The Relay server connection itself lost.
-            yield return Frames(100, 0.05);
             yield return Press(m_Board.hostOnlineButton);
             var third = new FakeRelay(m_Hub.Create(), true);
             m_Link.Host.SetResult(new OnlineHostResult { Ok = true, Transport = third, TugNumber = 4823, Code = "K7Q2ZF", Listed = true });
@@ -481,6 +470,51 @@ namespace TrashAstronauts.Tests
             third.RelayLost = true;
             yield return Frames(2);
             Assert.AreEqual(LobbyMode.Offline, m_Net.Mode);
+        }
+
+        [UnityTest]
+        public IEnumerator Relay_OneCrewMembersConnectionDrops_OnlyThatOneIsLetGo_TheGameStaysOpenAndListed()
+        {
+            yield return Board();
+            yield return Press(m_Board.hostOnlineButton);
+            var relay = new FakeRelay(m_Hub.Create(), true);
+            m_Link.Host.SetResult(new OnlineHostResult { Ok = true, Transport = relay, TugNumber = 4821, Code = "K7Q2ZD", Listed = true });
+            yield return Until(() => m_Net.Mode == LobbyMode.Hosting);
+            var a = AddBot(relay.Local);
+            var b = AddBot(relay.Local);
+            yield return Until(() => m_Net.Crew(1) != null && m_Net.Crew(2) != null && b.World.Present[1]);
+            Assert.AreEqual(3, m_Net.PlayerCount);
+            int leaves = m_Link.LeaveCalls;
+
+            // Relay drops crew 2's connection (its headset slept): only that one goes, at once, not after 45 s.
+            a.Frozen = true;
+            relay.Disconnects = 1;
+            relay.ConnectionCount = 1;
+            relay.Dropped.Enqueue(a.Session.Transport.Local);
+            double before = m_Clock;
+            yield return Frames(3);
+            Assert.Less(m_Clock - before, 1.0);
+            Assert.IsNull(m_Net.Crew(1), "Its suit is gone.");
+            Assert.IsNotNull(m_Net.Crew(2), "The rest of the crew stays.");
+            Assert.AreEqual(2, m_Net.PlayerCount);
+            yield return Until(() => !b.World.Present[1]);
+            Assert.IsFalse(b.World.Present[1], "The others are told it left.");
+            Assert.AreEqual(LobbyMode.Hosting, m_Net.Mode, "Still hosting...");
+            Assert.AreEqual(leaves, m_Link.LeaveCalls, "...and still listed.");
+            Assert.IsTrue(m_Net.OnlineListed);
+            Assert.AreEqual(LobbyNotice.None, m_Net.Notice);
+
+            // The last crew member's connection drops too: still hosting, alone, for whoever comes next.
+            b.Frozen = true;
+            relay.ConnectionCount = 0;
+            relay.Disconnects = 2;
+            relay.Dropped.Enqueue(b.Session.Transport.Local);
+            yield return Frames(3);
+            Assert.IsNull(m_Net.Crew(2));
+            Assert.AreEqual(1, m_Net.PlayerCount);
+            Assert.AreEqual(LobbyMode.Hosting, m_Net.Mode);
+            Assert.AreEqual(leaves, m_Link.LeaveCalls);
+            m_Net.Leave();
         }
 
         [UnityTest]

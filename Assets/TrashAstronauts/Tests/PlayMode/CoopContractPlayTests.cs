@@ -199,6 +199,13 @@ namespace TrashAstronauts.Tests
             public void PointCut(byte panel, byte index) =>
                 Add("cut " + panel + " " + index, m => m.PointCut(panel, index), a => { a.ApplyPointCut(panel, index); return true; }, false);
 
+            // Stage 4: the creature's messages (these tests run with the creature switched off, so they stay silent).
+            public void CreatureStateChanged(EnemyState state, byte targetSlot) => log.Add("creature " + state + " " + targetSlot);
+            public void Tranquilized(float seconds) => log.Add("tranquilized");
+            public void CatchStarted(byte victimSlot) => log.Add("catch " + victimSlot);
+            public void BlackoutStarted(float seconds) => log.Add("blackout on");
+            public void BlackoutEnded(bool instant) => log.Add("blackout off");
+
             public readonly List<(byte panel, byte by, NetVec3 impulse, NetVec3 torque)> panelsOpened = new List<(byte, byte, NetVec3, NetVec3)>();
 
             public void PanelOpened(byte panel, byte by, NetVec3 plateImpulse, NetVec3 plateTorque)

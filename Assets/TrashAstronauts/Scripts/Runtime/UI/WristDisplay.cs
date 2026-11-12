@@ -203,7 +203,11 @@ namespace TrashAstronauts.UI
                 case EnemyState.Patrol: return "DRONE: ROAMING" + range;
                 case EnemyState.Investigate: return "DRONE: HEARD A NOISE" + range;
                 case EnemyState.Search: return "DRONE: SEARCHING" + range;
-                case EnemyState.Chase: return blinkOn ? "!! DRONE HUNTING YOU !!" : "   DRONE HUNTING YOU   ";
+                case EnemyState.Chase:
+                    // In a crew it may be after someone else: say who (crew numbers as on the CO-OP CREW panel).
+                    if (director.Net != null && worst.Quarry.IsValid && worst.Quarry != director.LocalPlayerId)
+                        return "DRONE HUNTING CREW " + (worst.Quarry.Value + 1) + range;
+                    return blinkOn ? "!! DRONE HUNTING YOU !!" : "   DRONE HUNTING YOU   ";
                 default: return "DRONE: DORMANT";
             }
         }

@@ -90,11 +90,17 @@ namespace TrashAstronauts.Net
 
         public void OnItemDamageReport(byte itemId, byte slot, int newValue) { /* Stage 3: a client never simulates an item, so never reports damage. */ }
 
-        // ------------------------------------------------------------------ stage 4: creature and hazards (none in co-op yet)
+        // ------------------------------------------------------------------ creature and hazards
 
-        public void OnNoise(byte slot, NetVec3 position, float loudness, NoiseKind kind) { /* Stage 4: no creature to hear it. */ }
+        public void OnNoise(byte slot, NetVec3 position, float loudness, NoiseKind kind)
+        {
+            if (m_Rules != null) m_Rules.HostNoise(position, loudness, kind, slot);
+        }
 
-        public void OnTranqHitReport(byte slot, NetVec3 origin, NetVec3 hitPoint) { /* Stage 4 */ }
+        public void OnTranqHitReport(byte slot, NetVec3 origin, NetVec3 hitPoint)
+        {
+            if (m_Rules != null) m_Rules.HostTranqHitReport(origin, hitPoint, slot);
+        }
 
         public void OnWireReport(byte slot, byte index, NetWireChange change) { /* Stage 4: webs are never armed in a co-op contract. */ }
     }

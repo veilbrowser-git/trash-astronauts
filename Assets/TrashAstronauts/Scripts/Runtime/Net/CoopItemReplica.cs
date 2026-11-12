@@ -46,7 +46,7 @@ namespace TrashAstronauts.Net
         public int PosesDropped { get; private set; }
 
         /// <summary>
-        /// How far in the past items are drawn: SnapshotBuffer.InterpolationDelay (100 ms) on Wi-Fi; NetSession sets
+        /// How far in the past items and the creature replica are drawn: SnapshotBuffer.InterpolationDelay (100 ms) on Wi-Fi; NetSession sets
         /// NetSession.OnlineInterpolationDelay for an online session and puts it back when the session ends.
         /// </summary>
         public static double Delay = SnapshotBuffer<PoseSnapshot>.InterpolationDelay;

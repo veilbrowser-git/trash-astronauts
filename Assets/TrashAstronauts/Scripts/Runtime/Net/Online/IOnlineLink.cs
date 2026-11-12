@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using TrashAstronauts.Core;
+using TrashAstronauts.Core.Net;
 
 namespace TrashAstronauts.Net.Online
 {
@@ -52,5 +53,7 @@ namespace TrashAstronauts.Net.Online
         int ConnectionCount { get; }
         /// <summary>Puts queued sends on the wire now.</summary>
         void Flush();
+        /// <summary>Host: the next peer whose connection dropped since the last call (its session endpoint). False when none.</summary>
+        bool TryTakeDropped(out NetEndpoint peer);
     }
 }

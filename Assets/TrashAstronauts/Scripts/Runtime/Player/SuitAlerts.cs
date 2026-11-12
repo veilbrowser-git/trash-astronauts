@@ -52,7 +52,8 @@ namespace TrashAstronauts.Player
             {
                 foreach (var enemy in director.enemies)
                 {
-                    if (enemy != null && enemy.State == EnemyState.Chase) hunted = true;
+                    // In a crew only the hunted player's suit buzzes; offline it is always this player.
+                    if (enemy != null && enemy.State == EnemyState.Chase && (director.Net == null || enemy.Quarry == director.LocalPlayerId)) hunted = true;
                 }
             }
             if (hunted && !m_WasHunted && player != null) player.PulseBoth(0.7f, 0.25f);

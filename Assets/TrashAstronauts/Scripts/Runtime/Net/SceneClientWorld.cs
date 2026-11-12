@@ -96,22 +96,22 @@ namespace TrashAstronauts.Net
         /// </summary>
         public void OnItemOwner(byte itemId, byte ownerSlot, byte epoch, bool held, bool denied) { }
 
-        // ------------------------------------------------------------------ stage 4: creature and hazards (none in co-op yet)
+        // ------------------------------------------------------------------ creature and hazards
 
-        public void OnCreatureState(in CreatureSnapshot creature, double hostTime) { /* Stage 4 */ }
+        public void OnCreatureState(in CreatureSnapshot creature, double hostTime) => m_Apply.ApplyCreatureSnapshot(in creature, hostTime);
 
-        public void OnCreatureStateChanged(EnemyState state, byte targetSlot) { /* Stage 4 */ }
+        public void OnCreatureStateChanged(EnemyState state, byte targetSlot) => m_Apply.ApplyCreatureStateChanged(state, targetSlot);
 
-        public void OnTranquilized(float seconds) { /* Stage 4 */ }
+        public void OnTranquilized(float seconds) => m_Apply.ApplyTranquilized(seconds);
 
-        public void OnCatchStarted(byte victimSlot) { /* Stage 4 */ }
+        public void OnCatchStarted(byte victimSlot) => m_Apply.ApplyCatchStarted(victimSlot);
 
-        public void OnTranqTracer(byte by, NetVec3 from, NetVec3 to) { /* Stage 5 */ }
+        public void OnTranqTracer(byte by, NetVec3 from, NetVec3 to) { /* Stage 5: another player's dart tracer. */ }
 
-        public void OnBlackoutStarted(float seconds) { /* Stage 4 */ }
+        public void OnBlackoutStarted(float seconds) => m_Apply.ApplyBlackoutStarted(seconds);
 
-        public void OnBlackoutEnded(bool instant) { /* Stage 4 */ }
+        public void OnBlackoutEnded(bool instant) => m_Apply.ApplyBlackoutEnded(instant);
 
-        public void OnWireChanged(byte index, NetWireChange change, byte by) { /* Stage 4 */ }
+        public void OnWireChanged(byte index, NetWireChange change, byte by) { /* Webs are never armed in a co-op contract. */ }
     }
 }
