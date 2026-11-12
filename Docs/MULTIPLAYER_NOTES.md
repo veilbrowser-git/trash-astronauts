@@ -1,8 +1,12 @@
 # Preparing for co-op (2–4 players)
 
-Trash Astronauts ships single-player and fully offline. Nothing in the project opens a socket, and no
-networking package is installed. This note records where the seams are and what real multiplayer
-would still require. **None of this is implemented or tested as multiplayer today.**
+**Status (co-op stage 1):** the first co-op slice is in: on the same Wi-Fi, one headset presses HOST CO-OP
+on the tug's CO-OP CREW panel, the others FIND CREW (or ENTER CODE) and JOIN, and everyone sees everyone's
+suit, head and hands move in the tug. Nothing else is shared yet and no contract can start while a crew is
+linked. The code is a small UDP netcode of our own (`Scripts/Core/Net`, adapters in `Scripts/Runtime/Net`,
+no networking package). A socket is opened only after one of those buttons is pressed; single-player opens
+none. The design and the remaining stages are in the co-op implementation plan; the notes below are the
+original seam survey and are kept for reference until the full rewrite planned for the last stage.
 
 ## Boundaries that already exist
 

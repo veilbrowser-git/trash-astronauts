@@ -11,8 +11,12 @@ namespace TrashAstronauts.Player
     ///
     /// The one exception is the Mimic. Only while a Mimic is aboard and asking for it, the last few
     /// spoken phrases (a few seconds each) are also kept in memory so it can play them back. They are
-    /// forgotten when the contract ends. Nothing is ever written to disk and nothing leaves the headset
-    /// (the app has no network permission at all). Can be switched off in the suit menu (MIC).
+    /// forgotten when the contract ends. Nothing is ever written to disk and nothing leaves the headset.
+    /// The app does hold the network permission, for same-Wi-Fi co-op, but no co-op message can carry
+    /// microphone audio or recorded phrases (see Scripts/Core/Net/NetMessages.cs). Today co-op sends head and
+    /// hand poses, finger curls and a few suit state bits; a later stage will forward the creature's noise
+    /// events (a position and a loudness, talking included), never the sound itself. MIC off in the suit
+    /// menu switches all of this off.
     /// </summary>
     public sealed class VoiceSensor : MonoBehaviour
     {

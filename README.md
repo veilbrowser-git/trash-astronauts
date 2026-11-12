@@ -1,7 +1,9 @@
 # Trash Astronauts
 
-A single-player, fully offline VR salvage game for standalone Meta Quest (Quest 3 / 3S, tracked
-controllers). You are an underpaid astronaut: board a derelict hauler from your salvage tug, float
+A VR salvage game for standalone Meta Quest (Quest 3 / 3S, tracked controllers). It is a
+single-player game; an early co-op preview lets 2 to 4 headsets on the same Wi-Fi meet in the tug and see
+each other (see **Co-op on the same Wi-Fi** below). Nothing goes over the network unless you press one of
+the co-op buttons. You are an underpaid astronaut: board a derelict hauler from your salvage tug, float
 through it by pushing off the walls and swimming, cut open panels, haul junk back to the tug's
 collection locker, and get out before your oxygen runs out or the thing that used to be the ship's
 janitor finds you.
@@ -121,6 +123,29 @@ audio, prefabs and the scene in place, and it never overwrites the balancing ass
 | Press buttons | Touch with a fingertip, **or** point at a button and pull the trigger (up to 3.5 m). |
 | Suit menu | **B / Y** (or the left menu button): height +/-, snap-turn angle, left/right hand, drift on/off, unstuck, recall tools. The same panel is on the tug's rear wall. |
 
+## Co-op on the same Wi-Fi (preview)
+
+This first co-op version only lets the crew **see each other**: every player's suit, helmet, head and both
+hands (fingers included) move in the tug, each suit in its own colour (orange is the host, then blue, green
+and magenta). **Contracts are not shared yet**: while a crew is linked, no headset can start a contract, and
+the mission board says so. Press LEAVE to play a contract alone.
+
+The **CO-OP CREW** panel is on the tug wall opposite the mission board, between the collection locker and
+the practice plate:
+
+1. On one headset press **HOST CO-OP**. The panel shows the tug number and the crew code, for example
+   `TUG 4821` and `C 001  D 042`.
+2. On each other headset press **FIND CREW**. Tugs that answer are listed with a **JOIN** button each;
+   press **JOIN** next to the right tug number.
+3. If FIND CREW finds nobody, press **ENTER CODE**, type the host's crew code on the keypad (C is filled in
+   for you; usually only D needs typing) and press **JOIN**.
+4. **LEAVE** on any headset goes back to playing alone. If the host leaves, everyone is put back to solo.
+
+All headsets need the same game version and the same Wi-Fi network. Some routers stop devices on the same
+Wi-Fi from seeing each other (called client or AP isolation; common on guest networks), and then neither
+FIND CREW nor ENTER CODE can work. Co-op has not been tried with two real headsets yet: whether FIND CREW
+finds a host on a Quest, and whether a Quest shows its own crew code correctly, are still to be confirmed.
+
 Left-handed play: switch **HAND** in the suit menu. Holsters mirror and the wrist display moves to the other wrist. The setting is saved.
 
 ## Testing in the editor without a headset
@@ -183,7 +208,8 @@ The game then appears under **Unknown Sources** in the headset's app library.
 
 The build step applies the Quest settings itself every time: OpenXR loader for Android, the
 **Meta Quest Support** feature, the **Meta Quest Touch Plus**, **Oculus Touch** and **Touch Pro**
-controller profiles, single-pass instanced (multiview) rendering, and no internet permission. Also
+controller profiles, single-pass instanced (multiview) rendering, and the INTERNET permission (for
+co-op on the same Wi-Fi; a check in the build fails it if the permission is missing). Also
 configured: package id `com.trashastronauts.salvage`, IL2CPP, ARM64, Vulkan, linear colour, Input
 System as the active input handler, 72 Hz physics step.
 
@@ -256,15 +282,24 @@ Everything loose is a real mass obeying Newton's laws, tuned to stay comfortable
 - The three creatures share one skeleton and one patrol route; they differ in senses, speed, size and look. Their balance has not been play-tested.
 - Working hard (swimming, thrusting) uses oxygen up to 40% faster. Breathing and heartbeat audio are synthesized and may want tuning or an off switch.
 - Hand tracking is implemented but experimental: the gesture thresholds and palm alignment are untested on a headset. Thumbstick-driven continuous locomotion is out of scope.
-- Co-op is not implemented. See `Docs/MULTIPLAYER_NOTES.md` for where it would attach.
+- Co-op is a first slice only: players on the same Wi-Fi can see each other in the tug, nothing else is shared, and no contract can start while a crew is linked. It has never been run on two real headsets. See `Docs/MULTIPLAYER_NOTES.md`.
 
 ## Privacy
 
-The game works fully offline and the app has no network permission. If you allow microphone access, the microphone is normally read only to measure how loud you are, so the creature can react to your voice: up to one second of audio is held in memory at a time and overwritten.
+The game is single-player and works without any network. The app does hold Android's network (INTERNET)
+permission, because of the co-op preview, but it **opens a network connection only after you press HOST
+CO-OP, FIND CREW or ENTER CODE** on the tug's CO-OP CREW panel, and closes it when you press LEAVE. It then
+talks only to other headsets on the same local network: FIND CREW sends a small "is anyone hosting?" message
+to the addresses of your local network (port 47800), and in a crew each headset sends the others (through the host) its head and
+hand positions, finger curl, handedness, a few suit states (thruster, flashlight, cutter) and a fingerprint
+of the game version. There are no accounts, no servers and nothing goes to the internet. **No microphone
+audio and no recorded phrase is ever sent**, by co-op or anything else.
+
+If you allow microphone access, the microphone is normally read only to measure how loud you are, so the creature can react to your voice: up to one second of audio is held in memory at a time and overwritten.
 
 **The Mimic is the exception.** Only while a Mimic is the creature aboard, the game also keeps the last four things you said (up to four seconds each) in memory, so that it can play them back to you. The wrist display shows **MIC REC** while this is happening. Those phrases are erased when the contract ends, when you switch MIC off, and when the app closes.
 
-In every case the audio is never written to storage, never analysed for words, and never leaves the headset. Refusing the permission, or switching MIC off in the suit menu, disables this and nothing else. Because the game uses the microphone, Android also lists the audio-settings and Bluetooth permissions (they let a Bluetooth headset's microphone work); the game does nothing else with them. There is still no internet permission.
+In every case the audio is never written to storage, never analysed for words, and never leaves the headset. Refusing the permission, or switching MIC off in the suit menu, disables this and nothing else. Because the game uses the microphone, Android also lists the audio-settings and Bluetooth permissions (they let a Bluetooth headset's microphone work); the game does nothing else with them.
 
 ## Terms of Use
 
@@ -290,8 +325,11 @@ and loss of balance, and you can collide with real objects while wearing a heads
 
 You play at your own risk.
 
-**5. Privacy.** The Game runs fully offline. It has no accounts and no online services, and it does not
-collect, transmit or share personal data. Progress (credits, the oxygen upgrade and comfort settings)
+**5. Privacy.** The Game has no accounts and no online services, and it does not collect or share
+personal data. It uses the network only for its optional co-op preview, only after you press HOST CO-OP,
+FIND CREW or ENTER CODE, and then only with other headsets on your local network: it sends the position of
+your head and hands, finger curl, handedness, a few suit states and a game-version fingerprint, never
+microphone audio or recordings. Progress (credits, the oxygen upgrade and comfort settings)
 is stored only in a file on your own device and is removed when you uninstall the Game.
 
 **6. Third-party software.** The Game is built with Unity and Unity packages, which are subject to

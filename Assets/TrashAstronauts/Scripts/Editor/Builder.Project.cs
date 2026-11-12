@@ -72,6 +72,9 @@ namespace TrashAstronauts.EditorTools
             PlayerSettings.colorSpace = ColorSpace.Linear;
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.LandscapeLeft;
 
+            // Co-op on the same Wi-Fi opens UDP sockets, which needs android.permission.INTERNET. The game only
+            // opens one after HOST CO-OP, FIND CREW or ENTER CODE is pressed (see NetSession).
+            Try("Android INTERNET permission", () => PlayerSettings.Android.forceInternetPermission = true);
             Try("Android identifier", () => PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, AndroidPackageId));
             Try("Android scripting backend", () => PlayerSettings.SetScriptingBackend(NamedBuildTarget.Android, ScriptingImplementation.IL2CPP));
             Try("Android architecture", () => PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64);
@@ -194,9 +197,12 @@ namespace TrashAstronauts.EditorTools
                 feature.enabled = true;
                 if (id == "com.unity.openxr.feature.metaquest")
                 {
-                    // The game is fully offline: make sure the APK does not request the INTERNET permission.
+                    // Same-Wi-Fi co-op needs sockets, so the APK must keep the INTERNET permission: this feature
+                    // can strip it from the manifest, so make sure it does not. (AndroidManifestCheck fails the
+                    // build if the permission goes missing anyway.)
                     var noInternet = feature.GetType().GetProperty("ForceRemoveInternetPermission");
-                    if (noInternet != null && noInternet.CanWrite) noInternet.SetValue(feature, true);
+                    if (noInternet != null && noInternet.CanWrite) noInternet.SetValue(feature, false);
+                    else Debug.LogWarning("[Builder] MetaQuestFeature.ForceRemoveInternetPermission not found: check the INTERNET permission by hand.");
                 }
                 EditorUtility.SetDirty(feature);
             }
