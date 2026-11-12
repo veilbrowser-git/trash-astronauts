@@ -131,16 +131,17 @@ namespace TrashAstronauts.Tests
         }
 
         [Test]
-        public void ThreeWrecks_AreInTheScene_OnlyTheFirstIsDocked_AndEachIsComplete()
+        public void FourWrecks_AreInTheScene_OnlyTheFirstIsDocked_AndEachIsComplete()
         {
             var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
             var director = scene.GetRootGameObjects().SelectMany(g => g.GetComponentsInChildren<MissionDirector>(true)).Single();
-            Assert.AreEqual(3, director.maps.Length);
-            Assert.AreEqual(3, director.maps.Select(m => m.mapId).Distinct().Count());
-            Assert.AreEqual(3, director.maps.Select(m => m.displayName).Distinct().Count());
+            Assert.AreEqual(4, director.maps.Length);
+            Assert.AreEqual(4, director.maps.Select(m => m.mapId).Distinct().Count());
+            Assert.AreEqual(4, director.maps.Select(m => m.displayName).Distinct().Count());
             Assert.IsTrue(director.maps[0].gameObject.activeSelf);
             Assert.IsFalse(director.maps[1].gameObject.activeSelf);
             Assert.IsFalse(director.maps[2].gameObject.activeSelf);
+            Assert.IsFalse(director.maps[3].gameObject.activeSelf);
             Assert.IsNotNull(director.blackout);
             Assert.AreEqual(1, director.sharedDoors.Length);
             Assert.AreEqual(1, director.sharedCuttables.Length);
@@ -153,7 +154,9 @@ namespace TrashAstronauts.Tests
             foreach (var map in director.maps)
             {
                 Assert.GreaterOrEqual(map.spawnPoints.Length, 18, map.displayName);
-                Assert.GreaterOrEqual(map.cuttables.Length, 4, map.displayName + " needs a core housing, a locker, a rack and a shortcut.");
+                // The lava tube has no locker: open panels travel as a 16-bit mask and the other wrecks use 13 of the 16.
+                if (map.mapId == "lava_tube") Assert.GreaterOrEqual(map.cuttables.Length, 3, map.displayName + " needs a core housing, a rack and a shortcut.");
+                else Assert.GreaterOrEqual(map.cuttables.Length, 4, map.displayName + " needs a core housing, a locker, a rack and a shortcut.");
                 Assert.IsNotNull(map.dock, map.displayName);
                 Assert.Greater(map.graph.Length, 15, map.displayName);
                 Assert.Greater(map.patrolRoute.Length, 20, map.displayName);
