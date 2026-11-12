@@ -33,7 +33,7 @@ namespace TrashAstronauts.Net.Online
     /// 45 s), so a dropped Relay connection simply goes silent for them; the transport also counts it, forgets
     /// the endpoint (sends to it fail), and a client sets <see cref="LinkLost"/> so a board can say so at once.
     /// </summary>
-    public sealed class RelayTransport : INetTransport
+    public sealed class RelayTransport : INetTransport, IRelayLink
     {
         static int s_LiveCount;
 
@@ -55,6 +55,13 @@ namespace TrashAstronauts.Net.Online
         public const int MaxConnections = 8;
         /// <summary>Datagrams held between a driver update and the session's poll. More in one frame are dropped (counted).</summary>
         public const int QueueSlots = 128;
+        /// <summary>
+        /// How often the driver pings the Relay server while nothing else is sent. Relay severs a connection after 10 s
+        /// with no activity; 2 s (UTP's default is 3 s) leaves room for a few long frames. No setting can carry a
+        /// connection through a pause longer than those 10 s (a suspended app sends nothing at all): NetSession notices
+        /// the loss (<see cref="IRelayLink"/>) and ends the session instead of waiting 60 s.
+        /// </summary>
+        public const int RelayKeepAliveMS = 2000;
         const int k_MaxEventsPerUpdate = 4096;
 
         NetworkDriver m_Driver;
@@ -124,6 +131,23 @@ namespace TrashAstronauts.Net.Online
         /// <summary>Relay told us the allocation is no longer valid (expired, or the host went away).</summary>
         public bool AllocationInvalid => m_UsesRelay && m_Driver.IsCreated && m_Driver.GetRelayConnectionStatus() == RelayConnectionStatus.AllocationInvalid;
 
+        bool m_RelayEstablished;
+
+        /// <summary>
+        /// The connection to the Relay server itself was established and is not any more (it stopped answering, for
+        /// example after the headset slept longer than Relay's 10 s idle limit). Never true without Relay.
+        /// </summary>
+        public bool RelayLost
+        {
+            get
+            {
+                if (!m_UsesRelay || !m_Driver.IsCreated) return false;
+                RelayConnectionStatus status = m_Driver.GetRelayConnectionStatus();
+                if (status == RelayConnectionStatus.Established) { m_RelayEstablished = true; return false; }
+                return m_RelayEstablished;
+            }
+        }
+
         RelayTransport(NetworkDriver driver, bool isHost, bool usesRelay)
         {
             m_Driver = driver;
@@ -140,6 +164,7 @@ namespace TrashAstronauts.Net.Online
             var settings = new NetworkSettings(Allocator.Temp);
             // Drop a silent connection after as long as the sessions hold a silent player's slot, not UTP's 30 s.
             settings.WithNetworkConfigParameters(disconnectTimeoutMS: (int)(NetProtocol.SlotHoldSeconds * 1000.0), maxMessageSize: PacketSize);
+            // Relay keep-alives (see RelayKeepAliveMS) are set with the Relay parameters below.
             return settings;
         }
 
@@ -149,7 +174,7 @@ namespace TrashAstronauts.Net.Online
             NetworkSettings settings = MakeSettings();
             try
             {
-                settings.WithRelayParameters(ref serverData);
+                settings.WithRelayParameters(ref serverData, RelayKeepAliveMS);
                 return Open(settings, true, true, NetworkEndpoint.AnyIpv4, default, out error);
             }
             finally { settings.Dispose(); }
@@ -161,7 +186,7 @@ namespace TrashAstronauts.Net.Online
             NetworkSettings settings = MakeSettings();
             try
             {
-                settings.WithRelayParameters(ref serverData);
+                settings.WithRelayParameters(ref serverData, RelayKeepAliveMS);
                 return Open(settings, false, true, NetworkEndpoint.AnyIpv4, serverData.Endpoint, out error);
             }
             finally { settings.Dispose(); }

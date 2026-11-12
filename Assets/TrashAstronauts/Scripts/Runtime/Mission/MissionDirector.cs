@@ -888,7 +888,7 @@ namespace TrashAstronauts.Mission
                 {
                     if (player == null || player.locomotion == null || hubSpawn == null) continue;
                     anyMoved = true;
-                    player.locomotion.FadeTeleport(player.fader, hubSpawn, CloseHatch);
+                    player.locomotion.FadeTeleport(player.fader, HubSpotFor(player), hubSpawn.rotation, CloseHatch);
                 }
                 if (!anyMoved) CloseHatch();
             }
@@ -981,7 +981,8 @@ namespace TrashAstronauts.Mission
             if (Session.Phase == MissionPhase.Active) AbortRun();
             Net = null;
             ContractStartBlocked = false;
-            ClearLocalAway();
+            RestoreRunItemsLocal();
+            MoveAwayToPauses();
             ApplyHostSilent(false);
             SetHazardPause(HazardPauseReason.HostPaused, false);
             var local = LocalPlayer;

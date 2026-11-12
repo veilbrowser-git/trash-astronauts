@@ -47,6 +47,8 @@ namespace TrashAstronauts.Net.Online
         public OnlineServices Services => m_Services;
         public OnlineLobby Lobby => m_Lobby;
         public bool IsBusy => m_Busy;
+        /// <summary>Hosting and the game is in the lobby list right now.</summary>
+        public bool IsListed => State == OnlineLinkState.Hosting && m_Lobby.IsListed;
 
         /// <param name="services">Default: <see cref="OnlineServices.Shared"/>.</param>
         /// <param name="relay">Default: <see cref="RelayConnector"/>.</param>

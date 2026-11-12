@@ -114,10 +114,18 @@ namespace TrashAstronauts.Player
             return StartCoroutine(FadeTeleportRoutine(fader, destination, afterMove));
         }
 
-        IEnumerator FadeTeleportRoutine(ScreenFader fader, Transform destination, Action afterMove)
+        /// <summary>Fade out, move to this floor point facing this way, fade back in (a crew member's own spot in the tug).</summary>
+        public Coroutine FadeTeleport(ScreenFader fader, Vector3 feetPosition, Quaternion facing, Action afterMove = null)
+        {
+            return StartCoroutine(FadeTeleportRoutine(fader, null, afterMove, true, feetPosition, facing));
+        }
+
+        IEnumerator FadeTeleportRoutine(ScreenFader fader, Transform destination, Action afterMove,
+            bool usePose = false, Vector3 feetPosition = default, Quaternion facing = default)
         {
             if (fader != null) yield return fader.FadeOut();
-            if (destination != null) TeleportTo(destination.position, destination.rotation);
+            if (usePose) TeleportTo(feetPosition, facing);
+            else if (destination != null) TeleportTo(destination.position, destination.rotation);
             // Give the mediator a frame to apply the queued move before revealing the view again.
             yield return null;
             yield return null;

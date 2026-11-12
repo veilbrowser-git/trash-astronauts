@@ -211,11 +211,16 @@ namespace TrashAstronauts.Tests
 
         SalvageItem[] LooseItems() => m_Director.Items.Where(i => i != null && !i.IsSecured && !i.IsMounted && i.definition != null).ToArray();
 
+        double m_RulesClock;
+
         Recorder Host()
         {
             m_Director.Net = new FakeNet { client = false, slot = 0 };
             var recorder = new Recorder();
             m_Rules = new CoopHostRules(m_Director, recorder);
+            // A second passes between any two requests here, so the per-crew request rate limit never bites
+            // in the tests that are about something else (it has its own test).
+            m_Rules.Clock = () => m_RulesClock += 1.0;
             return recorder;
         }
 
@@ -305,6 +310,10 @@ namespace TrashAstronauts.Tests
             yield return Frames(2);
             var door = m_Director.wreckDoors.First(d => d != null && !d.locked && !d.IsOpen && d.buttons != null && d.buttons.Length > 0);
             byte id = (byte)m_Director.NetIds.Doors.IndexOf(door.doorId);
+            // Both crew members stand at the door (requests from far away are refused; see the trust test).
+            var crew1 = AddRemotePlayer(1, door.transform.position);
+            var crew2 = AddRemotePlayer(2, door.transform.position);
+            yield return Frames(2); // they register on their first frame
             rec.Clear();
 
             // Two crew members press OPEN on either side at once: it opens, once.
@@ -327,6 +336,8 @@ namespace TrashAstronauts.Tests
             Assert.IsTrue(m_Director.tugHatch.IsOpen);
             Assert.IsFalse(m_Rules.HostDoorRequest(200, true, 1));
             Assert.AreEqual(2, rec.log.Count);
+            Object.Destroy(crew1.gameObject);
+            Object.Destroy(crew2.gameObject);
         }
 
         [UnityTest]
@@ -349,6 +360,12 @@ namespace TrashAstronauts.Tests
             byte pid = (byte)m_Director.NetIds.Panels.IndexOf(panel.panelId);
             Assert.AreSame(panel, m_Director.PanelAt(pid));
             Assert.Greater(panel.TotalCuts, 0);
+            // Both crew members are at the panel with their cutters (far-away reports are refused; see the trust test).
+            var cutter1 = AddRemotePlayer(1, panel.transform.position);
+            var cutter2 = AddRemotePlayer(2, panel.transform.position);
+            cutter1.SetRemoteHead(panel.transform.position);
+            cutter2.SetRemoteHead(panel.transform.position);
+            yield return Frames(2); // they register on their first frame
             rec.Clear();
 
             for (int k = 0; k < panel.TotalCuts - 1; k++)
@@ -564,6 +581,44 @@ namespace TrashAstronauts.Tests
             m_Rules.Tick(1f);
             Assert.AreEqual(moving.Count + 1, rec.Count("rest"));
             Assert.AreEqual(1, m_Rules.CollectItemPoses(buffer));
+            Object.Destroy(crew.gameObject);
+        }
+
+        [UnityTest]
+        public IEnumerator Host_ASlowZeroGDrift_IsNotDeclaredAtRest_AndARestedItemThatCreepsAwayIsStreamedAgain()
+        {
+            var crew = AddRemotePlayer(1, m_Director.hubSpawn.position);
+            var rec = Host();
+            yield return Frames(2);
+            Assert.IsTrue(m_Rules.HostStartRequest(1));
+            yield return Frames(2);
+            var buffer = new ItemPoseEntry[16];
+            var item = LooseItems().First();
+            int id = item.NetIndex;
+
+            // 3 cm/s: the old threshold called this still and the host's copy drifted on while the crew's stopped.
+            item.Body.linearVelocity = Vector3.right * 0.03f;
+            item.Body.angularVelocity = Vector3.zero;
+            for (int i = 0; i < 10; i++) m_Rules.Tick(0.1f);
+            Assert.AreEqual(0, rec.Count("rest " + id), "A drifting item is never rested.");
+            int n = m_Rules.CollectItemPoses(buffer);
+            Assert.IsTrue(buffer.Take(n).Any(e => e.itemId == id && !e.atRest), "It is streamed as moving.");
+
+            // Really still for half a second: rested once.
+            item.Body.linearVelocity = Vector3.zero;
+            m_Rules.Tick(0.3f);
+            m_Rules.Tick(0.3f);
+            Assert.AreEqual(1, rec.Count("rest " + id));
+
+            // It creeps 5 cm (too slowly to count as moving): streamed again, then rested where it is now.
+            item.Body.position += Vector3.up * 0.05f;
+            item.transform.position += Vector3.up * 0.05f;
+            m_Rules.Tick(0.05f);
+            n = m_Rules.CollectItemPoses(buffer);
+            Assert.IsTrue(buffer.Take(n).Any(e => e.itemId == id && !e.atRest), "Moved more than 2 cm since its rest: streamed again.");
+            m_Rules.Tick(0.3f);
+            m_Rules.Tick(0.3f);
+            Assert.AreEqual(2, rec.Count("rest " + id), "...and rested again at its new place.");
             Object.Destroy(crew.gameObject);
         }
 
@@ -1054,9 +1109,11 @@ namespace TrashAstronauts.Tests
             // A panel cut open by crew reports.
             var panel = m_Director.cuttables.First(c => c != null && !c.isTraining && !c.IsOpen && c.TotalCuts > 0);
             byte pid = (byte)m_Director.NetIds.Panels.IndexOf(panel.panelId);
+            crew.SetRemoteHead(panel.transform.position);
             for (int k = 0; k < panel.TotalCuts; k++) m_Rules.HostPointCutReport(pid, (byte)k, 1);
             Assert.IsTrue(panel.IsOpen);
             Same("panel");
+            crew.SetRemoteHead(m_Director.hubSpawn.position + Vector3.up * 1.6f); // back aboard
 
             // Time and air, as the clock carries them.
             m_Director.TickMission(5f, false);

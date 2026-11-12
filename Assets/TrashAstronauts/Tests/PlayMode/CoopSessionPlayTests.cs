@@ -153,6 +153,7 @@ namespace TrashAstronauts.Tests
             var door = m_Director.wreckDoors.First(d => d != null && !d.locked && !d.IsOpen && d.buttons != null && d.buttons.Length > 0);
             byte doorId = (byte)m_Director.NetIds.Doors.IndexOf(door.doorId);
             int doorStates = bot.World.Calls[NetMsg.DoorState];
+            yield return MoveBotHead(bot, door.transform.position + Vector3.up * 1.2f);
             bot.Session.SendDoorRequest(doorId, true);
             yield return Until(() => door.IsOpen && (bot.World.DoorOpenMask & (1 << doorId)) != 0);
             Assert.IsTrue(door.IsOpen, "The real door opened.");
@@ -164,10 +165,12 @@ namespace TrashAstronauts.Tests
             // Every weld of a panel reported (each twice): it is cut here, each weld told once, the panel opened once.
             var panel = m_Director.cuttables.First(c => c != null && !c.isTraining && !c.IsOpen && c.TotalCuts > 0);
             byte pid = (byte)m_Director.NetIds.Panels.IndexOf(panel.panelId);
+            yield return MoveBotHead(bot, panel.transform.position);
             for (int k = 0; k < panel.TotalCuts; k++)
             {
                 bot.Session.SendPointCutReport(pid, (byte)k);
                 bot.Session.SendPointCutReport(pid, (byte)k);
+                yield return Frames(25); // a weld takes a cutter far longer than this
             }
             yield return Until(() => panel.IsOpen && bot.World.Calls[NetMsg.PanelOpened] > 0);
             yield return Frames(10);
@@ -178,6 +181,48 @@ namespace TrashAstronauts.Tests
             Assert.AreNotEqual(0, bot.World.PanelOpenMask & (1 << pid));
             Assert.Greater(new Vector3(bot.World.LastPlateImpulse.x, bot.World.LastPlateImpulse.y, bot.World.LastPlateImpulse.z).magnitude, 0.3f,
                 "The plate's push travels with it.");
+            m_Net.Leave();
+        }
+
+        IEnumerator MoveBotHead(Bot bot, Vector3 head)
+        {
+            SetHead(bot, head);
+            yield return Until(() => m_Net.Crew(1) != null && Vector3.Distance(m_Net.Crew(1).context.HeadPosition, head) < 0.05f);
+        }
+
+        [UnityTest]
+        public IEnumerator Host_DoorAndWeldRequests_FromFarAway_OrTooFast_AreIgnored()
+        {
+            Bot bot = null;
+            yield return HostWithBot(b => bot = b);
+            yield return StartFromBot(bot);
+            yield return Frames(3);
+            var rules = m_Net.HostRules;
+            var door = m_Director.wreckDoors.First(d => d != null && !d.locked && !d.IsOpen && d.buttons != null && d.buttons.Length > 0);
+            byte doorId = (byte)m_Director.NetIds.Doors.IndexOf(door.doorId);
+            var panel = m_Director.cuttables.First(c => c != null && !c.isTraining && !c.IsOpen && c.TotalCuts > 0);
+            byte pid = (byte)m_Director.NetIds.Panels.IndexOf(panel.panelId);
+
+            // From inside the tug (a modified client): no door opens, no weld is cut.
+            Assert.Greater(Vector3.Distance(m_Net.Crew(1).context.HeadPosition, door.transform.position), CoopHostRules.DoorReach + 1f, "Test set-up: the bot is far away.");
+            bot.Session.SendDoorRequest(doorId, true);
+            for (int k = 0; k < panel.TotalCuts; k++) bot.Session.SendPointCutReport(pid, (byte)k);
+            yield return Frames(30);
+            Assert.IsFalse(door.IsOpen, "A door request from across the ship is ignored.");
+            Assert.AreEqual(0, panel.CutCount, "Weld reports from across the ship are ignored.");
+            Assert.AreEqual(0, bot.World.Calls[NetMsg.PointCut]);
+            Assert.Greater(rules.TooFar, 0);
+
+            // At the door but hammering it: only a few get through, so nobody's reliable stream floods.
+            yield return MoveBotHead(bot, door.transform.position + Vector3.up * 1.2f);
+            yield return Frames(50); // the bucket refills
+            int doorStates = bot.World.Calls[NetMsg.DoorState];
+            for (int i = 0; i < 40; i++) bot.Session.SendDoorRequest(doorId, i % 2 == 0);
+            yield return Frames(30);
+            int changes = bot.World.Calls[NetMsg.DoorState] - doorStates;
+            Assert.Greater(changes, 0, "Honest requests still work.");
+            Assert.LessOrEqual(changes, (int)CoopHostRules.RequestBurst + 3, "40 requests at once: at most a burst gets through.");
+            Assert.Greater(rules.RateLimited, 0);
             m_Net.Leave();
         }
 
@@ -389,6 +434,10 @@ namespace TrashAstronauts.Tests
             float until = Time.unscaledTime + 5f;
             while (Time.unscaledTime < until && !m_Player.InSafeZone) { Tick(); yield return null; }
             Assert.IsTrue(m_Player.InSafeZone, "The rig left in the wreck is brought home.");
+            yield return Frames(5);
+            Vector3 feet = m_Player.HeadPosition, spot = m_Director.CrewSpot(1);
+            Assert.Less(Vector2.Distance(new Vector2(feet.x, feet.z), new Vector2(spot.x, spot.z)), 0.3f,
+                "...onto its own crew spot, not onto the host's.");
 
             // The next contract from the results screen, asked for from here.
             host.World.NextRun = HostRun(4);
@@ -397,6 +446,78 @@ namespace TrashAstronauts.Tests
             Assert.AreEqual(4, m_Director.Session.RunIndex);
             Assert.AreEqual(credits + item.Value, m_Director.Profile.Data.totalCredits);
             m_Net.Leave();
+        }
+
+        [UnityTest]
+        public IEnumerator Client_LeavingOnTheResultsScreen_LeavesEveryItemAnOrdinaryGrabbableOne()
+        {
+            var host = AddScriptedHost();
+            host.World.AutoStart = true;
+            host.World.NextRun = HostRun(8);
+            yield return JoinScripted(host);
+            m_Director.StartMission(m_Director.LocalPlayerId);
+            yield return Until(() => m_Director.Phase == MissionPhase.Active);
+            var item = m_Director.RunItems.First(i => i != null && !i.IsMounted);
+            host.Session.QueueItemPose((byte)item.NetIndex, CoopConvert.ToNet(item.transform.position), CoopConvert.ToNet(item.transform.rotation), false, false);
+            yield return Frames(5);
+            Assert.IsNotNull(item.GetComponent<CoopItemReplica>(), "Test set-up: items follow the host.");
+            host.World.CurrentPhase = MissionPhase.Results;
+            var message = new RunEndedMsg { outcome = MissionOutcome.QuotaMissed, quota = m_Director.Session.Quota };
+            host.Session.SendRunEnded(in message);
+            yield return Until(() => m_Director.Phase == MissionPhase.Results);
+
+            m_Net.Leave();
+            yield return null;
+            Assert.AreEqual(MissionPhase.Results, m_Director.Phase, "The results stay on the board.");
+            foreach (var each in m_Director.RunItems)
+            {
+                if (each == null || each.IsSecured || each.IsMounted) continue;
+                Assert.IsFalse(each.HostOnly, each.SalvageId);
+                Assert.IsTrue(each.SimulatedHere, each.SalvageId);
+                Assert.IsTrue(each.grab.enabled, each.SalvageId + " can be picked up again");
+                Assert.IsFalse(each.Body.isKinematic, each.SalvageId);
+                Assert.IsNull(each.GetComponent<CoopItemReplica>(), each.SalvageId);
+            }
+            Assert.IsTrue(m_Director.StartMission(PlayerId.Local), "And the next solo contract starts.");
+        }
+
+        [UnityTest]
+        public IEnumerator Client_APauseFromBeforeJoining_BecomesAway_AndAwayBecomesAPauseAgainOnLeaving_NothingStranded()
+        {
+            // Offline: this headset's hazards are paused (the test's stand-in for tracking lost; HazardPauseMonitor
+            // clears TrackingLost every frame when no headset is bound, as in batch mode).
+            m_Director.SetHazardPause(HazardPauseReason.Scripted, true);
+            Assert.IsTrue(m_Director.HazardsPaused);
+            var host = AddScriptedHost();
+            yield return JoinScripted(host);
+
+            // Joined: that is Away now, not a hazard pause (the host's pause is the only one in a session).
+            Assert.IsFalse(m_Director.HazardsPaused, "The pause moved over to Away.");
+            Assert.AreEqual(HazardPauseReason.Scripted, m_Director.AwayReasons);
+            yield return Until(() => host.World.Away[1]);
+            Assert.IsTrue(host.World.Away[1], "The host hears this player is away.");
+
+            // Tracking comes back: in a session HazardPauseMonitor reports it through SetLocalAway.
+            m_Director.SetLocalAway(HazardPauseReason.Scripted, false);
+            yield return Until(() => !host.World.Away[1]);
+            Assert.IsFalse(host.World.Away[1], "Back: nothing was stranded.");
+            Assert.IsFalse(m_Net.LocalAway);
+
+            // The app is suspended and tracking lost; the app resumes first: still away.
+            m_Director.SetLocalAway(HazardPauseReason.Scripted, true);
+            m_Net.SendMessage("OnApplicationPause", true);
+            m_Net.SendMessage("OnApplicationPause", false);
+            yield return Frames(10);
+            Assert.IsTrue(m_Net.LocalAway, "Resuming the app while tracking is still lost is not back.");
+            Assert.IsTrue(host.World.Away[1]);
+
+            // Leaving while still untracked: single-player pauses for it again, and the "back" clears it.
+            m_Net.Leave();
+            Assert.IsTrue(m_Director.HazardsPaused, "Away became a hazard pause again.");
+            Assert.AreEqual(HazardPauseReason.None, m_Director.AwayReasons);
+            Assert.IsFalse(m_Player.IsAway);
+            m_Director.SetHazardPause(HazardPauseReason.Scripted, false);
+            Assert.IsFalse(m_Director.HazardsPaused, "Nothing stranded in single-player either.");
         }
 
         [UnityTest]

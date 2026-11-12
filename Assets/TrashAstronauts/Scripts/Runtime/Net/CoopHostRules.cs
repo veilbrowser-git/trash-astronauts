@@ -35,6 +35,26 @@ namespace TrashAstronauts.Net
         WorldStateMsg m_World;
         bool m_Disposed;
 
+        /// <summary>Door and weld requests a crew member may make: a burst of this many...</summary>
+        public const float RequestBurst = 6f;
+        /// <summary>...refilled at this many per second (a real cutter or hand is far slower).</summary>
+        public const float RequestsPerSecond = 4f;
+        /// <summary>A door request counts only from a head this close to the door or one of its buttons (metres).</summary>
+        public const float DoorReach = 4f;
+        /// <summary>A weld report counts only from a head this close to that weld (the cutter's reach plus slack, metres).</summary>
+        public const float WeldReach = 3.5f;
+
+        readonly float[] m_Tokens = new float[NetProtocol.MaxPlayers];
+        readonly double[] m_TokenTime = new double[NetProtocol.MaxPlayers];
+        readonly bool[] m_TokenStarted = new bool[NetProtocol.MaxPlayers];
+
+        /// <summary>Requests refused for coming too fast (spam) or from too far away (a modified client).</summary>
+        public int RateLimited { get; private set; }
+        public int TooFar { get; private set; }
+
+        /// <summary>Seconds, for the request rate limit. NetSession sets the session clock; default unscaled time.</summary>
+        public Func<double> Clock = () => Time.unscaledTimeAsDouble;
+
         public MissionDirector Director => m_Director;
         public CoopItemSampler Sampler => m_Sampler;
 
@@ -142,8 +162,10 @@ namespace TrashAstronauts.Net
         /// </summary>
         public bool HostDoorRequest(byte doorId, bool desiredOpen, byte by)
         {
+            if (!TakeToken(by)) return false;
             var door = m_Director.DoorAt(doorId);
             if (door == null || door.locked) return false;
+            if (!WithinReach(by, door, DoorReach)) return false;
             if (door.IsOpen == desiredOpen) return false;
             door.SetOpen(desiredOpen, false, new PlayerId(by));
             return true;
@@ -157,8 +179,11 @@ namespace TrashAstronauts.Net
         public bool HostPointCutReport(byte panel, byte index, byte by)
         {
             if (m_Director.Phase != MissionPhase.Active) return false;
+            if (!TakeToken(by)) return false;
             var cuttable = m_Director.PanelAt(panel);
             if (cuttable == null || cuttable.isTraining || cuttable.IsOpen) return false;
+            if (cuttable.cutPoints == null || index >= cuttable.cutPoints.Length || cuttable.cutPoints[index] == null) return false;
+            if (!WithinReach(by, cuttable.cutPoints[index].transform.position, WeldReach)) return false;
             var who = new PlayerId(by);
             bool changed = cuttable.ApplyRemotePointCut(index, who);
             if (cuttable.CutCount >= cuttable.TotalCuts) m_Director.RequestOpenPanel(cuttable, who);
@@ -170,6 +195,62 @@ namespace TrashAstronauts.Net
         {
             var player = m_Director.FindPlayer(new PlayerId(slot));
             if (player != null && player.IsRemote) player.IsAway = away;
+        }
+
+        // ------------------------------------------------------------------ trust (a modified client in a public game)
+
+        /// <summary>
+        /// Token bucket per slot: <see cref="RequestBurst"/> at once, refilled at <see cref="RequestsPerSecond"/>.
+        /// A request over the limit is dropped, so a spamming client cannot flood the crew's reliable streams.
+        /// </summary>
+        bool TakeToken(byte slot)
+        {
+            if (slot >= m_Tokens.Length) return false;
+            double now = Clock != null ? Clock() : Time.unscaledTimeAsDouble;
+            if (!m_TokenStarted[slot])
+            {
+                m_TokenStarted[slot] = true;
+                m_Tokens[slot] = RequestBurst;
+            }
+            else
+            {
+                double dt = now - m_TokenTime[slot];
+                if (dt > 0) m_Tokens[slot] = Mathf.Min(RequestBurst, m_Tokens[slot] + (float)(dt * RequestsPerSecond));
+            }
+            m_TokenTime[slot] = now;
+            if (m_Tokens[slot] < 1f)
+            {
+                RateLimited++;
+                return false;
+            }
+            m_Tokens[slot] -= 1f;
+            return true;
+        }
+
+        bool WithinReach(byte slot, Vector3 target, float reach)
+        {
+            var player = m_Director.FindPlayer(new PlayerId(slot));
+            if (player != null && (player.HeadPosition - target).sqrMagnitude <= reach * reach) return true;
+            TooFar++;
+            return false;
+        }
+
+        bool WithinReach(byte slot, SlidingDoor door, float reach)
+        {
+            var player = m_Director.FindPlayer(new PlayerId(slot));
+            if (player != null)
+            {
+                Vector3 head = player.HeadPosition;
+                float r2 = reach * reach;
+                if ((head - door.transform.position).sqrMagnitude <= r2) return true;
+                if (door.buttons != null)
+                {
+                    for (int i = 0; i < door.buttons.Length; i++)
+                        if (door.buttons[i] != null && (head - door.buttons[i].transform.position).sqrMagnitude <= r2) return true;
+                }
+            }
+            TooFar++;
+            return false;
         }
 
         // ------------------------------------------------------------------ state for the adapter

@@ -56,6 +56,61 @@ namespace TrashAstronauts.Mission
             if (was != now && Net != null) Net.ReportPause(now);
         }
 
+        /// <summary>The local player's own Away reasons (a client: headset off, tracking or focus lost).</summary>
+        public HazardPauseReason AwayReasons => m_AwayReasons;
+
+        /// <summary>
+        /// Joining as a client: a headset already off, untracked or unfocused had that as a hazard pause; from
+        /// now on it is Away (HazardPauseMonitor routes the matching "back" to <see cref="SetLocalAway"/>), so the
+        /// reasons move over and the hazards are no longer paused here. The host's pause stays where it is.
+        /// </summary>
+        public void MovePausesToAway()
+        {
+            HazardPauseReason own = m_PauseReasons & ~HazardPauseReason.HostPaused;
+            if (own == HazardPauseReason.None) return;
+            bool wasPaused = HazardsPaused;
+            m_PauseReasons &= HazardPauseReason.HostPaused;
+            bool wasAway = m_AwayReasons != HazardPauseReason.None;
+            m_AwayReasons |= own;
+            var local = LocalPlayer;
+            if (local != null) local.IsAway = true;
+            if (wasPaused != HazardsPaused) HazardPauseChanged?.Invoke(HazardsPaused);
+            if (!wasAway && Net != null) Net.ReportPause(true);
+        }
+
+        /// <summary>
+        /// Leaving a session: Away reasons still in force become hazard pauses again (single-player pauses for a
+        /// headset that is off), so the matching "back" from HazardPauseMonitor clears them. Nothing is stranded.
+        /// </summary>
+        void MoveAwayToPauses()
+        {
+            HazardPauseReason away = m_AwayReasons;
+            m_AwayReasons = HazardPauseReason.None;
+            var local = LocalPlayer;
+            if (local != null) local.IsAway = false;
+            if (away == HazardPauseReason.None) return;
+            bool wasPaused = HazardsPaused;
+            m_PauseReasons |= away;
+            if (wasPaused != HazardsPaused) HazardPauseChanged?.Invoke(HazardsPaused);
+        }
+
+        /// <summary>
+        /// After a session: every salvage item of the last run that is still in the scene (a results screen) is an
+        /// ordinary local item again: simulated here, grabbable, no replica.
+        /// </summary>
+        void RestoreRunItemsLocal()
+        {
+            for (int i = 0; i < m_RunItems.Count; i++)
+            {
+                var item = m_RunItems[i];
+                if (item == null) continue;
+                var replica = item.GetComponent<CoopItemReplica>();
+                if (replica != null) Destroy(replica);
+                item.SetHostOnly(false);
+                item.SetSimulatedHere(true);
+            }
+        }
+
         /// <summary>Forgets every Away reason of the local player (leaving a session).</summary>
         public void ClearLocalAway()
         {
@@ -366,8 +421,9 @@ namespace TrashAstronauts.Mission
         {
             var local = LocalPlayer;
             bool outside = local != null && safeZone != null && !safeZone.Contains(local.HeadPosition);
+            // Onto this player's own crew spot (slot 0 and single-player: the hub spawn), not on top of the host.
             if (local != null && local.locomotion != null && hubSpawn != null && (always || outside))
-                local.locomotion.FadeTeleport(local.fader, hubSpawn, CloseHatch);
+                local.locomotion.FadeTeleport(local.fader, HubSpotFor(local), hubSpawn.rotation, CloseHatch);
             else
                 CloseHatch();
         }

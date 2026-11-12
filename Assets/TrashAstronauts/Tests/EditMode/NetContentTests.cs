@@ -259,6 +259,29 @@ namespace TrashAstronauts.Tests
             return b;
         }
 
+        // ------------------------------------------------------------------ IL2CPP stripping
+
+        [Test]
+        public void LinkXml_KeepsTheOnlineServiceAssemblies_FromManagedStripping()
+        {
+            string path = "Assets/TrashAstronauts/link.xml";
+            Assert.IsTrue(File.Exists(path), "link.xml keeps what the online path reaches only by reflection and JSON.");
+            var doc = System.Xml.Linq.XDocument.Load(path);
+            var listed = doc.Root.Elements("assembly").ToDictionary(e => (string)e.Attribute("fullname"), e => (string)e.Attribute("preserve"));
+            var loaded = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetName().Name).ToList();
+            foreach (string name in new[]
+            {
+                "Unity.Services.Core", "Unity.Services.Core.Internal", "Unity.Services.Core.Registration", "Unity.Services.Core.Environments",
+                "Unity.Services.Authentication", "Unity.Services.Multiplayer", "Unity.Services.Wire.Internal", "Newtonsoft.Json",
+            })
+            {
+                Assert.IsTrue(listed.ContainsKey(name), name + " is kept");
+                Assert.AreEqual("all", listed[name], name);
+            }
+            foreach (var name in listed.Keys)
+                Assert.Contains(name, loaded, name + " is a real assembly of this project (a typo would keep nothing)");
+        }
+
         // ------------------------------------------------------------------ Android permission
 
         [Test]
