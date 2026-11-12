@@ -61,6 +61,8 @@ namespace TrashAstronauts.Core
         public bool bulky;
         [Tooltip("Bonus items are not part of the planned loot or the quota guarantee; one is hidden somewhere each run.")]
         public bool bonusSpawn;
+        [Tooltip("How easily a hard knock costs it value. 0 = scrap (cannot be damaged), 1 = very delicate.")]
+        [Range(0f, 1f)] public float fragility;
         [TextArea] public string scannerBlurb = "";
         [Tooltip("Prefab with a SalvageItem component. Assigned by the project builder.")]
         public GameObject prefab;

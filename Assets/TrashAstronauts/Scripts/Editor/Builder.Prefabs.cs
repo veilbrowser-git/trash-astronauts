@@ -52,7 +52,23 @@ namespace TrashAstronauts.EditorTools
                 s_Defs["novelty_rubber_duck"].bonusSpawn = true;
                 EditorUtility.SetDirty(s_Defs["novelty_rubber_duck"]);
             }
+            // How easily each thing is damaged by being banged about (scrap and the duck do not care).
+            SetFragility("elec_nav_board", 0.6f);
+            SetFragility("elec_comms_relay", 0.7f);
+            SetFragility("reactor_regulator_core", 0.5f);
+            SetFragility("novelty_orbital_toaster", 0.8f);
+            // The creature has to be able to catch someone who is only drifting.
+            if (s_Config.enemy.chaseSpeed < 3f) s_Config.enemy.chaseSpeed = 3f;
+            if (s_Config.enemy.chaseLoseSightSeconds < 5f) s_Config.enemy.chaseLoseSightSeconds = 5f;
+            EditorUtility.SetDirty(s_Config);
             AssetDatabase.SaveAssets();
+        }
+
+        static void SetFragility(string id, float value)
+        {
+            if (!s_Defs.TryGetValue(id, out var def) || Mathf.Approximately(def.fragility, value)) return;
+            def.fragility = value;
+            EditorUtility.SetDirty(def);
         }
 
         static void Def(string id, string displayName, SalvageCategory category, int value, float mass, bool bulky, string blurb)
@@ -329,145 +345,23 @@ namespace TrashAstronauts.EditorTools
             var rb = go.AddComponent<Rigidbody>();
             rb.isKinematic = true;
             rb.useGravity = false;
-            go.AddComponent<SphereCollider>().radius = warden ? 0.38f : 0.3f;
+            go.AddComponent<SphereCollider>().radius = warden ? 0.36f : 0.3f;
 
             var body = Empty(go.transform, "Body", Vector3.zero).transform;
 
-            // Hunched torso
-            CBox(body, "Thorax", new Vector3(0, 0.05f, -0.04f), new Vector3(0.36f, 0.28f, 0.5f), M(hide), 0.09f, new Vector3(-12, 0, 0));
-            CBox(body, "Abdomen", new Vector3(0, 0.15f, -0.38f), new Vector3(0.28f, 0.22f, 0.4f), M(hide), 0.08f, new Vector3(-30, 0, 0));
-            CBox(body, "Underbelly", new Vector3(0, -0.09f, -0.08f), new Vector3(0.22f, 0.08f, 0.36f), M("Sinew"), 0.03f, new Vector3(-10, 0, 0));
-            for (int i = 0; i < 6; i++)
-            {
-                float z = 0.16f - i * 0.11f;
-                float y = 0.2f + i * 0.035f;
-                CBox(body, "Spine Plate", new Vector3(0, y, z), new Vector3(0.3f - i * 0.03f, 0.03f, 0.08f), M("Claw"), 0.012f, new Vector3(-18 - i * 5f, 0, 0));
-                Part(body, "Spine Spike", Cone(0.018f, 0f, 0.11f + (i % 2) * 0.05f, 6), new Vector3(0, y + 0.06f, z - 0.01f), M("Bone"), new Vector3(-25 - i * 6f, 0, 0));
-            }
-            for (int i = 0; i < 3; i++)
-            {
-                foreach (float side in new[] { -1f, 1f })
-                    CBox(body, "Rib", new Vector3(side * 0.185f, 0.02f, 0.1f - i * 0.12f), new Vector3(0.022f, 0.22f, 0.035f), M("Bone"), 0.007f, new Vector3(0, 0, side * 14f));
-            }
-
-            // The last piece of its old casing, hanging off one side.
-            var casing = Empty(body, "Old Casing", new Vector3(-0.2f, 0.05f, -0.3f), Quaternion.Euler(8f, -80f, 18f)).transform;
-            CBox(casing, "Panel", Vector3.zero, new Vector3(0.24f, 0.15f, 0.012f), M("PaintWhite"), 0.004f);
-            CBox(casing, "Stripe", new Vector3(0, -0.055f, -0.007f), new Vector3(0.24f, 0.03f, 0.002f), M("Hazard"), 0.0005f);
-            Text(casing, "Label", variant == 0 ? "JANITOR-7" : listener ? "ACOUSTICS-3" : warden ? "WARDEN-12" : "COMMS-1", new Vector3(0, 0.02f, -0.008f), Quaternion.identity, 0.32f, new Vector2(0.22f, 0.06f), new Color(0.25f, 0.25f, 0.25f)).fontStyle = FontStyles.Bold;
-
-            // Head: low and forward, a cluster of eyes over a hinged jaw.
-            var head = Empty(body, "Head", new Vector3(0, -0.03f, 0.27f)).transform;
-            CBox(head, "Skull", new Vector3(0, 0.02f, 0.02f), new Vector3(0.22f, 0.15f, 0.24f), M(hide), 0.055f);
-            CBox(head, "Brow", new Vector3(0, 0.085f, 0.1f), new Vector3(0.24f, 0.04f, 0.1f), M("Claw"), 0.014f, new Vector3(18, 0, 0));
-            var mainEye = Prim(head, "Eye Main", PrimitiveType.Sphere, new Vector3(0, 0.03f, 0.135f), listener ? new Vector3(0.02f, 0.02f, 0.012f) : warden ? new Vector3(0.14f, 0.13f, 0.06f) : new Vector3(0.06f, 0.06f, 0.035f), M("CreatureEye"));
+            // The model itself is built in Blender (ModelSource/Spiders/build_spiders.py): one real spider
+            // species per creature, with eight segmented legs, fangs, pedipalps, eight eyes and fur.
+            var spider = LoadSpider(variant == 0 ? "janitor" : listener ? "listener" : warden ? "warden" : "mimic", body);
+            Transform head = spider.head, jaw = spider.jaw;
+            GameObject mainEye = spider.eyes[0];
             var extraEyes = new List<Renderer>();
-            Vector3[] eyeOffsets =
-            {
-                new Vector3(-0.055f, 0.045f, 0.128f), new Vector3(0.055f, 0.045f, 0.128f), new Vector3(-0.075f, 0.005f, 0.12f),
-                new Vector3(0.08f, 0.012f, 0.118f), new Vector3(-0.03f, -0.012f, 0.134f), new Vector3(0.035f, 0.072f, 0.12f),
-            };
-            float[] eyeSizes = { 0.03f, 0.026f, 0.02f, 0.022f, 0.018f, 0.016f };
-            for (int i = 0; i < (variant == 0 ? eyeOffsets.Length : mimic ? 2 : 0); i++)
-                extraEyes.Add(Prim(head, "Eye " + i, PrimitiveType.Sphere, eyeOffsets[i], new Vector3(eyeSizes[i], eyeSizes[i], eyeSizes[i] * 0.6f), M("CreatureEye")).GetComponent<MeshRenderer>());
-            for (int i = 0; i < 6; i++)
-                Part(head, "Upper Fang", Cone(0.011f, 0f, 0.05f + (i % 3) * 0.012f, 6), new Vector3(-0.075f + i * 0.03f, -0.07f, 0.125f - Mathf.Abs(i - 2.5f) * 0.008f), M("Bone"), new Vector3(180 + (i - 2.5f) * 4f, 0, 0));
-            var jaw = Empty(head, "Jaw", new Vector3(0, -0.07f, -0.02f)).transform;
-            CBox(jaw, "Jaw Plate", new Vector3(0, -0.03f, 0.08f), new Vector3(0.19f, 0.035f, 0.2f), M(hide), 0.014f);
-            for (int i = 0; i < 5; i++)
-                Part(jaw, "Lower Fang", Cone(0.011f, 0f, 0.045f + (i % 2) * 0.014f, 6), new Vector3(-0.065f + i * 0.0325f, 0.01f, 0.165f), M("Bone"));
-            foreach (float side in new[] { -1f, 1f })
-                Part(head, "Mandible", Cone(0.02f, 0f, 0.2f, 6), new Vector3(side * 0.12f, -0.05f, 0.14f), M("Claw"), new Vector3(105, side * 28f, 0));
-
-            if (listener)
-            {
-                // No eyes worth the name: two huge listening dishes instead, and a row of blind pits.
-                foreach (float side in new[] { -1f, 1f })
-                {
-                    Part(head, "Ear Dish", Lathe("ListenerEar", 16, new Vector2(0.012f, 0f), new Vector2(0.115f, 0.05f), new Vector2(0.122f, 0.05f), new Vector2(0.02f, -0.008f)),
-                        new Vector3(side * 0.17f, 0.07f, -0.01f), M("Bone"), new Vector3(90f, side * 50f, 0));
-                    Part(head, "Ear Stalk", Tube(0.012f, 0.12f, 6), new Vector3(side * 0.12f, 0.05f, -0.03f), M("Sinew"), new Vector3(0, 0, side * -62f));
-                    for (int i = 0; i < 3; i++)
-                        Prim(head, "Blind Pit", PrimitiveType.Sphere, new Vector3(side * (0.03f + i * 0.028f), 0.05f - i * 0.012f, 0.128f - i * 0.006f), new Vector3(0.018f, 0.018f, 0.008f), M("Claw"));
-                }
-            }
-            if (mimic)
-            {
-                // A loudspeaker horn where the throat should be, ringed with small slack mouths, and a
-                // crest of old antenna rods: it used to be the ship's intercom.
-                Part(head, "Voice Horn", Lathe("MimicHorn", 18, new Vector2(0.02f, 0f), new Vector2(0.05f, 0.05f), new Vector2(0.105f, 0.12f), new Vector2(0.115f, 0.12f), new Vector2(0.04f, -0.012f)),
-                    new Vector3(0, -0.13f, 0.1f), M("Bone"), new Vector3(78f, 0, 0));
-                Part(head, "Horn Grille", Tube(0.05f, 0.006f, 14), new Vector3(0, -0.15f, 0.17f), M("Vent"), new Vector3(78f, 0, 0));
-                for (int i = 0; i < 5; i++)
-                {
-                    float a = (i - 2) * 0.5f;
-                    var mouth = Empty(head, "Small Mouth " + i, new Vector3(Mathf.Sin(a) * 0.115f, 0.0f - Mathf.Abs(i - 2) * 0.012f, 0.1f + Mathf.Cos(a) * 0.045f), Quaternion.Euler(0, a * Mathf.Rad2Deg, 0)).transform;
-                    CBox(mouth, "Lip", Vector3.zero, new Vector3(0.05f, 0.022f, 0.02f), M("Sinew"), 0.008f);
-                    Prim(mouth, "Dark", PrimitiveType.Cube, new Vector3(0, 0, 0.006f), new Vector3(0.036f, 0.01f, 0.012f), M("Claw"));
-                }
-                for (int i = 0; i < 4; i++)
-                    Part(head, "Antenna", Tube(0.004f, 0.22f + (i % 2) * 0.12f, 5), new Vector3(-0.07f + i * 0.047f, 0.2f + (i % 2) * 0.05f, -0.04f), M("Chrome"), new Vector3(-14f + i * 4f, 0, (i - 1.5f) * 9f));
-            }
-            if (warden)
-            {
-                // One enormous eye under an armoured hood, and plated shoulders.
-                CBox(head, "Hood", new Vector3(0, 0.115f, 0.07f), new Vector3(0.3f, 0.05f, 0.26f), M("Claw"), 0.02f, new Vector3(14, 0, 0));
-                Part(head, "Eye Socket", Torus(0.075f, 0.014f, 18, 6), new Vector3(0, 0.03f, 0.132f), M("Claw"), new Vector3(90, 0, 0));
-                foreach (float side in new[] { -1f, 1f })
-                {
-                    CBox(body, "Pauldron", new Vector3(side * 0.25f, 0.11f, 0.11f), new Vector3(0.17f, 0.1f, 0.28f), M("Hazard"), 0.03f, new Vector3(0, 0, side * -22f));
-                    CBox(body, "Flank Plate", new Vector3(side * 0.2f, 0.06f, -0.2f), new Vector3(0.04f, 0.2f, 0.3f), M("Claw"), 0.012f, new Vector3(0, 0, side * 10f));
-                }
-            }
-
-            // Long limbs: upper arm, elbow, forearm, three claws. The Listener has a third pair.
-            var shoulders = new List<Transform>();
-            var elbows = new List<Transform>();
-            var shoulderPos = new List<Vector3> { new Vector3(-0.19f, 0.03f, 0.12f), new Vector3(0.19f, 0.03f, 0.12f), new Vector3(-0.17f, 0.08f, -0.2f), new Vector3(0.17f, 0.08f, -0.2f) };
-            if (listener)
-            {
-                shoulderPos.Add(new Vector3(-0.19f, 0.06f, -0.04f));
-                shoulderPos.Add(new Vector3(0.19f, 0.06f, -0.04f));
-            }
-            for (int i = 0; i < shoulderPos.Count; i++)
-            {
-                float side = i % 2 == 0 ? -1f : 1f;
-                bool front = i < 2;
-                bool middle = i >= 4;
-                var shoulder = Empty(body, "Shoulder " + i, shoulderPos[i], Quaternion.Euler(middle ? 0f : front ? -22f : 18f, 0f, side * (middle ? 62f : front ? 30f : 40f))).transform;
-                if (listener) shoulder.localScale = new Vector3(0.72f, 1.18f, 0.72f);
-                if (warden) shoulder.localScale = front ? new Vector3(1.9f, 1.05f, 1.9f) : new Vector3(1.2f, 0.85f, 1.2f);
-                Prim(shoulder, "Joint", PrimitiveType.Sphere, Vector3.zero, Vector3.one * 0.075f, M("Sinew"));
-                CBox(shoulder, "Upper Arm", new Vector3(0, -0.2f, 0), new Vector3(0.04f, 0.4f, 0.04f), M(hide), 0.012f);
-                Part(shoulder, "Tendon", Tube(0.007f, 0.36f, 6), new Vector3(0.022f, -0.2f, 0.01f), M("Sinew"));
-                var elbow = Empty(shoulder, "Elbow", new Vector3(0, -0.4f, 0), Quaternion.Euler(front ? 30f : 22f, 0, 0)).transform;
-                Prim(elbow, "Joint", PrimitiveType.Sphere, Vector3.zero, Vector3.one * 0.06f, M("Sinew"));
-                CBox(elbow, "Forearm", new Vector3(0, -0.22f, 0), new Vector3(0.03f, 0.44f, 0.03f), M("Bone"), 0.009f);
-                for (int c = 0; c < 3; c++)
-                    Part(elbow, "Claw", Cone(0.013f, 0f, 0.16f, 6), new Vector3((c - 1) * 0.022f, -0.5f, 0.01f), M("Claw"), new Vector3(180 - 14f, 0, (c - 1) * 16f));
-                shoulders.Add(shoulder);
-                elbows.Add(elbow);
-            }
-
-            // Trailing cables under the abdomen.
+            for (int i = 1; i < spider.eyes.Count; i++) extraEyes.Add(spider.eyes[i].GetComponent<MeshRenderer>());
+            var shoulders = spider.legs;
+            var elbows = spider.lowerLegs;
             var tendrils = new List<Transform>();
-            for (int i = 0; i < 5; i++)
-            {
-                Transform parent = body;
-                Vector3 pos = new Vector3(-0.1f + i * 0.05f, -0.03f + (i % 2) * 0.02f, -0.32f - (i % 3) * 0.06f);
-                int segments = 3 + i % 2;
-                for (int sgm = 0; sgm < segments; sgm++)
-                {
-                    var pivot = Empty(parent, "Cable " + i + "." + sgm, pos).transform;
-                    Part(pivot, "Segment", Tube(0.009f - sgm * 0.0015f, 0.17f, 6), new Vector3(0, -0.085f, 0), M(i % 2 == 0 ? "Rubber" : "Sinew"));
-                    tendrils.Add(pivot);
-                    parent = pivot;
-                    pos = new Vector3(0, -0.17f, 0);
-                }
-            }
 
-            var eyePoint = Empty(go.transform, "Eye Point", new Vector3(0, 0f, 0.42f));
-            var lightGo = Empty(head, "Eye Light", new Vector3(0, 0.03f, 0.16f));
+            var eyePoint = Empty(go.transform, "Eye Point", new Vector3(0, 0.05f, 0.3f));
+            var lightGo = Empty(head, "Eye Light", new Vector3(0, 0.08f, 0.24f));
             var light = lightGo.AddComponent<Light>();
             light.type = LightType.Spot;
             light.spotAngle = 80f;
@@ -490,7 +384,6 @@ namespace TrashAstronauts.EditorTools
             drone.hum = hum;
             drone.voice = voice;
             drone.hoverHeight = listener ? 1.15f : warden ? 1.55f : 1.45f;
-            body.localScale = Vector3.one * (listener ? 0.9f : warden ? 1.3f : 1f);
             hum.pitch = listener ? 1.3f : warden ? 0.72f : 1f;
             if (listener)
             {
@@ -500,8 +393,8 @@ namespace TrashAstronauts.EditorTools
                 drone.tuning = new EnemyTuning
                 {
                     sightRange = 1.6f, sightHalfAngle = 35f, sightAcquireSeconds = 0.5f, hearingRadiusAtFullLoudness = 27f,
-                    patrolSpeed = 1.0f, investigateSpeed = 2.1f, chaseSpeed = 2.4f, searchSpeed = 1.3f,
-                    investigateLingerSeconds = 6f, chaseLoseSightSeconds = 2f, searchSeconds = 6f, catchRadius = 0.9f, wakeDelaySeconds = 20f,
+                    patrolSpeed = 1.0f, investigateSpeed = 2.3f, chaseSpeed = 3.0f, searchSpeed = 1.5f,
+                    investigateLingerSeconds = 6f, chaseLoseSightSeconds = 3.5f, searchSeconds = 6f, catchRadius = 0.9f, wakeDelaySeconds = 20f,
                 };
                 drone.sedationMultiplier = 1.3f;
             }
@@ -513,7 +406,7 @@ namespace TrashAstronauts.EditorTools
                 drone.tuning = new EnemyTuning
                 {
                     sightRange = 14f, sightHalfAngle = 38f, sightAcquireSeconds = 0.7f, hearingRadiusAtFullLoudness = 9f,
-                    patrolSpeed = 0.65f, investigateSpeed = 1.0f, chaseSpeed = 1.75f, searchSpeed = 0.9f,
+                    patrolSpeed = 0.7f, investigateSpeed = 1.2f, chaseSpeed = 2.3f, searchSpeed = 1.0f,
                     investigateLingerSeconds = 4f, chaseLoseSightSeconds = 5f, searchSeconds = 10f, catchRadius = 1.2f, wakeDelaySeconds = 20f,
                 };
                 drone.sedationMultiplier = 0.6f;
@@ -526,8 +419,8 @@ namespace TrashAstronauts.EditorTools
                 drone.tuning = new EnemyTuning
                 {
                     sightRange = 8f, sightHalfAngle = 55f, sightAcquireSeconds = 0.9f, hearingRadiusAtFullLoudness = 21f,
-                    patrolSpeed = 0.9f, investigateSpeed = 1.7f, chaseSpeed = 2.1f, searchSpeed = 1.2f,
-                    investigateLingerSeconds = 5f, chaseLoseSightSeconds = 3f, searchSeconds = 8f, catchRadius = 0.95f, wakeDelaySeconds = 20f,
+                    patrolSpeed = 0.9f, investigateSpeed = 1.8f, chaseSpeed = 2.8f, searchSpeed = 1.3f,
+                    investigateLingerSeconds = 5f, chaseLoseSightSeconds = 5f, searchSeconds = 8f, catchRadius = 0.95f, wakeDelaySeconds = 20f,
                 };
                 var speaker = Empty(head, "Mimic Speaker", new Vector3(0, -0.12f, 0.16f)).AddComponent<AudioSource>();
                 ConfigureSpatial(speaker, null, false, 0.85f, 2.5f, 26f);
@@ -549,6 +442,9 @@ namespace TrashAstronauts.EditorTools
             animator.shoulders = shoulders.ToArray();
             animator.elbows = elbows.ToArray();
             animator.tendrils = tendrils.ToArray();
+            animator.spider = true;
+            animator.abdomen = spider.abdomen;
+            animator.palps = spider.palps.ToArray();
             return SavePrefab(go, go.name);
         }
 
@@ -937,7 +833,7 @@ namespace TrashAstronauts.EditorTools
 
             // --- wrist display
             var wrist = Empty(rig.transform, "Wrist Display", Vector3.zero, null, GameLayers.Default);
-            Prim(wrist.transform, "Back", PrimitiveType.Cube, new Vector3(0, -0.007f, 0.004f), new Vector3(0.125f, 0.106f, 0.006f), M("Screen"));
+            Prim(wrist.transform, "Back", PrimitiveType.Cube, new Vector3(0, -0.013f, 0.004f), new Vector3(0.125f, 0.118f, 0.006f), M("Screen"));
             var display = wrist.AddComponent<WristDisplay>();
             display.player = context;
             display.oxygenText = Text(wrist.transform, "Oxygen", "O2 100%", new Vector3(0, 0.028f, -0.001f), Quaternion.identity, 0.085f, new Vector2(0.12f, 0.026f), new Color(0.8f, 1f, 1f));
@@ -948,7 +844,15 @@ namespace TrashAstronauts.EditorTools
             display.oxygenBarRenderer = bar.GetComponent<MeshRenderer>();
             display.salvageText = Text(wrist.transform, "Salvage", "NO CONTRACT", new Vector3(0, -0.012f, -0.001f), Quaternion.identity, 0.07f, new Vector2(0.12f, 0.024f), new Color(1f, 0.9f, 0.6f));
             display.threatText = Text(wrist.transform, "Threat", "", new Vector3(0, -0.035f, -0.001f), Quaternion.identity, 0.065f, new Vector2(0.12f, 0.014f), new Color(1f, 0.6f, 0.5f));
-            display.voiceText = Text(wrist.transform, "Voice", "MIC", new Vector3(0, -0.051f, -0.001f), Quaternion.identity, 0.055f, new Vector2(0.12f, 0.012f), new Color(0.6f, 1f, 0.7f));
+            // Noise meter: how loud you are being, from your voice or the last loud thing you did.
+            var noisePivot = Empty(wrist.transform, "Noise Bar", new Vector3(-0.056f, -0.05f, -0.001f));
+            Prim(noisePivot.transform, "Track", PrimitiveType.Cube, new Vector3(0.056f, 0, 0.0008f), new Vector3(0.112f, 0.009f, 0.001f), M("Trim"));
+            var noiseScale = Empty(noisePivot.transform, "Scale", Vector3.zero);
+            var noiseFill = Prim(noiseScale.transform, "Fill", PrimitiveType.Cube, new Vector3(0.056f, 0, 0), new Vector3(0.112f, 0.008f, 0.002f), M("GlowWhite"));
+            noiseScale.transform.localScale = new Vector3(0.001f, 1f, 1f);
+            display.noiseBar = noiseScale.transform;
+            display.noiseBarRenderer = noiseFill.GetComponent<MeshRenderer>();
+            display.voiceText = Text(wrist.transform, "Voice", "NOISE: quiet", new Vector3(0, -0.063f, -0.001f), Quaternion.identity, 0.055f, new Vector2(0.12f, 0.012f), new Color(0.6f, 1f, 0.7f));
             context.wristDisplay = wrist.transform;
 
             // --- suit menu

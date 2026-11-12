@@ -28,12 +28,12 @@ namespace TrashAstronauts.Core
         [Header("Movement (m/s)")]
         public float patrolSpeed = 0.9f;
         public float investigateSpeed = 1.5f;
-        public float chaseSpeed = 2.2f;
+        public float chaseSpeed = 3.0f;
         public float searchSpeed = 1.1f;
 
         [Header("Timing (s)")]
         public float investigateLingerSeconds = 4f;
-        public float chaseLoseSightSeconds = 3f;
+        public float chaseLoseSightSeconds = 5f;
         public float searchSeconds = 7f;
 
         [Header("Catching")]

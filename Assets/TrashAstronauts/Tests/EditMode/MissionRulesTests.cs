@@ -23,6 +23,20 @@ namespace TrashAstronauts.Tests
         }
 
         [Test]
+        public void DamagedSalvage_IsWorthLess_ButNeverGoesBackUp_AndCannotBeDamagedInTheLocker()
+        {
+            var session = NewRun(out var profile);
+            Assert.IsTrue(session.DamageSalvage("c", 450));
+            Assert.IsFalse(session.DamageSalvage("c", 500), "Value only goes down.");
+            Assert.IsFalse(session.DamageSalvage("zzz", 1));
+            Assert.AreEqual(100 + 150 + 450, session.TotalRegisteredValue);
+            session.TryDeposit("c", PlayerId.Local);
+            Assert.AreEqual(450, session.DepositedValue, "The locker pays what it is worth now.");
+            Assert.IsFalse(session.DamageSalvage("c", 10), "Safe once it is in the locker.");
+            Assert.AreEqual(450, session.DepositedValue);
+        }
+
+        [Test]
         public void TrickShot_PaysABonusOnce_OnlyForDepositedSalvage_AndCountsTowardQuota()
         {
             var session = NewRun(out var profile);

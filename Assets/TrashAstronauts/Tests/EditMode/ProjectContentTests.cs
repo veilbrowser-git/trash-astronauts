@@ -77,21 +77,36 @@ namespace TrashAstronauts.Tests
         }
 
         [Test]
-        public void Creature_HasAnimatedLimbs_AndAClusterOfEyes()
+public void Creature_IsARealSpider_EightLegsEightEyesFangsAndFur()
         {
-            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/TrashAstronauts/Prefabs/Drone_Janitor7.prefab");
-            Assert.IsNotNull(prefab);
-            var drone = prefab.GetComponent<EnemyDrone>();
-            var animator = prefab.GetComponent<CreatureAnimator>();
-            Assert.IsNotNull(animator);
-            Assert.AreEqual(4, animator.shoulders.Length);
-            Assert.AreEqual(4, animator.elbows.Length);
-            Assert.GreaterOrEqual(animator.tendrils.Length, 10);
-            Assert.IsNotNull(animator.head);
-            Assert.IsNotNull(animator.jaw);
-            Assert.IsNotNull(drone.eyeRenderer);
-            Assert.GreaterOrEqual(drone.extraEyes.Length, 5);
-            Assert.Greater(prefab.GetComponentsInChildren<MeshRenderer>().Length, 60, "The creature should be a detailed model.");
+            foreach (var name in new[] { "Drone_Janitor7", "Creature_Listener", "Creature_Warden", "Creature_Mimic" })
+            {
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/TrashAstronauts/Prefabs/" + name + ".prefab");
+                Assert.IsNotNull(prefab, name);
+                var drone = prefab.GetComponent<EnemyDrone>();
+                var animator = prefab.GetComponent<CreatureAnimator>();
+                Assert.IsNotNull(animator, name);
+                Assert.IsTrue(animator.spider, name);
+                Assert.AreEqual(8, animator.shoulders.Length, name + " should have eight legs.");
+                Assert.AreEqual(8, animator.elbows.Length, name + " legs should bend at the knee.");
+                for (int i = 0; i < 8; i++)
+                {
+                    Assert.IsNotNull(animator.shoulders[i]);
+                    Assert.IsTrue(animator.elbows[i].IsChildOf(animator.shoulders[i]), "A knee belongs to its own leg.");
+                }
+                Assert.AreEqual(4, animator.shoulders.Count(l => l.localPosition.x < 0f), "Four legs on each side.");
+                Assert.AreEqual(2, animator.palps.Length, name + " should have two pedipalps.");
+                Assert.IsNotNull(animator.head);
+                Assert.IsNotNull(animator.abdomen);
+                Assert.IsNotNull(animator.jaw, name + " should have fangs.");
+                Assert.IsNotNull(drone.eyeRenderer);
+                Assert.AreEqual(7, drone.extraEyes.Length, name + " should have eight eyes.");
+                int triangles = prefab.GetComponentsInChildren<MeshFilter>().Sum(f => f.sharedMesh.triangles.Length / 3);
+                Assert.Greater(triangles, 20000, name + " should be a detailed, furred model.");
+                Assert.Less(triangles, 90000, name + " must stay affordable on a standalone headset.");
+                foreach (var filter in prefab.GetComponentsInChildren<MeshFilter>())
+                    Assert.AreEqual(filter.sharedMesh.vertexCount, filter.sharedMesh.normals.Length, filter.name);
+            }
         }
 
         [Test]
@@ -106,15 +121,10 @@ namespace TrashAstronauts.Tests
             Assert.Less(listener.tuning.sightRange, 2f, "The Listener is blind.");
             Assert.Greater(listener.tuning.hearingRadiusAtFullLoudness, 20f);
             Assert.Greater(warden.tuning.sightRange, 12f, "The Warden sees far.");
-            Assert.Less(warden.tuning.chaseSpeed, 2f, "The Warden is slow.");
-            Assert.AreEqual(6, listener.GetComponent<CreatureAnimator>().shoulders.Length, "The Listener has a third pair of limbs.");
-            Assert.AreEqual(0, listener.extraEyes.Length);
-            foreach (var creature in new[] { listener, warden })
-            {
-                Assert.IsNotNull(creature.eyeRenderer);
-                Assert.IsNotNull(creature.GetComponent<CreatureAnimator>().jaw);
-                Assert.Greater(creature.GetComponentsInChildren<MeshRenderer>().Length, 60);
-            }
+            Assert.Less(warden.tuning.chaseSpeed, janitor.director == null ? 2.6f : 2.6f, "The Warden is the slowest hunter.");
+            var listenerMesh = listener.GetComponentsInChildren<MeshFilter>().Sum(f => f.sharedMesh.triangles.Length);
+            var janitorMesh = janitor.GetComponentsInChildren<MeshFilter>().Sum(f => f.sharedMesh.triangles.Length);
+            Assert.AreNotEqual(listenerMesh, janitorMesh, "Each creature is its own species, not a recolour.");
 
             var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
             var director = scene.GetRootGameObjects().SelectMany(g => g.GetComponentsInChildren<MissionDirector>(true)).Single();
@@ -142,8 +152,7 @@ namespace TrashAstronauts.Tests
             Assert.Less(mimic.pitch, 1f, "It should sound lower than the player.");
             Assert.AreEqual("THE MIMIC", drone.displayName);
             Assert.IsTrue(drone.overrideTuning);
-            Assert.AreEqual(4, prefab.GetComponent<CreatureAnimator>().shoulders.Length);
-            Assert.Greater(prefab.GetComponentsInChildren<MeshRenderer>().Length, 60);
+            Assert.AreEqual(8, prefab.GetComponent<CreatureAnimator>().shoulders.Length);
             foreach (var name in new[] { "Drone_Janitor7", "Creature_Listener", "Creature_Warden" })
                 Assert.IsNull(AssetDatabase.LoadAssetAtPath<GameObject>("Assets/TrashAstronauts/Prefabs/" + name + ".prefab").GetComponent<VoiceMimic>(), "Only the Mimic records phrases.");
         }

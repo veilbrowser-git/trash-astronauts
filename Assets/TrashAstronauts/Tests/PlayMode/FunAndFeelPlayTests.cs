@@ -49,6 +49,7 @@ namespace TrashAstronauts.Tests
         /// <summary>Puts the player in open space at the near end of the long corridor, at rest, facing down it.</summary>
         IEnumerator FloatInCargoBay()
         {
+            m_Director.keepPlayersInHub = false; // this test floats in the wreck without starting a contract
             m_Player.locomotion.TeleportTo(new Vector3(0f, 0.2f, 9.2f), Quaternion.identity);
             yield return Frames(3);
             m_Player.locomotion.zeroG.Stop();

@@ -172,6 +172,8 @@ namespace TrashAstronauts.EditorTools
             var floor = MakeTexture("FloorGrate", 512, PaintFloor);
             var hazard = MakeTexture("Hazard", 256, PaintHazard);
             var stars = MakeTexture("Stars", 512, PaintStars);
+            var flesh = MakeTexture("Flesh", 256, PaintFlesh);
+            var fleshN = MakeNormalMap("Flesh_N", 256, (x, y) => FleshHeight(x, y, 256), 2.4f);
             var platesN = MakeNormalMap("Plates_N", 512, (x, y) => PlatesHeight(x, y, 512), 2.2f);
             var floorN = MakeNormalMap("FloorGrate_N", 512, (x, y) => FloorHeight(x, y, 512), 1.6f);
 
@@ -216,13 +218,18 @@ namespace TrashAstronauts.EditorTools
             Lit("GlowWhite", new Color(0.9f, 0.95f, 1f), 0.3f, null, new Color(1.6f, 1.8f, 2f));
             Lit("GlowWarm", new Color(1f, 0.85f, 0.6f), 0.3f, null, new Color(2f, 1.5f, 0.9f));
             Lit("GlowTeal", new Color(0.2f, 1f, 0.85f), 0.3f, null, new Color(0.3f, 1.8f, 1.5f));
-            Lit("Carapace", new Color(0.07f, 0.075f, 0.085f), 0.65f, plates, null, platesN);
-            Lit("PaleHide", new Color(0.56f, 0.5f, 0.47f), 0.5f, plates, null, platesN);
-            Lit("WardenPlate", new Color(0.2f, 0.14f, 0.03f), 0.6f, plates, null, platesN);
+            // Creature skin: mottled, veined and wet. The texture is near grey so each creature's colour comes from here.
+            Lit("Carapace", new Color(0.13f, 0.125f, 0.15f), 0.84f, flesh, null, fleshN);
+            Lit("Shadow", new Color(0.012f, 0.012f, 0.016f), 0.1f);
+            Lit("ApparitionEye", new Color(1f, 0.95f, 0.8f), 0.9f, null, new Color(2.6f, 2.3f, 1.7f));
+            Lit("EyeSocket", new Color(0.02f, 0.008f, 0.008f), 0.9f);
+            Lit("SpiderEye", new Color(0.015f, 0.008f, 0.008f), 0.97f, null, new Color(0.05f, 0.007f, 0.004f));
+            Lit("PaleHide", new Color(0.72f, 0.63f, 0.58f), 0.74f, flesh, null, fleshN);
+            Lit("WardenPlate", new Color(0.3f, 0.2f, 0.07f), 0.78f, flesh, null, fleshN);
             Lit("DuckYellow", new Color(0.98f, 0.8f, 0.08f), 0.7f);
             Lit("LeafGreen", new Color(0.12f, 0.45f, 0.16f), 0.35f);
-            Lit("MimicHide", new Color(0.2f, 0.09f, 0.24f), 0.6f, plates, null, platesN);
-            Lit("Sinew", new Color(0.16f, 0.07f, 0.06f), 0.55f);
+            Lit("MimicHide", new Color(0.27f, 0.12f, 0.33f), 0.82f, flesh, null, fleshN);
+            Lit("Sinew", new Color(0.4f, 0.1f, 0.09f), 0.88f, flesh, null, fleshN);
             Lit("Bone", new Color(0.62f, 0.58f, 0.5f), 0.35f);
             Lit("Claw", new Color(0.03f, 0.03f, 0.035f), 0.85f);
             Lit("CreatureEye", new Color(1f, 0.08f, 0.04f), 0.9f, null, new Color(3f, 0.25f, 0.12f));

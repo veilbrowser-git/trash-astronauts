@@ -45,28 +45,33 @@ namespace TrashAstronauts.EditorTools
             Shot("11_creature_side", Builder.FreighterPoint(1.9f, 1.5f, 28.9f), Builder.FreighterPoint(3.4f, 1.3f, 28.4f));
             Shot("12_gloves_and_tools", new Vector3(-0.35f, 1.45f, -0.55f), new Vector3(0.4f, 1.1f, -0.9f));
             Shot("13_salvage_lineup", new Vector3(0f, 1.25f, -40.9f), new Vector3(0f, 1.2f, -40f));
-            // All three creatures side by side on an empty stage: Janitor, Listener, Warden.
+            // The four spiders side by side on an empty stage, then close-ups.
             var roster = new GameObject("Preview Roster") { hideFlags = HideFlags.HideAndDontSave };
             string[] creatureNames = { "Drone_Janitor7", "Creature_Listener", "Creature_Warden", "Creature_Mimic" };
             for (int i = 0; i < creatureNames.Length; i++)
             {
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(Builder.PrefabDir + "/" + creatureNames[i] + ".prefab");
                 if (prefab == null) continue;
-                var instance = Object.Instantiate(prefab, new Vector3(-2.55f + i * 1.7f, 1.4f, -60f), Quaternion.Euler(0f, 150f + i * 20f, 0f), roster.transform);
+                var instance = Object.Instantiate(prefab, new Vector3(-3.9f + i * 2.6f, 1.4f, -60f), Quaternion.Euler(0f, 160f + i * 14f, 0f), roster.transform);
                 instance.hideFlags = HideFlags.HideAndDontSave;
                 foreach (var l in instance.GetComponentsInChildren<Light>(true)) l.enabled = false;
             }
-            foreach (float x in new[] { -1.5f, 1.5f })
+            foreach (float x in new[] { -3.5f, 0f, 3.5f })
             {
                 var rosterLight = new GameObject("Roster Light") { hideFlags = HideFlags.HideAndDontSave }.AddComponent<Light>();
                 rosterLight.transform.SetParent(roster.transform);
-                rosterLight.transform.position = new Vector3(x, 2.3f, -61.6f);
+                rosterLight.transform.position = new Vector3(x, 2.6f, -61.8f);
                 rosterLight.type = LightType.Point;
-                rosterLight.range = 7f;
-                rosterLight.intensity = 7f;
+                rosterLight.range = 8f;
+                rosterLight.intensity = 9f;
             }
-            Shot("14_creature_roster", new Vector3(0f, 1.4f, -63.2f), new Vector3(0f, 1.1f, -60f));
-            Shot("14b_creature_mimic", new Vector3(2.0f, 1.3f, -61.4f), new Vector3(2.55f, 1.3f, -60f));
+            Shot("14_creature_roster", new Vector3(0f, 2.3f, -64.6f), new Vector3(0f, 1.2f, -60f));
+            Shot("14a_spider_tarantula", new Vector3(-4.5f, 1.75f, -61.1f), new Vector3(-3.9f, 1.38f, -60f));
+            Shot("14b_spider_tarantula_top", new Vector3(-3.9f, 2.5f, -60.6f), new Vector3(-3.9f, 1.4f, -60f));
+            Shot("14c_spider_cave", new Vector3(-1.9f, 1.8f, -61.3f), new Vector3(-1.3f, 1.38f, -60f));
+            Shot("14d_spider_hunter", new Vector3(0.7f, 1.7f, -61.0f), new Vector3(1.3f, 1.38f, -60f));
+            Shot("14e_spider_widow", new Vector3(3.3f, 1.8f, -61.2f), new Vector3(3.9f, 1.4f, -60f));
+            Shot("14f_spider_face", new Vector3(-4.15f, 1.38f, -60.75f), new Vector3(-3.9f, 1.36f, -60f));
             Object.DestroyImmediate(roster);
 
             // Hands holding tools, posed exactly as the grab system will hold them.

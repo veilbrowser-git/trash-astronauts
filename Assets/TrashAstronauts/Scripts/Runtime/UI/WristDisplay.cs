@@ -18,6 +18,77 @@ namespace TrashAstronauts.UI
         public TMP_Text salvageText;
         public TMP_Text threatText;
         public TMP_Text voiceText;
+        [Tooltip("Noise meter: scaled along X from 0 (silent) to 1 (the whole deck heard that).")]
+        public Transform noiseBar;
+        public Renderer noiseBarRenderer;
+
+        /// <summary>0..1: how loud the player is being right now (voice or the last loud thing they did, fading).</summary>
+        public float NoiseLevel { get; private set; }
+        public string NoiseLabel { get; private set; } = "";
+        float m_EventLevel;
+        string m_EventLabel = "";
+        NoiseSystem m_Hooked;
+
+        void OnDisable()
+        {
+            if (m_Hooked != null) m_Hooked.NoiseEmitted -= OnNoise;
+            m_Hooked = null;
+        }
+
+        void OnNoise(NoiseEvent noise)
+        {
+            // Only what this player did: their voice, tools, thruster, and things they threw or dropped.
+            if (noise.Kind == NoiseKind.Voice) return; // the live microphone level covers the voice
+            if (player != null && !noise.Source.Equals(player.Id)) return;
+            if (noise.Loudness < m_EventLevel) return;
+            m_EventLevel = Mathf.Clamp01(noise.Loudness);
+            switch (noise.Kind)
+            {
+                case NoiseKind.Cutting: m_EventLabel = "CUTTER"; break;
+                case NoiseKind.PanelBreak: m_EventLabel = "PANEL"; break;
+                case NoiseKind.Door: m_EventLabel = "DOOR"; break;
+                case NoiseKind.Thruster: m_EventLabel = "THRUSTER"; break;
+                default: m_EventLabel = "IMPACT"; break;
+            }
+        }
+
+        void UpdateNoiseMeter()
+        {
+            var director = MissionDirector.Active;
+            if (director == null) return;
+            if (director.noise != m_Hooked)
+            {
+                if (m_Hooked != null) m_Hooked.NoiseEmitted -= OnNoise;
+                m_Hooked = director.noise;
+                if (m_Hooked != null) m_Hooked.NoiseEmitted += OnNoise;
+            }
+
+            m_EventLevel = Mathf.Max(0f, m_EventLevel - Time.unscaledDeltaTime * 0.45f);
+            var voice = player != null ? player.voice : null;
+            float voiceLevel = voice != null && voice.Listening ? voice.Loudness * voice.loudnessScale : 0f;
+            bool voiceWins = voiceLevel >= m_EventLevel && voiceLevel > 0.02f;
+            float target = Mathf.Max(voiceLevel, m_EventLevel);
+            NoiseLevel = target > NoiseLevel ? target : Mathf.MoveTowards(NoiseLevel, target, Time.unscaledDeltaTime * 1.5f);
+            NoiseLabel = NoiseLevel < 0.03f ? "" : voiceWins ? "VOICE" : m_EventLabel;
+
+            if (noiseBar != null) noiseBar.localScale = new Vector3(Mathf.Max(0.001f, Mathf.Clamp01(NoiseLevel)), 1f, 1f);
+            if (noiseBarRenderer != null)
+            {
+                if (m_Block == null) m_Block = new MaterialPropertyBlock();
+                noiseBarRenderer.GetPropertyBlock(m_Block);
+                m_Block.SetColor(k_BaseColor, NoiseLevel < 0.3f ? new Color(0.3f, 1f, 0.5f) : NoiseLevel < 0.6f ? k_Low : k_Critical);
+                noiseBarRenderer.SetPropertyBlock(m_Block);
+            }
+            if (voiceText != null)
+            {
+                var creature = director.ActiveEnemy;
+                bool heard = director.Phase == MissionPhase.Active && creature != null && Time.time - creature.LastHeardNoiseTime < 2f;
+                string label = heard ? "!! IT HEARD THAT !!" : NoiseLabel.Length > 0 ? "NOISE: " + NoiseLabel : "NOISE: quiet";
+                if (voice != null && !voice.Listening && voice.Status.Length > 0) label += "  (" + voice.Status + ")";
+                else if (voice != null && voice.CaptureActive) label += "  REC";
+                if (voiceText.text != label) voiceText.text = label;
+            }
+        }
         public Transform oxygenBar;
         public Renderer oxygenBarRenderer;
         public float refreshInterval = 0.2f;
@@ -32,6 +103,7 @@ namespace TrashAstronauts.UI
 
         void Update()
         {
+            UpdateNoiseMeter();
             if (Time.unscaledTime < m_NextRefresh) return;
             m_NextRefresh = Time.unscaledTime + refreshInterval;
             Refresh();
@@ -96,16 +168,6 @@ namespace TrashAstronauts.UI
 
             Set(threatText, DescribeThreat(director, blinkOn));
 
-            if (voiceText != null)
-            {
-                var voice = player != null ? player.voice : null;
-                string mic;
-                if (voice == null) mic = "";
-                else if (!voice.Listening) mic = voice.Status;
-                else if (voice.HeardRecently && session.Phase == MissionPhase.Active) mic = "MIC ))) IT CAN HEAR YOU";
-                else mic = (voice.CaptureActive ? "MIC REC " : "MIC ") + new string('|', 1 + Mathf.RoundToInt(voice.Loudness * 7f));
-                Set(voiceText, mic);
-            }
         }
 
         static string DescribeThreat(MissionDirector director, bool blinkOn)

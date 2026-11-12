@@ -213,7 +213,7 @@ namespace TrashAstronauts.Player
                     var director = TrashAstronauts.Mission.MissionDirector.Active;
                     if (director != null && director.noise != null)
                         director.noise.Emit(new TrashAstronauts.Core.NoiseEvent(transform.position + Vector3.up * 1.2f, thrusterLoudness,
-                            TrashAstronauts.Core.NoiseKind.Impact, TrashAstronauts.Core.PlayerId.Local));
+                            TrashAstronauts.Core.NoiseKind.Thruster, TrashAstronauts.Core.PlayerId.Local));
                 }
             }
             else m_ThrusterNoiseTimer = 0f;

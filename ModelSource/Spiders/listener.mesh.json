@@ -1,0 +1,430 @@
+{
+ "id": "listener",
+ "smoothness": 0.42,
+ "vertexTotal": 23970,
+ "indexTotal": 93333,
+ "triangles": 31111,
+ "hairs": 2205,
+ "parts": [
+  {
+   "name": "Body",
+   "parent": "",
+   "pivot": [
+    0.0,
+    0.0,
+    -0.0
+   ],
+   "material": "atlas",
+   "vertexStart": 0,
+   "vertexCount": 0,
+   "indexStart": 0,
+   "indexCount": 0
+  },
+  {
+   "name": "Head",
+   "parent": "Body",
+   "pivot": [
+    0.0,
+    0.0,
+    -0.0
+   ],
+   "material": "atlas",
+   "vertexStart": 0,
+   "vertexCount": 1319,
+   "indexStart": 0,
+   "indexCount": 5001
+  },
+  {
+   "name": "Abdomen",
+   "parent": "Body",
+   "pivot": [
+    0.0,
+    0.0,
+    -0.13300000131130219
+   ],
+   "material": "atlas",
+   "vertexStart": 1319,
+   "vertexCount": 1703,
+   "indexStart": 5001,
+   "indexCount": 6039
+  },
+  {
+   "name": "Eye_0",
+   "parent": "Head",
+   "pivot": [
+    -0.017338834702968597,
+    0.040098853409290314,
+    0.1140153706073761
+   ],
+   "material": "eye",
+   "vertexStart": 3022,
+   "vertexCount": 117,
+   "indexStart": 11040,
+   "indexCount": 576
+  },
+  {
+   "name": "Eye_1",
+   "parent": "Head",
+   "pivot": [
+    0.017338834702968597,
+    0.040098853409290314,
+    0.1140153706073761
+   ],
+   "material": "eye",
+   "vertexStart": 3139,
+   "vertexCount": 117,
+   "indexStart": 11616,
+   "indexCount": 576
+  },
+  {
+   "name": "Eye_2",
+   "parent": "Head",
+   "pivot": [
+    -0.04401286691427231,
+    0.03244046866893768,
+    0.10097256302833557
+   ],
+   "material": "eye",
+   "vertexStart": 3256,
+   "vertexCount": 117,
+   "indexStart": 12192,
+   "indexCount": 576
+  },
+  {
+   "name": "Eye_3",
+   "parent": "Head",
+   "pivot": [
+    0.04401286691427231,
+    0.03244046866893768,
+    0.10097256302833557
+   ],
+   "material": "eye",
+   "vertexStart": 3373,
+   "vertexCount": 117,
+   "indexStart": 12768,
+   "indexCount": 576
+  },
+  {
+   "name": "Eye_4",
+   "parent": "Head",
+   "pivot": [
+    -0.022244038060307503,
+    0.0541461780667305,
+    0.07973028719425201
+   ],
+   "material": "eye",
+   "vertexStart": 3490,
+   "vertexCount": 117,
+   "indexStart": 13344,
+   "indexCount": 576
+  },
+  {
+   "name": "Eye_5",
+   "parent": "Head",
+   "pivot": [
+    0.022244038060307503,
+    0.0541461780667305,
+    0.07973028719425201
+   ],
+   "material": "eye",
+   "vertexStart": 3607,
+   "vertexCount": 117,
+   "indexStart": 13920,
+   "indexCount": 576
+  },
+  {
+   "name": "Eye_6",
+   "parent": "Head",
+   "pivot": [
+    -0.05225957930088043,
+    0.04614826291799545,
+    0.0621955506503582
+   ],
+   "material": "eye",
+   "vertexStart": 3724,
+   "vertexCount": 117,
+   "indexStart": 14496,
+   "indexCount": 576
+  },
+  {
+   "name": "Eye_7",
+   "parent": "Head",
+   "pivot": [
+    0.05225957930088043,
+    0.04614826291799545,
+    0.0621955506503582
+   ],
+   "material": "eye",
+   "vertexStart": 3841,
+   "vertexCount": 117,
+   "indexStart": 15072,
+   "indexCount": 576
+  },
+  {
+   "name": "Jaw",
+   "parent": "Head",
+   "pivot": [
+    0.0,
+    -0.006000000052154064,
+    0.11760000139474869
+   ],
+   "material": "atlas",
+   "vertexStart": 3958,
+   "vertexCount": 886,
+   "indexStart": 15648,
+   "indexCount": 3789
+  },
+  {
+   "name": "Palp_0",
+   "parent": "Head",
+   "pivot": [
+    -0.052000001072883606,
+    -0.012000000104308128,
+    0.10080000013113022
+   ],
+   "material": "atlas",
+   "vertexStart": 4844,
+   "vertexCount": 515,
+   "indexStart": 19437,
+   "indexCount": 2142
+  },
+  {
+   "name": "Palp_1",
+   "parent": "Head",
+   "pivot": [
+    0.052000001072883606,
+    -0.012000000104308128,
+    0.10080000013113022
+   ],
+   "material": "atlas",
+   "vertexStart": 5359,
+   "vertexCount": 515,
+   "indexStart": 21579,
+   "indexCount": 2142
+  },
+  {
+   "name": "Leg_0",
+   "parent": "Body",
+   "pivot": [
+    -0.07999999821186066,
+    -0.01679999940097332,
+    0.07280000299215317
+   ],
+   "material": "atlas",
+   "vertexStart": 5874,
+   "vertexCount": 1242,
+   "indexStart": 23721,
+   "indexCount": 4641
+  },
+  {
+   "name": "LegLower_0",
+   "parent": "Leg_0",
+   "pivot": [
+    -0.36901453137397766,
+    0.3266301453113556,
+    0.5012816190719604
+   ],
+   "material": "atlas",
+   "vertexStart": 7116,
+   "vertexCount": 1070,
+   "indexStart": 28362,
+   "indexCount": 4173
+  },
+  {
+   "name": "Leg_1",
+   "parent": "Body",
+   "pivot": [
+    0.07999999821186066,
+    -0.01679999940097332,
+    0.07280000299215317
+   ],
+   "material": "atlas",
+   "vertexStart": 8186,
+   "vertexCount": 1242,
+   "indexStart": 32535,
+   "indexCount": 4641
+  },
+  {
+   "name": "LegLower_1",
+   "parent": "Leg_1",
+   "pivot": [
+    0.37798210978507996,
+    0.3041408061981201,
+    0.5145766735076904
+   ],
+   "material": "atlas",
+   "vertexStart": 9428,
+   "vertexCount": 1070,
+   "indexStart": 37176,
+   "indexCount": 4173
+  },
+  {
+   "name": "Leg_2",
+   "parent": "Body",
+   "pivot": [
+    -0.07999999821186066,
+    -0.01679999940097332,
+    0.026599999517202377
+   ],
+   "material": "atlas",
+   "vertexStart": 10498,
+   "vertexCount": 1190,
+   "indexStart": 41349,
+   "indexCount": 4524
+  },
+  {
+   "name": "LegLower_2",
+   "parent": "Leg_2",
+   "pivot": [
+    -0.5229323506355286,
+    0.27305734157562256,
+    0.18781420588493347
+   ],
+   "material": "atlas",
+   "vertexStart": 11688,
+   "vertexCount": 1022,
+   "indexStart": 45873,
+   "indexCount": 4065
+  },
+  {
+   "name": "Leg_3",
+   "parent": "Body",
+   "pivot": [
+    0.07999999821186066,
+    -0.01679999940097332,
+    0.026599999517202377
+   ],
+   "material": "atlas",
+   "vertexStart": 12710,
+   "vertexCount": 1190,
+   "indexStart": 49938,
+   "indexCount": 4524
+  },
+  {
+   "name": "LegLower_3",
+   "parent": "Leg_3",
+   "pivot": [
+    0.5196558237075806,
+    0.27868378162384033,
+    0.18662163615226746
+   ],
+   "material": "atlas",
+   "vertexStart": 13900,
+   "vertexCount": 1022,
+   "indexStart": 54462,
+   "indexCount": 4065
+  },
+  {
+   "name": "Leg_4",
+   "parent": "Body",
+   "pivot": [
+    -0.07999999821186066,
+    -0.01679999940097332,
+    -0.019600000232458115
+   ],
+   "material": "atlas",
+   "vertexStart": 14922,
+   "vertexCount": 1174,
+   "indexStart": 58527,
+   "indexCount": 4488
+  },
+  {
+   "name": "LegLower_4",
+   "parent": "Leg_4",
+   "pivot": [
+    -0.5192942023277283,
+    0.24752195179462433,
+    -0.14556558430194855
+   ],
+   "material": "atlas",
+   "vertexStart": 16096,
+   "vertexCount": 1006,
+   "indexStart": 63015,
+   "indexCount": 4029
+  },
+  {
+   "name": "Leg_5",
+   "parent": "Body",
+   "pivot": [
+    0.07999999821186066,
+    -0.01679999940097332,
+    -0.019600000232458115
+   ],
+   "material": "atlas",
+   "vertexStart": 17102,
+   "vertexCount": 1174,
+   "indexStart": 67044,
+   "indexCount": 4488
+  },
+  {
+   "name": "LegLower_5",
+   "parent": "Leg_5",
+   "pivot": [
+    0.5224865674972534,
+    0.24348391592502594,
+    -0.146480992436409
+   ],
+   "material": "atlas",
+   "vertexStart": 18276,
+   "vertexCount": 1006,
+   "indexStart": 71532,
+   "indexCount": 4029
+  },
+  {
+   "name": "Leg_6",
+   "parent": "Body",
+   "pivot": [
+    -0.07999999821186066,
+    -0.01679999940097332,
+    -0.0658000037074089
+   ],
+   "material": "atlas",
+   "vertexStart": 19282,
+   "vertexCount": 1258,
+   "indexStart": 75561,
+   "indexCount": 4677
+  },
+  {
+   "name": "LegLower_6",
+   "parent": "Leg_6",
+   "pivot": [
+    -0.4278596043586731,
+    0.302016019821167,
+    -0.5110399723052979
+   ],
+   "material": "atlas",
+   "vertexStart": 20540,
+   "vertexCount": 1086,
+   "indexStart": 80238,
+   "indexCount": 4209
+  },
+  {
+   "name": "Leg_7",
+   "parent": "Body",
+   "pivot": [
+    0.07999999821186066,
+    -0.01679999940097332,
+    -0.0658000037074089
+   ],
+   "material": "atlas",
+   "vertexStart": 21626,
+   "vertexCount": 1258,
+   "indexStart": 84447,
+   "indexCount": 4677
+  },
+  {
+   "name": "LegLower_7",
+   "parent": "Leg_7",
+   "pivot": [
+    0.4221801161766052,
+    0.3194287419319153,
+    -0.5037705898284912
+   ],
+   "material": "atlas",
+   "vertexStart": 22884,
+   "vertexCount": 1086,
+   "indexStart": 89124,
+   "indexCount": 4209
+  }
+ ]
+}

@@ -18,5 +18,7 @@ MonoBehaviour:
   creditValue: 600
   mass: 14
   bulky: 1
+  bonusSpawn: 0
+  fragility: 0.5
   scannerBlurb: Reactor part. Heavy. Do not lick.
   prefab: {fileID: 4765662649092243120, guid: 97106b081e29b4009b91790b1882f971, type: 3}

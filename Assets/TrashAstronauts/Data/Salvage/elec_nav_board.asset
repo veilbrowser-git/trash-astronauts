@@ -18,5 +18,7 @@ MonoBehaviour:
   creditValue: 150
   mass: 1.5
   bulky: 0
+  bonusSpawn: 0
+  fragility: 0.6
   scannerBlurb: Still knows the way home.
   prefab: {fileID: 7654965998540258398, guid: 4a64f15adc50242d091b8e896594bd56, type: 3}

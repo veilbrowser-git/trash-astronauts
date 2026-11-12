@@ -38,7 +38,37 @@ namespace TrashAstronauts.Mission
         public bool HasBeenCollected { get; private set; }
         public bool IsHeld => grab != null && grab.isSelected;
         public Rigidbody Body => m_Body;
-        public int Value => definition != null ? definition.creditValue : 0;
+        /// <summary>What it is worth now. Delicate things lose value when they are banged about.</summary>
+        public int Value => m_DamagedValue >= 0 ? m_DamagedValue : (definition != null ? definition.creditValue : 0);
+        public int FullValue => definition != null ? definition.creditValue : 0;
+        public int DamageCount { get; private set; }
+        int m_DamagedValue = -1;
+
+        /// <summary>
+        /// Called when it hits something. A hard enough knock costs a delicate item some of its value,
+        /// down to a third of what it started at. Scrap does not care.
+        /// </summary>
+        public int ApplyImpact(float speed)
+        {
+            if (definition == null || definition.fragility <= 0f || IsSecured || isTraining) return 0;
+            var director = m_Director != null ? m_Director : MissionDirector.Active;
+            if (director == null || director.Session == null || director.Phase != MissionPhase.Active) return 0;
+            const float safeSpeed = 2.0f, wreckingSpeed = 7f;
+            float severity = Mathf.Clamp01((speed - safeSpeed) / (wreckingSpeed - safeSpeed));
+            if (severity <= 0f) return 0;
+
+            int full = definition.creditValue;
+            int floor = Mathf.CeilToInt(full / 3f);
+            int loss = Mathf.Max(1, Mathf.RoundToInt(full * definition.fragility * 0.35f * (0.3f + 0.7f * severity)));
+            int now = Mathf.Max(floor, Value - loss);
+            loss = Value - now;
+            if (loss <= 0) return 0;
+            m_DamagedValue = now;
+            DamageCount++;
+            director.Session.DamageSalvage(SalvageId, now);
+            if (scanTag != null) scanTag.Show(definition.displayName + "  DAMAGED  -" + loss, now, 2.5f);
+            return loss;
+        }
 
         void Awake()
         {
@@ -110,6 +140,8 @@ namespace TrashAstronauts.Mission
         public void Initialize(MissionDirector director, string salvageId, SalvageDefinition def, Cuttable mount)
         {
             m_Director = director;
+            m_DamagedValue = -1;
+            DamageCount = 0;
             SalvageId = salvageId;
             if (def != null) definition = def;
             SpawnPosition = transform.position;
@@ -148,7 +180,7 @@ namespace TrashAstronauts.Mission
             LastHolder = player != null ? player.Id : PlayerId.Local;
             WasThrown = false;
             if (impact != null) impact.LastHandler = LastHolder;
-            if (scanTag != null && definition != null) scanTag.Show(definition.displayName, definition.creditValue, 2.5f);
+            if (scanTag != null && definition != null) scanTag.Show(definition.displayName, Value, 2.5f);
 
             if (!HasBeenCollected && !isTraining)
             {

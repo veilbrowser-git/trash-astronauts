@@ -60,11 +60,11 @@ namespace TrashAstronauts.EditorTools
 
             // Lighting: dim flat ambient so routes stay readable with the flashlight off, dark fog for mood.
             RenderSettings.ambientMode = AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.13f, 0.15f, 0.19f);
+            RenderSettings.ambientLight = new Color(0.095f, 0.11f, 0.145f); // darker than before: the flashlight matters now
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.ExponentialSquared;
             RenderSettings.fogColor = new Color(0.015f, 0.02f, 0.03f);
-            RenderSettings.fogDensity = 0.03f;
+            RenderSettings.fogDensity = 0.04f;
             RenderSettings.skybox = null;
 
             s_Level = new GameObject("Level").transform;
@@ -122,6 +122,9 @@ namespace TrashAstronauts.EditorTools
 
             var blackout = missionGo.AddComponent<BlackoutController>();
             blackout.director = director;
+            var scares = missionGo.AddComponent<ScareDirector>();
+            scares.director = director;
+            scares.apparition = BuildApparition(missionGo.transform);
 
             // --- tutorial practice item
             var practiceSpawn = Empty(missionGo.transform, "Practice Scrap Spawn", new Vector3(0.9f, 1.15f, 0.4f));

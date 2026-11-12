@@ -33,6 +33,22 @@ MonoBehaviour:
     secondsToCool: 5
     restartHeatFraction: 0.35
     secondsPerCutPoint: 0.55
+  tranqDartCost: 120
+  maxTranqDarts: 6
+  tranqSleepSeconds: 8
+  scannerUpgradeCost: 300
+  scannerUpgradeRangeMultiplier: 1.6
+  cutterUpgradeCost: 350
+  cutterUpgradeHeatMultiplier: 1.6
+  trickShotDistance: 2.2
+  trickShotBonusFraction: 0.25
+  exertionOxygenCost: 0.4
+  playerMass: 90
+  blackoutsEnabled: 1
+  blackoutMinDelay: 70
+  blackoutMaxDelay: 170
+  blackoutMinDuration: 12
+  blackoutMaxDuration: 20
   enemy:
     sightRange: 9
     sightHalfAngle: 60
@@ -40,10 +56,10 @@ MonoBehaviour:
     hearingRadiusAtFullLoudness: 16
     patrolSpeed: 0.9
     investigateSpeed: 1.5
-    chaseSpeed: 2.2
+    chaseSpeed: 3
     searchSpeed: 1.1
     investigateLingerSeconds: 4
-    chaseLoseSightSeconds: 3
+    chaseLoseSightSeconds: 5
     searchSeconds: 7
     catchRadius: 0.95
     wakeDelaySeconds: 20

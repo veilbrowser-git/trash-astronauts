@@ -21,6 +21,8 @@ namespace TrashAstronauts.Mission
         float m_LastAudio = -10f;
         float m_LastNoise = -10f;
         float m_SpawnTime;
+        SalvageItem m_Item;
+        bool m_LookedForItem;
 
         /// <summary>Who last handled this object, so a noise can be attributed to a player.</summary>
         public PlayerId LastHandler { get; set; } = PlayerId.None;
@@ -34,6 +36,10 @@ namespace TrashAstronauts.Mission
             if (speed < audioSpeedThreshold) return;
 
             Vector3 point = collision.contactCount > 0 ? collision.GetContact(0).point : transform.position;
+
+            // Delicate salvage is worth less every time it is banged into something.
+            if (!m_LookedForItem) { m_Item = GetComponent<SalvageItem>(); m_LookedForItem = true; }
+            if (m_Item != null) m_Item.ApplyImpact(speed);
 
             if (Time.time - m_LastAudio >= audioCooldown && Sfx.Library != null)
             {

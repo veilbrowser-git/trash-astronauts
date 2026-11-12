@@ -10,3 +10,7 @@
 | `Assets/Settings/*` (URP assets) | Unity's URP Blank project template | Unity Companion License |
 
 No third-party art, audio, fonts or code were downloaded for this project.
+
+## Spider models (version 0.6.0)
+
+The four spider creatures are original work generated for this project by `ModelSource/Spiders/build_spiders.py` running in Blender. No third-party models, scans or textures are used; the colour textures are painted by the same script.

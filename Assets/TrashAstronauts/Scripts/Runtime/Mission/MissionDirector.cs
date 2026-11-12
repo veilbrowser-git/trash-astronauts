@@ -527,8 +527,69 @@ namespace TrashAstronauts.Mission
 
         // ------------------------------------------------------------------ tick
 
+        [Header("Spawn safety")]
+        [Tooltip("Puts the player's HEAD (not just their play-space origin) at the hub spawn when the game starts, and brings them back if they end up outside the tug before a contract has started.")]
+        public bool keepPlayersInHub = true;
+        /// <summary>How many times a player had to be put back inside the tug.</summary>
+        public int HubRescueCount { get; private set; }
+        bool m_SpawnAligned;
+        float m_OutsideHubTimer;
+        float m_SceneStartTime = -1f;
+
+        /// <summary>
+        /// A headset's play space is rarely centred on the person wearing it: someone standing a couple of
+        /// metres from the middle of their room would otherwise start a couple of metres from the spawn
+        /// point, which in a 4 m wide tug means outside it. Teleporting is head-accurate, so do one at the
+        /// start, and whenever a player is found outside the tug while there is no contract running.
+        /// </summary>
+        void GuardHubSpawn(float dt)
+        {
+            if (!keepPlayersInHub || hubSpawn == null || safeZone == null || m_Players.Count == 0) return;
+            if (m_SceneStartTime < 0f) m_SceneStartTime = Time.unscaledTime;
+
+            if (!m_SpawnAligned)
+            {
+                // Give tracking a moment to report where the head really is.
+                if (Time.unscaledTime - m_SceneStartTime < 0.5f) return;
+                m_SpawnAligned = true;
+                if (Session == null || Session.Phase != MissionPhase.Hub) return;
+                foreach (var player in m_Players)
+                {
+                    if (player == null || player.locomotion == null) continue;
+                    // Only if they are standing away from the middle of their play space (that is what puts
+                    // the head somewhere other than the spawn point). Someone centred is left alone.
+                    Vector3 offset = player.HeadPosition - player.transform.position;
+                    offset.y = 0f;
+                    if (offset.magnitude > 0.3f) player.locomotion.TeleportTo(hubSpawn.position, hubSpawn.rotation);
+                }
+                return;
+            }
+
+            if (Session == null || Session.Phase != MissionPhase.Hub)
+            {
+                m_OutsideHubTimer = 0f;
+                return;
+            }
+            bool anyOutside = false;
+            foreach (var player in m_Players)
+            {
+                if (player == null || player.locomotion == null) continue;
+                Vector3 head = player.HeadPosition;
+                head.y = safeZone.transform.position.y; // only the floor plan matters
+                if (safeZone.Contains(head)) continue;
+                anyOutside = true;
+                if (m_OutsideHubTimer + dt >= 0.75f)
+                {
+                    player.locomotion.TeleportTo(hubSpawn.position, hubSpawn.rotation);
+                    HubRescueCount++;
+                }
+            }
+            m_OutsideHubTimer = anyOutside ? (m_OutsideHubTimer + dt >= 0.75f ? 0f : m_OutsideHubTimer + dt) : 0f;
+        }
+
         void Update()
         {
+            GuardHubSpawn(Time.unscaledDeltaTime);
             bool everyoneSafe = true;
             for (int i = 0; i < m_Players.Count; i++)
             {

@@ -17,6 +17,19 @@ namespace TrashAstronauts.Mission
         public Transform[] elbows;
         public Transform[] tendrils;
         public Transform jaw;
+        [Header("Spider")]
+        [Tooltip("Eight legs hinged at the body (shoulders) and knee (elbows), animated as a real spider's.")]
+        public bool spider;
+        public Transform abdomen;
+        public Transform[] palps;
+
+        Vector3[] m_LegLiftAxis;
+        float[] m_LegLiftSign;
+        float[] m_LegSide;
+        Quaternion[] m_PalpRest;
+        Quaternion m_AbdomenRest = Quaternion.identity;
+        Quaternion m_BodyRestRotation = Quaternion.identity;
+        float m_Gait;
 
         Quaternion[] m_ShoulderRest;
         Quaternion[] m_ElbowRest;
@@ -39,6 +52,114 @@ namespace TrashAstronauts.Mission
             if (head != null) m_HeadRest = head.localRotation;
             if (body != null) m_BodyRest = body.localPosition;
             m_LastPosition = transform.position;
+            if (spider) CaptureSpider();
+        }
+
+        void CaptureSpider()
+        {
+            int count = shoulders != null ? shoulders.Length : 0;
+            m_LegLiftAxis = new Vector3[count];
+            m_LegLiftSign = new float[count];
+            m_LegSide = new float[count];
+            for (int i = 0; i < count; i++)
+            {
+                // Which way the leg points, from the body joint to the knee.
+                Vector3 outward = elbows != null && i < elbows.Length && elbows[i] != null ? elbows[i].localPosition : Vector3.right;
+                outward.y = 0f;
+                outward = outward.sqrMagnitude > 1e-6f ? outward.normalized : Vector3.right;
+                m_LegSide[i] = outward.x >= 0f ? 1f : -1f;
+                m_LegLiftAxis[i] = Vector3.Cross(Vector3.up, outward).normalized;
+                // Work out which direction of turn about that axis raises the leg.
+                m_LegLiftSign[i] = (Quaternion.AngleAxis(10f, m_LegLiftAxis[i]) * outward).y > 0f ? 1f : -1f;
+            }
+            m_PalpRest = Capture(palps);
+            if (abdomen != null) m_AbdomenRest = abdomen.localRotation;
+            if (body != null) m_BodyRestRotation = body.localRotation;
+        }
+
+        /// <summary>
+        /// Legs step in the alternating pattern real spiders use (two sets of four), slowly while it
+        /// wanders and in a blur when it hunts. Hunting, the front pairs rear up in a threat display, the
+        /// fangs spread and the abdomen lifts. Dormant, it curls its legs under itself.
+        /// </summary>
+        void AnimateSpider(float t, float dt, float speed, EnemyState state, bool scaring)
+        {
+            float moving = Mathf.Clamp01(speed / 0.5f);
+            float rate = Mathf.Lerp(1.5f, 12f, m_Aggression) * Mathf.Lerp(0.55f, 1f, moving);
+            m_Gait += dt * rate * m_Awake;
+            float swingAmp = Mathf.Lerp(7f, 24f, Mathf.Max(m_Aggression, moving * 0.5f));
+            float liftAmp = Mathf.Lerp(5f, 20f, Mathf.Max(m_Aggression, moving * 0.4f));
+            float curl = 1f - m_Awake;
+
+            int legs = shoulders != null ? shoulders.Length : 0;
+            for (int i = 0; i < legs; i++)
+            {
+                if (shoulders[i] == null) continue;
+                int row = i / 2;
+                // Alternating sets: left 1, right 2, left 3, right 4 move together; the others half a cycle later.
+                float phase = m_Gait + ((row + i % 2) % 2) * Mathf.PI + row * 0.35f;
+                float swing = Mathf.Sin(phase) * swingAmp;
+                float lift = Mathf.Max(0f, Mathf.Cos(phase)) * liftAmp;
+                if (scaring)
+                {
+                    // In the player's face: every leg thrown wide and shaking, the front pairs reaching round their head.
+                    swing = Mathf.Sin(t * 47f + i * 1.3f) * 9f;
+                    lift = (row < 2 ? 30f : 12f) + Mathf.Sin(t * 53f + i * 2.1f) * 8f;
+                }
+
+                // Threat display: the first two pairs reach up and forward.
+                float rear = row == 0 ? 34f : row == 1 ? 14f : row == 3 ? -6f : 0f;
+                lift += rear * m_Aggression + m_Twitch * 10f * Mathf.Sin(i * 2.1f);
+                float forward = (row == 0 ? 20f : row == 1 ? 8f : 0f) * m_Aggression;
+                lift -= curl * 52f;
+
+                Quaternion yaw = Quaternion.AngleAxis(swing - m_LegSide[i] * forward, Vector3.up);
+                Quaternion raise = Quaternion.AngleAxis(lift * m_LegLiftSign[i], m_LegLiftAxis[i]);
+                shoulders[i].localRotation = m_ShoulderRest[i] * yaw * raise;
+
+                if (elbows != null && i < elbows.Length && elbows[i] != null)
+                {
+                    float flex = Mathf.Sin(phase + 0.7f) * (6f + liftAmp * 0.5f) - m_Aggression * (row == 0 ? 18f : 6f) - curl * 58f + m_Twitch * 8f;
+                    elbows[i].localRotation = m_ElbowRest[i] * Quaternion.AngleAxis(flex * m_LegLiftSign[i], m_LegLiftAxis[i]);
+                }
+            }
+
+            if (palps != null)
+            {
+                for (int i = 0; i < palps.Length; i++)
+                {
+                    if (palps[i] == null) continue;
+                    float side = i % 2 == 0 ? -1f : 1f;
+                    palps[i].localRotation = m_PalpRest[i] * Quaternion.Euler(
+                        Mathf.Sin(t * 5.3f + i * 1.9f) * 10f * (0.4f + m_Aggression) - m_Aggression * 22f - curl * 30f,
+                        side * Mathf.Sin(t * 3.1f + i) * 7f, 0f);
+                }
+            }
+
+            if (abdomen != null)
+            {
+                float breath = 1f + Mathf.Sin(t * (1.4f + m_Aggression * 3f)) * 0.018f * m_Awake;
+                abdomen.localScale = new Vector3(breath, breath, 1f);
+                abdomen.localRotation = m_AbdomenRest * Quaternion.Euler(-m_Aggression * 16f - m_Twitch * 4f, Mathf.Sin(t * 0.9f) * 3f, 0f);
+            }
+
+            if (body != null)
+            {
+                // The whole animal turns to look, a little; a spider cannot turn its head.
+                Vector3 look = Vector3.zero;
+                if (state == EnemyState.Search || state == EnemyState.Investigate) look = new Vector3(Mathf.Sin(t * 1.7f) * 4f, Mathf.Sin(t * 0.9f) * 20f, Mathf.Sin(t * 2.3f) * 3f);
+                else if (state == EnemyState.Patrol) look = new Vector3(Mathf.Sin(t * 0.6f) * 2f, Mathf.Sin(t * 0.4f) * 9f, 0f);
+                else if (state == EnemyState.Chase) look = new Vector3(-10f + Random.Range(-1.5f, 1.5f), Random.Range(-2f, 2f), Random.Range(-2f, 2f));
+                if (scaring) look = new Vector3(-24f, 0f, 0f);
+                body.localRotation = Quaternion.Slerp(body.localRotation, m_BodyRestRotation * Quaternion.Euler(look), 1f - Mathf.Exp(-7f * dt));
+            }
+
+            if (jaw != null)
+            {
+                // Chelicerae swing forward and up to bare the fangs.
+                float open = m_Aggression * 24f + m_Twitch * 8f + Mathf.Sin(t * 9f) * 3f * m_Aggression + (scaring ? 34f + Mathf.Sin(t * 38f) * 14f : 0f);
+                jaw.localRotation = Quaternion.Euler(-open, 0f, 0f);
+            }
         }
 
         static Quaternion[] Capture(Transform[] transforms)
@@ -78,6 +199,12 @@ namespace TrashAstronauts.Mission
                 float bob = Mathf.Sin(t * (1.1f + m_Aggression * 3f)) * 0.03f * m_Awake;
                 Vector3 jitter = m_Aggression > 0.6f ? Random.insideUnitSphere * 0.006f : Vector3.zero;
                 body.localPosition = m_BodyRest + new Vector3(0f, bob - (1f - m_Awake) * 0.12f, 0f) + jitter;
+            }
+
+            if (spider)
+            {
+                AnimateSpider(t, dt, speed, state, scaring);
+                return;
             }
 
             // Limbs: curled in while dormant, dangling on patrol, splayed forward when hunting.

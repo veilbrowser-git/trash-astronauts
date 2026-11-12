@@ -18,5 +18,7 @@ MonoBehaviour:
   creditValue: 190
   mass: 2.5
   bulky: 0
+  bonusSpawn: 0
+  fragility: 0.7
   scannerBlurb: Receives. Does not listen.
   prefab: {fileID: 7913809154196258007, guid: 8e01c607905b841b9b0e4c36ee6c1459, type: 3}

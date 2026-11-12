@@ -67,6 +67,20 @@ namespace TrashAstronauts.Mission
         float m_WakeTimer;
         float m_DoorTimer;
         float m_LingerSpin;
+        bool m_Direct;
+        bool m_SawLastStep;
+        bool m_SeesNow;
+        Vector3 m_LastSeenPosition;
+        Vector3 m_LastSeenVelocity;
+
+        /// <summary>When it last reacted to a sound (Time.time).</summary>
+        public float LastHeardNoiseTime { get; private set; } = -100f;
+        /// <summary>True while it is flying straight at its quarry instead of following its route points.</summary>
+        public bool IsPursuingDirectly => m_Direct;
+        [Tooltip("How far from its route it will leave to reach something it is hunting.")]
+        public float huntOffGraphDistance = 14f;
+        [Tooltip("Speed multiplier for the last few metres of a chase.")]
+        public float lungeMultiplier = 1.3f;
         float m_SedateTimer;
         PlayerContext m_Target;
 
@@ -83,8 +97,8 @@ namespace TrashAstronauts.Mission
         [Header("Volume (kept low on purpose)")]
         [Range(0f, 1f)] public float voiceVolume = 0.35f;
         [Header("Catch jumpscare")]
-        public float scareDistance = 0.78f;
-        public float scareLungeSeconds = 0.12f;
+        public float scareDistance = 0.55f;
+        public float scareLungeSeconds = 0.09f;
         public float scareHoldSeconds = 0.75f;
         /// <summary>Distance to the nearest player, for wrist warnings.</summary>
         public float NearestPlayerDistance { get; private set; } = float.MaxValue;
@@ -169,7 +183,11 @@ namespace TrashAstronauts.Mission
         {
             if (!m_Running || Brain == null || IsSedated) return;
             if (IsForbidden(noise.Position) && !IsNearGraph(noise.Position)) return;
-            if (Brain.HearNoise(noise, transform.position)) m_HasPath = false;
+            if (Brain.HearNoise(noise, transform.position))
+            {
+                m_HasPath = false;
+                LastHeardNoiseTime = Time.time;
+            }
         }
 
         void Update()
@@ -205,6 +223,21 @@ namespace TrashAstronauts.Mission
             }
 
             bool sees = Perceive(out Vector3 playerPosition, out bool playerSafe);
+            m_SeesNow = sees && !playerSafe;
+            if (m_SeesNow)
+            {
+                // Remember where the quarry is and which way it is going, for when it slips out of sight.
+                if (m_SawLastStep && dt > 0f)
+                    m_LastSeenVelocity = Vector3.Lerp(m_LastSeenVelocity, Vector3.ClampMagnitude((playerPosition - m_LastSeenPosition) / dt, 4f), 0.35f);
+                else m_LastSeenVelocity = Vector3.zero;
+                m_LastSeenPosition = playerPosition;
+            }
+            else if (m_SawLastStep && Brain.State == EnemyState.Chase)
+            {
+                // Just lost sight: keep going to where they were heading, not where they were.
+                Brain.Redirect(PredictQuarry(1.2f));
+            }
+            m_SawLastStep = m_SeesNow;
             Vector3 destination = CurrentDestination();
             bool arrived = m_HasPath && m_PathIndex >= m_Path.Count;
 
@@ -273,7 +306,7 @@ namespace TrashAstronauts.Mission
             Vector3 origin = eye != null ? eye.position : transform.position;
             Vector3 to = point - origin;
             // Very close targets are noticed regardless of facing.
-            if (distance > 1.6f && Vector3.Angle(transform.forward, to) > m_Tuning.sightHalfAngle) return false;
+            if (distance > 2.4f && Vector3.Angle(transform.forward, to) > m_Tuning.sightHalfAngle) return false;
             return !Physics.Linecast(origin, point, GameLayers.EnvironmentMask, QueryTriggerInteraction.Ignore);
         }
 
@@ -296,8 +329,58 @@ namespace TrashAstronauts.Mission
 
         // ------------------------------------------------------------------ movement
 
+        Vector3 PredictQuarry(float seconds)
+        {
+            Vector3 guess = m_LastSeenPosition + m_LastSeenVelocity * seconds;
+            if (Physics.Linecast(m_LastSeenPosition, guess, out RaycastHit hit, GameLayers.EnvironmentMask, QueryTriggerInteraction.Ignore))
+                guess = Vector3.MoveTowards(hit.point, m_LastSeenPosition, 0.5f);
+            return guess;
+        }
+
+        /// <summary>True if it could fly straight from a to b at its current height without hitting anything or entering a no-go zone.</summary>
+        bool ClearLine(Vector3 a, Vector3 b)
+        {
+            a.y = b.y = transform.position.y;
+            Vector3 d = b - a;
+            float length = d.magnitude;
+            if (length < 0.05f) return true;
+            if (Physics.SphereCast(a, 0.22f, d / length, out _, length, GameLayers.EnvironmentMask, QueryTriggerInteraction.Ignore)) return false;
+            for (float s = 0.75f; s < length; s += 0.75f)
+            {
+                if (IsForbidden(a + d * (s / length))) return false;
+            }
+            return !IsForbidden(b);
+        }
+
         Vector3 CurrentDestination()
         {
+            if (Brain.State != EnemyState.Patrol)
+            {
+                // With a clear run at what it is hunting (the quarry, or the place a sound came from), go
+                // straight for it; otherwise plan through the route points.
+                bool chasing = Brain.State == EnemyState.Chase;
+                Vector3 goal = AtHoverHeight(Brain.PointOfInterest);
+                if (ClearLine(transform.position, goal))
+                {
+                    if (!m_Direct || (m_PathGoal - Brain.PointOfInterest).sqrMagnitude > 0.15f * 0.15f || (chasing && m_PathIndex >= m_Path.Count))
+                    {
+                        m_Path.Clear();
+                        m_Path.Add(goal);
+                        m_PathIndex = 0;
+                        m_PathGoal = Brain.PointOfInterest;
+                        m_HasPath = true;
+                        m_Direct = true;
+                    }
+                    return Brain.PointOfInterest;
+                }
+                if (m_Direct)
+                {
+                    m_Direct = false;
+                    m_HasPath = false;
+                }
+            }
+            else m_Direct = false;
+
             if (Brain.State == EnemyState.Patrol)
             {
                 if (patrolRoute == null || patrolRoute.Length == 0) return transform.position;
@@ -351,12 +434,16 @@ namespace TrashAstronauts.Mission
             if (!allowFinalApproach) return;
             Vector3 final = AtHoverHeight(goal);
             Vector3 last = AtHoverHeight(end.Position);
-            if (Vector3.Distance(last, final) <= maxOffGraphDistance
+            if (Vector3.Distance(last, final) <= huntOffGraphDistance
                 && !IsForbidden(final)
                 && !Physics.Linecast(last, final, GameLayers.EnvironmentMask, QueryTriggerInteraction.Ignore))
             {
                 m_Path.Add(final);
             }
+
+            // Cut corners: skip route points it can already fly straight past.
+            int guard = 0;
+            while (m_Path.Count >= 2 && guard++ < 8 && ClearLine(transform.position, m_Path[1])) m_Path.RemoveAt(0);
         }
 
         Vector3 AtHoverHeight(Vector3 p) => new Vector3(p.x, hoverHeight, p.z);
@@ -373,8 +460,10 @@ namespace TrashAstronauts.Mission
             }
             m_LingerSpin = 0f;
 
+            bool chasing = Brain.State == EnemyState.Chase;
             Vector3 target = m_Path[m_PathIndex];
             Vector3 to = target - transform.position;
+            to.y = 0f; // it steers in plan; height is eased separately below
             float distance = to.magnitude;
             if (distance <= arriveDistance)
             {
@@ -382,15 +471,25 @@ namespace TrashAstronauts.Mission
                 return;
             }
 
-            Vector3 flat = new Vector3(to.x, 0f, to.z);
+            Vector3 flat = to;
             if (flat.sqrMagnitude > 0.0001f)
             {
                 transform.rotation = Quaternion.RotateTowards(transform.rotation,
-                    Quaternion.LookRotation(flat.normalized, Vector3.up), turnSpeed * dt);
+                    Quaternion.LookRotation(flat.normalized, Vector3.up), turnSpeed * (chasing ? 1.8f : 1f) * dt);
             }
 
-            float step = Mathf.Min(distance, Brain.SpeedForState * dt);
+            // It lunges over the last few metres of a chase.
+            float speed = Brain.SpeedForState;
+            if (chasing && m_SeesNow && NearestPlayerDistance < 4f) speed *= lungeMultiplier;
+            float step = Mathf.Min(distance, speed * dt);
             Vector3 next = transform.position + to / distance * step;
+
+            // Rise or sink toward a quarry that is floating above or below it.
+            // Only when it has left its route to fly straight at them; the routes are laid out at its usual height.
+            float wantHeight = hoverHeight;
+            if (chasing && m_Direct && m_SeesNow && m_Target != null)
+                wantHeight = Mathf.Clamp(m_Target.HeadPosition.y - 0.15f, hoverHeight - 0.5f, hoverHeight + 0.8f);
+            next.y = Mathf.MoveTowards(transform.position.y, wantHeight, 1.1f * dt);
 
             // Doors: wait, then open them. Slow and loud on purpose so the player gets warning.
             if (doors != null)
@@ -399,13 +498,31 @@ namespace TrashAstronauts.Mission
                 {
                     if (door == null || !door.BlocksSegment(transform.position, transform.position + to / distance * Mathf.Min(distance, 1.4f))) continue;
                     m_DoorTimer += dt;
-                    if (m_DoorTimer >= doorOpenDelay && !door.IsOpen && !door.locked) door.SetOpen(true);
+                    if (m_DoorTimer >= (chasing ? doorOpenDelay * 0.5f : doorOpenDelay) && !door.IsOpen && !door.locked) door.SetOpen(true);
                     return;
                 }
             }
             m_DoorTimer = 0f;
 
             if (IsForbidden(next)) return;
+
+            // Off its route (flying straight at something, or at an unusual height) it checks where it is
+            // about to be, so it can never push into a wall, a crate or anything hanging from the ceiling.
+            bool offRoute = m_Direct || Mathf.Abs(next.y - hoverHeight) > 0.02f;
+            if (offRoute && Physics.CheckSphere(next, 0.13f, GameLayers.EnvironmentMask, QueryTriggerInteraction.Ignore))
+            {
+                next.y = transform.position.y; // try the same step without changing height
+                if (Physics.CheckSphere(next, 0.13f, GameLayers.EnvironmentMask, QueryTriggerInteraction.Ignore))
+                {
+                    // Blocked: stay put this step, drift back toward its usual height if that is clear, and plan again.
+                    Vector3 settle = transform.position;
+                    settle.y = Mathf.MoveTowards(settle.y, hoverHeight, 1.1f * dt);
+                    if (!Physics.CheckSphere(settle, 0.13f, GameLayers.EnvironmentMask, QueryTriggerInteraction.Ignore)) transform.position = settle;
+                    m_HasPath = false;
+                    m_Direct = false;
+                    return;
+                }
+            }
             transform.position = next;
         }
 
@@ -422,35 +539,144 @@ namespace TrashAstronauts.Mission
             if (director != null) director.FailMission(FailureReason.Caught, player != null ? player.Id : PlayerId.Local);
         }
 
+        [Header("Jumpscare")]
+        [Tooltip("Before it strikes, every light dies and everything goes silent for this long.")]
+        public float scareDarkSeconds = 0.5f;
+        [Tooltip("How long it thrashes in the player's face after the strike.")]
+        public float scareMaulSeconds = 1.7f;
+        [Tooltip("How close its face lunges on each bite (metres from the eyes to its centre).")]
+        public float scareBiteDistance = 0.36f;
+        /// <summary>0 = not scaring, 1 = the dark beat, 2 = in the player's face.</summary>
+        public int ScarePhase { get; private set; }
+
         /// <summary>
-        /// The catch: the creature lunges into the player's face, jaws open and eyes blazing, with one
-        /// short sting, then the view fades. The camera itself is never moved or shaken.
+        /// The catch. First every light in the wreck dies, the flashlight with them, and the ship goes
+        /// silent: half a second of nothing. Then it is in the player's face under a red strobe, far
+        /// closer than before, shrieking, thrashing and lunging to bite, with the controllers buzzing at
+        /// full strength, until the view cuts out. The camera itself is never moved or shaken; the
+        /// creature does all the moving.
         /// </summary>
         IEnumerator Jumpscare(PlayerContext player)
         {
             IsScaring = true;
+            ScarePhase = 1;
             Transform head = player.head;
+            if (voice != null) voice.Stop();
+            if (hum != null) hum.Stop();
+            var lib = Sfx.Library;
+
+            // --- the dark: lights out, flashlight dead, silence
+            float total = scareDarkSeconds + scareLungeSeconds + scareMaulSeconds;
+            var blackout = director != null ? director.blackout : null;
+            if (blackout != null) blackout.TriggerNow(total + 1f);
+            Tools.FlashlightTool torch = null;
+            if (player.tools != null)
+            {
+                foreach (var tool in player.tools)
+                {
+                    if (tool is Tools.FlashlightTool f) torch = f;
+                }
+            }
+            if (torch != null && torch.beam != null) torch.beam.enabled = false;
+            if (eyeLight != null) eyeLight.enabled = false;
+            SetEyesDark();
+            if (lib != null) Sfx.PlayUi(lib.powerDown, 0.5f, 1.6f);
+            player.PulseBoth(0.35f, 0.12f);
+
+            // It comes round to wherever the player is looking while they cannot see it.
+            float t = 0f;
+            while (t < scareDarkSeconds)
+            {
+                t += Time.unscaledDeltaTime;
+                Vector3 behind = Vector3.ProjectOnPlane(head.forward, Vector3.up);
+                if (behind.sqrMagnitude < 0.001f) behind = Vector3.forward;
+                transform.position = head.position + behind.normalized * 2.2f + Vector3.down * 0.05f;
+                transform.rotation = Quaternion.LookRotation(-behind.normalized, Vector3.up);
+                yield return null;
+            }
+
+            // --- the strike
+            ScarePhase = 2;
+            if (lib != null)
+            {
+                Sfx.PlayUi(lib.droneScare != null ? lib.droneScare : lib.droneCatch, 1f);
+                Sfx.PlayUi(lib.droneCatch, 0.9f, 0.75f);
+                Sfx.PlayUi(lib.impactHeavy, 1f, 0.5f);
+            }
+            player.PulseBoth(1f, scareLungeSeconds + scareMaulSeconds);
             Vector3 start = transform.position;
             Quaternion startRotation = transform.rotation;
-            if (voice != null) voice.Stop();
-            if (Sfx.Library != null) Sfx.PlayUi(Sfx.Library.droneScare != null ? Sfx.Library.droneScare : Sfx.Library.droneCatch, 0.55f);
-            player.PulseBoth(1f, 0.35f);
+            var random = new System.Random(71);
+            float shriekAt = 0.55f;
 
-            float t = 0f;
-            while (t < scareLungeSeconds + scareHoldSeconds)
+            t = 0f;
+            while (t < scareLungeSeconds + scareMaulSeconds)
             {
                 t += Time.unscaledDeltaTime;
                 Vector3 flat = Vector3.ProjectOnPlane(head.forward, Vector3.up);
                 if (flat.sqrMagnitude < 0.001f) flat = Vector3.forward;
-                // Its face (about 0.4 m ahead of its centre) ends up a forearm's length from the eyes.
-                Vector3 target = head.position + flat.normalized * scareDistance + Vector3.down * 0.02f;
-                Quaternion face = Quaternion.LookRotation((head.position - target).normalized, Vector3.up);
-                float k = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t / scareLungeSeconds));
+                flat.Normalize();
+
+                // Two more lunges after the first: it snaps in to bite, hangs back, snaps in again.
+                float maul = Mathf.Max(0f, t - scareLungeSeconds);
+                float bite = Mathf.Pow(Mathf.Abs(Mathf.Sin(maul * Mathf.PI / 0.55f)), 6f);
+                float distance = Mathf.Lerp(scareDistance, scareBiteDistance, bite);
+                Vector3 shake = new Vector3((float)random.NextDouble() - 0.5f, (float)random.NextDouble() - 0.5f, (float)random.NextDouble() - 0.5f) * 0.07f;
+                Vector3 target = head.position + flat * distance + Vector3.down * 0.03f + shake;
+                Quaternion face = Quaternion.LookRotation((head.position - target).normalized, Vector3.up)
+                    * Quaternion.Euler(((float)random.NextDouble() - 0.5f) * 14f, ((float)random.NextDouble() - 0.5f) * 14f, Mathf.Sin(maul * 31f) * 16f);
+                float k = Mathf.Clamp01(t / scareLungeSeconds);
+                k = 1f - (1f - k) * (1f - k);
                 transform.SetPositionAndRotation(Vector3.Lerp(start, target, k), Quaternion.Slerp(startRotation, face, k));
-                RefreshPresentation(true);
+
+                // A hard red strobe from its own eyes is the only light there is.
+                bool flash = Mathf.Repeat(t * 13f, 1f) < 0.62f;
+                if (eyeLight != null)
+                {
+                    eyeLight.enabled = flash;
+                    eyeLight.color = new Color(1f, 0.04f, 0.02f);
+                    eyeLight.intensity = 9f;
+                    eyeLight.range = 6f;
+                }
+                SetEyesBlazing(flash ? 4f : 1.2f);
+
+                // A second shriek on the way in for the second bite.
+                if (maul >= shriekAt && lib != null)
+                {
+                    shriekAt = float.MaxValue;
+                    Sfx.PlayUi(lib.droneScare != null ? lib.droneScare : lib.droneCatch, 0.9f, 1.25f);
+                    Sfx.PlayUi(lib.panelBreak, 0.7f, 0.6f);
+                }
                 yield return null;
             }
+
+            // --- over: put the world back the way it was before the run ends
+            if (eyeLight != null) eyeLight.range = 9f;
+            if (torch != null && torch.beam != null) torch.beam.enabled = torch.IsOn;
+            if (blackout != null) blackout.EndBlackout(true);
+            ScarePhase = 0;
             FinishCatch(player);
+        }
+
+        void SetEyesDark()
+        {
+            if (m_Block == null) m_Block = new MaterialPropertyBlock();
+            m_Block.SetColor(k_BaseColor, Color.black);
+            m_Block.SetColor(k_Emission, Color.black);
+            if (eyeRenderer != null) eyeRenderer.SetPropertyBlock(m_Block);
+            if (extraEyes == null) return;
+            foreach (var eye in extraEyes) if (eye != null) eye.SetPropertyBlock(m_Block);
+        }
+
+        void SetEyesBlazing(float strength)
+        {
+            if (m_Block == null) m_Block = new MaterialPropertyBlock();
+            var red = new Color(1f, 0.05f, 0.03f);
+            m_Block.SetColor(k_BaseColor, red);
+            m_Block.SetColor(k_Emission, red * strength);
+            if (eyeRenderer != null) eyeRenderer.SetPropertyBlock(m_Block);
+            if (extraEyes == null) return;
+            foreach (var eye in extraEyes) if (eye != null) eye.SetPropertyBlock(m_Block);
         }
 
         // ------------------------------------------------------------------ presentation
@@ -458,6 +684,9 @@ namespace TrashAstronauts.Mission
         void OnStateChanged(EnemyState previous, EnemyState next)
         {
             m_HasPath = false;
+            m_Direct = false;
+            // The trail went cold: search further along the way the quarry was heading.
+            if (previous == EnemyState.Chase && next == EnemyState.Search) Brain.Redirect(PredictQuarry(3f));
             m_DoorTimer = 0f;
             var lib = Sfx.Library;
 
@@ -524,8 +753,10 @@ namespace TrashAstronauts.Mission
             {
                 if (m_Block == null) m_Block = new MaterialPropertyBlock();
                 eyeRenderer.GetPropertyBlock(m_Block);
-                m_Block.SetColor(k_BaseColor, state == EnemyState.Dormant && !IsScaring ? new Color(0.05f, 0.05f, 0.05f) : color);
-                m_Block.SetColor(k_Emission, color * (2.5f * brightness));
+                // Calm, the eyes are wet black beads with a dull ember in them; they only burn when it hunts.
+                float glow = IsScaring || state == EnemyState.Chase ? 2.5f : state == EnemyState.Investigate ? 1.0f : state == EnemyState.Search ? 0.8f : 0.28f;
+                m_Block.SetColor(k_BaseColor, state == EnemyState.Dormant && !IsScaring ? new Color(0.02f, 0.015f, 0.015f) : Color.Lerp(new Color(0.03f, 0.01f, 0.01f), color, Mathf.Clamp01(glow * 0.5f)));
+                m_Block.SetColor(k_Emission, color * (glow * brightness));
                 eyeRenderer.SetPropertyBlock(m_Block);
                 if (extraEyes != null)
                 {

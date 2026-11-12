@@ -207,6 +207,17 @@ namespace TrashAstronauts.Core
             return true;
         }
 
+        /// <summary>Lowers what an item is worth after it took a knock. It can only go down, and not once it is in the locker.</summary>
+        public bool DamageSalvage(string salvageId, int newValue)
+        {
+            if (Phase != MissionPhase.Active) return false;
+            if (!TryGetSalvage(salvageId, out var record) || record.State == SalvageState.Deposited) return false;
+            newValue = Math.Max(0, newValue);
+            if (newValue >= record.Value) return false;
+            record.Value = newValue;
+            return true;
+        }
+
         public bool IsPanelOpen(string panelId) => panelId != null && m_OpenPanels.Contains(panelId);
 
         /// <summary>Opens a cuttable panel or mount. Returns false if it was already open.</summary>

@@ -18,5 +18,7 @@ MonoBehaviour:
   creditValue: 350
   mass: 2
   bulky: 0
+  bonusSpawn: 0
+  fragility: 0.8
   scannerBlurb: MSRP 349.99. Why? Nobody knows.
   prefab: {fileID: 7166557077086633849, guid: 792aca2d640bd46d5bee3e232cb620e9, type: 3}

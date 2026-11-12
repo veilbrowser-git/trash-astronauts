@@ -211,6 +211,33 @@ namespace TrashAstronauts.Tests
         }
 
         [Test]
+        public void AfterLosingSight_AChasingCreature_FollowsSounds_AndCanBeRedirected()
+        {
+            var brain = new EnemyBrain(Tuning());
+            brain.WakeUp();
+            Run(brain, See(new Vector3(5, 0, 0)), 1.5f);
+            Assert.AreEqual(EnemyState.Chase, brain.State);
+            Assert.AreEqual(new Vector3(5, 0, 0), brain.PointOfInterest);
+
+            // Out of sight for a second: now a noise it can hear tells it where to go.
+            Run(brain, Blind(), 1f);
+            Assert.AreEqual(EnemyState.Chase, brain.State);
+            Assert.Greater(brain.LostSightSeconds, 0.9f);
+            Assert.IsTrue(brain.HearNoise(new NoiseEvent(new Vector3(-3, 0, 2), 1f, NoiseKind.Impact, PlayerId.Local), Vector3.zero));
+            Assert.AreEqual(new Vector3(-3, 0, 2), brain.PointOfInterest);
+            Assert.IsFalse(brain.HearNoise(new NoiseEvent(new Vector3(100, 0, 0), 0.2f, NoiseKind.Impact, PlayerId.Local), Vector3.zero), "Too far to hear.");
+
+            // The body can also point it at a better guess (where the quarry was heading).
+            brain.Redirect(new Vector3(7, 0, 7));
+            Assert.AreEqual(new Vector3(7, 0, 7), brain.PointOfInterest);
+
+            // Seeing the quarry again overrides all of that.
+            brain.Tick(See(new Vector3(1, 0, 1)));
+            Assert.AreEqual(new Vector3(1, 0, 1), brain.PointOfInterest);
+            Assert.AreEqual(0f, brain.LostSightSeconds);
+        }
+
+        [Test]
         public void NoiseDuringAChase_DoesNotDistractIt()
         {
             var brain = new EnemyBrain(Tuning());

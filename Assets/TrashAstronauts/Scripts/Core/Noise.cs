@@ -10,6 +10,7 @@ namespace TrashAstronauts.Core
         PanelBreak = 2,
         Door = 3,
         Voice = 4,
+        Thruster = 5,
     }
 
     /// <summary>A gameplay-relevant sound. Loudness 1 is "the whole deck heard that".</summary>

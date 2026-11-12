@@ -76,7 +76,17 @@ namespace TrashAstronauts.Core
         /// <summary>Feeds a noise to the drone. Returns true if it decided to go and look.</summary>
         public bool HearNoise(in NoiseEvent noise, Vector3 selfPosition)
         {
-            if (State == EnemyState.Dormant || State == EnemyState.Chase) return false;
+            if (State == EnemyState.Dormant) return false;
+            if (State == EnemyState.Chase)
+            {
+                // While it can see its quarry nothing distracts it. Once it has lost sight, any sound it
+                // can hear tells it where to go next (which is also how a thrown can saves you).
+                if (m_LostSightTimer < 0.35f) return false;
+                if (!NoiseRules.IsAudible(noise, selfPosition, m_Tuning.hearingRadiusAtFullLoudness)) return false;
+                PointOfInterest = noise.Position;
+                m_LostSightTimer = Mathf.Max(0.35f, m_LostSightTimer - 2f);
+                return true;
+            }
             if (!NoiseRules.IsAudible(noise, selfPosition, m_Tuning.hearingRadiusAtFullLoudness)) return false;
 
             PointOfInterest = noise.Position;
@@ -84,6 +94,16 @@ namespace TrashAstronauts.Core
             if (State == EnemyState.Investigate) TimeInState = 0f;
             else SetState(EnemyState.Investigate);
             return true;
+        }
+
+        /// <summary>Seconds since it last saw its quarry during a chase.</summary>
+        public float LostSightSeconds => State == EnemyState.Chase ? m_LostSightTimer : 0f;
+
+        /// <summary>Points a hunt (investigate, chase without sight, search) at a better guess.</summary>
+        public void Redirect(Vector3 point)
+        {
+            if (State == EnemyState.Dormant || State == EnemyState.Patrol) return;
+            PointOfInterest = point;
         }
 
         public void Tick(in EnemyPercept percept)
