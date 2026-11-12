@@ -225,6 +225,7 @@ Everything loose is a real mass obeying Newton's laws, tuned to stay comfortable
 
 - **Breathing and heartbeat.** Your breathing inside the helmet quickens and grows louder when you work hard (pulling, thrusting) and when you are afraid (the spider close by, or chasing you), and it settles back over several seconds once things calm down. A soft heartbeat fades in only when the spider is chasing or very near, and beats faster the more frightened you are. In the tug, with no creature awake, both stay calm. The logic is in `Scripts/Runtime/Player/SuitAudio.cs`.
 - **Sound through walls.** When ship walls stand between you and the spider, its footsteps, hum and voice come through muffled and quieter, and they clear up smoothly when it comes into view. Each of those sounds checks its line to your head about five times a second against the ship's walls (crates and loose junk do not count). This only changes what you hear; how much noise the spider hears from you is unchanged (`Scripts/Runtime/Audio/SoundOcclusion.cs`).
+- **Rooms that sound their size.** Twice a second the suit casts ten short rays from your head to the walls and smooths the result into a room size. A single reverb follows your head: a narrow duct gets a short, quiet tail and a big cargo hold a longer one (0.3 to 2.2 seconds), kept low so footsteps and warnings stay clear. Sounds inside your helmet (breathing, heartbeat) stay dry (`Scripts/Runtime/Audio/RoomAcoustics.cs`).
 
 ## Known limitations
 

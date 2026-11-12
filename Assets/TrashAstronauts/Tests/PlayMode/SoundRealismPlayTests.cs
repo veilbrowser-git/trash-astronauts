@@ -129,6 +129,10 @@ namespace TrashAstronauts.Tests
                 var walker = enemy.GetComponent<SurfaceWalker>();
                 if (walker != null) Assert.IsNotNull(walker.steps.GetComponent<SoundOcclusion>(), enemy.name + " footsteps");
             }
+            var room = Object.FindFirstObjectByType<RoomAcoustics>();
+            Assert.IsNotNull(room, "The listener measures the room.");
+            Assert.IsNotNull(room.zone);
+            Assert.IsTrue(suit.breathing.bypassReverbZones, "Helmet sounds stay dry.");
         }
 
         [Test]
@@ -187,6 +191,68 @@ namespace TrashAstronauts.Tests
                 Object.Destroy(wall);
                 Object.Destroy(sourceGo);
                 Object.Destroy(listener.gameObject);
+            }
+        }
+
+        static GameObject Box(Vector3 center, float size)
+        {
+            // A hollow cube of six thin walls on the Environment layer.
+            var root = new GameObject("Test Room");
+            root.transform.position = center;
+            float h = size * 0.5f, t = 0.1f;
+            var faces = new[] { Vector3.right, Vector3.left, Vector3.up, Vector3.down, Vector3.forward, Vector3.back };
+            foreach (var n in faces)
+            {
+                var wall = new GameObject("Wall");
+                wall.layer = GameLayers.Environment;
+                wall.transform.SetParent(root.transform, false);
+                wall.transform.localPosition = n * h;
+                var box = wall.AddComponent<BoxCollider>();
+                box.size = new Vector3(n.x != 0f ? t : size, n.y != 0f ? t : size, n.z != 0f ? t : size);
+            }
+            return root;
+        }
+
+        [Test]
+        public void RoomSize_IsMeasured_AndBigSpacesGetALongerReverbTail()
+        {
+            var small = Box(new Vector3(-300f, 300f, 300f), 1.4f);
+            var large = Box(new Vector3(300f, 300f, 300f), 20f);
+            var listener = new GameObject("Test Room Listener");
+            var zoneGo = new GameObject("Test Reverb");
+            var zone = zoneGo.AddComponent<AudioReverbZone>();
+            var room = listener.AddComponent<RoomAcoustics>();
+            room.enabled = false;
+            room.zone = zone;
+            try
+            {
+                const float dt = 1f / 72f;
+                listener.transform.position = small.transform.position;
+                Physics.SyncTransforms();
+                for (int i = 0; i < 360; i++) room.Step(dt);
+                float smallSize = room.RoomSize, smallDecay = zone.decayTime;
+                int smallRoom = zone.room;
+                Assert.Less(smallSize, 1.5f, "A duct-sized box measures small.");
+
+                listener.transform.position = large.transform.position;
+                Physics.SyncTransforms();
+                room.Step(dt);
+                Assert.Less(room.RoomSize, smallSize + 3f, "The size changes smoothly, not in one step.");
+                for (int i = 0; i < 720; i++) room.Step(dt);
+                float largeSize = room.RoomSize;
+                Assert.Greater(largeSize, 8f, "A hold-sized box measures large.");
+                Assert.Greater(zone.decayTime, smallDecay + 1f, "A big hold has a longer tail.");
+                Assert.Greater(zone.room, smallRoom, "...and a little more reverb.");
+                Assert.LessOrEqual(zone.decayTime, room.maxDecay + 1e-3f, "Kept subtle.");
+                Assert.LessOrEqual(zone.room, room.maxRoom);
+                Assert.AreEqual(listener.transform.position, zone.transform.position, "The zone follows the listener.");
+            }
+            finally
+            {
+                Object.Destroy(small);
+                Object.Destroy(large);
+                Object.Destroy(listener);
+                Object.Destroy(zoneGo);
             }
         }
     }

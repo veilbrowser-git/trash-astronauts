@@ -785,6 +785,17 @@ namespace TrashAstronauts.EditorTools
             camGo.AddComponent<AudioListener>();
             // Everything is heard from inside a helmet: the top end is taken off all of it.
             camGo.AddComponent<AudioLowPassFilter>().cutoffFrequency = 6200f;
+            // Rooms sound their size: one reverb zone that follows the head, sized by a few rays to the walls.
+            var reverbGo = Empty(camGo.transform, "Room Reverb", Vector3.zero, null, GameLayers.Player);
+            var reverb = reverbGo.AddComponent<AudioReverbZone>();
+            reverb.reverbPreset = AudioReverbPreset.User;
+            reverb.minDistance = 500f;
+            reverb.maxDistance = 600f;
+            reverb.reflections = -1400;
+            reverb.reverb = -900;
+            reverb.roomHF = -900;
+            var roomAcoustics = camGo.AddComponent<RoomAcoustics>();
+            roomAcoustics.zone = reverb;
             var headDriver = camGo.AddComponent<TrackedPoseDriver>();
             headDriver.positionInput = new InputActionProperty(Ref("Head/Position"));
             headDriver.rotationInput = new InputActionProperty(Ref("Head/Rotation"));
@@ -979,6 +990,7 @@ namespace TrashAstronauts.EditorTools
             source.playOnAwake = false;
             source.spatialBlend = 0f;
             source.volume = 0f;
+            source.bypassReverbZones = true; // inside the helmet: no room echo on breathing
             return source;
         }
 
