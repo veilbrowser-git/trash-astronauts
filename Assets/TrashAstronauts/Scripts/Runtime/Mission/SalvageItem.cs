@@ -99,8 +99,9 @@ namespace TrashAstronauts.Mission
         }
 
         /// <summary>
-        /// True on a co-op client while only the host may pick salvage up (the ride-along stage): the item
-        /// cannot be grabbed here and the scanner says so. Always false offline and on a host.
+        /// True on a co-op client whose session does not share grabbing (no item sync): the item cannot be
+        /// grabbed here. With item sync (co-op stage 3) every crew member grabs, so this stays false; always
+        /// false offline and on a host.
         /// </summary>
         public bool HostOnly { get; private set; }
 
@@ -123,16 +124,37 @@ namespace TrashAstronauts.Mission
         /// <summary>
         /// The one place that decides whether the body is kinematic and whether it can be grabbed, from
         /// everything that has a say: clamped to a mount, secured in the locker, held on another machine,
-        /// or simulated somewhere else.
+        /// or simulated somewhere else. A copy that another machine simulates is also not interpolated: it is
+        /// placed exactly where the stream says, and when this machine takes it over (a hand closes on it) the
+        /// physics starts from where it is shown, not from a stale interpolation pose. Offline (always
+        /// simulated here) the body keeps the interpolation it was built with.
         /// </summary>
         public void RefreshBodyMode()
         {
             if (m_Body == null) m_Body = GetComponent<Rigidbody>();
+            if (!m_InterpolationKnown)
+            {
+                m_Interpolation = m_Body.interpolation;
+                m_InterpolationKnown = true;
+            }
             // Grab first: switching it off drops the item from a hand, and that drop restores the body's
             // own idea of kinematic. What is decided here has to be the last word.
             if (grab != null) grab.enabled = !IsMounted && !IsSecured && !HostOnly;
-            m_Body.isKinematic = IsMounted || IsSecured || RemoteHolder.IsValid || !SimulatedHere;
+            bool wasKinematic = m_Body.isKinematic;
+            bool kinematic = IsMounted || IsSecured || RemoteHolder.IsValid || !SimulatedHere;
+            if (wasKinematic && !kinematic && m_Body.interpolation == RigidbodyInterpolation.None && m_Interpolation != RigidbodyInterpolation.None)
+            {
+                // Leaving a replica's life: the body starts exactly where it was placed.
+                m_Body.position = transform.position;
+                m_Body.rotation = transform.rotation;
+            }
+            m_Body.isKinematic = kinematic;
+            var interpolation = SimulatedHere ? m_Interpolation : RigidbodyInterpolation.None;
+            if (m_Body.interpolation != interpolation) m_Body.interpolation = interpolation;
         }
+
+        RigidbodyInterpolation m_Interpolation;
+        bool m_InterpolationKnown;
 
         /// <summary>What it is worth now. Delicate things lose value when they are banged about.</summary>
         public int Value => m_DamagedValue >= 0 ? m_DamagedValue : FullValue;
@@ -173,6 +195,11 @@ namespace TrashAstronauts.Mission
         void Awake()
         {
             m_Body = GetComponent<Rigidbody>();
+            if (!m_InterpolationKnown)
+            {
+                m_Interpolation = m_Body.interpolation;
+                m_InterpolationKnown = true;
+            }
             m_Colliders = GetComponentsInChildren<Collider>(true);
             if (grab == null) grab = GetComponent<XRGrabInteractable>();
             SpawnPosition = transform.position;
@@ -312,7 +339,7 @@ namespace TrashAstronauts.Mission
         {
             if (highlight != null) highlight.Pulse(seconds);
             if (scanTag != null && definition != null)
-                scanTag.Show(HostOnly ? definition.displayName + "  HOST ONLY" : definition.displayName, definition.creditValue, seconds);
+                scanTag.Show(definition.displayName, definition.creditValue, seconds);
         }
 
         /// <summary>Brings a lost item back into the playable area with no velocity.</summary>

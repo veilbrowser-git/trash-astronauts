@@ -125,19 +125,43 @@ namespace TrashAstronauts.Mission
 
         /// <summary>
         /// After a session: every salvage item of the last run that is still in the scene (a results screen) is an
-        /// ordinary local item again: simulated here, grabbable, no replica.
+        /// ordinary local item again: simulated here, grabbable, in nobody else's hand, no replica, no item sync.
+        /// A host keeps an item a crew member was holding or flying where it last was.
         /// </summary>
         void RestoreRunItemsLocal()
         {
+            if (ItemClient != null) ItemClient.Dispose();
+            ItemClient = null;
             for (int i = 0; i < m_RunItems.Count; i++)
             {
                 var item = m_RunItems[i];
                 if (item == null) continue;
                 var replica = item.GetComponent<CoopItemReplica>();
                 if (replica != null) Destroy(replica);
+                var sync = item.GetComponent<ItemSync>();
+                if (sync != null)
+                {
+                    sync.End();
+                    Destroy(sync);
+                }
+                item.SetRemoteHolder(PlayerId.None);
                 item.SetHostOnly(false);
                 item.SetSimulatedHere(true);
             }
+        }
+
+        // ------------------------------------------------------------------ items in everyone's hands (stage 3)
+
+        /// <summary>
+        /// A client's item sync (co-op stage 3): while set, the run's items can be grabbed here, carried, thrown
+        /// and handed over (each through its ItemSync). Set by <see cref="CoopItemClient"/> for its session; null
+        /// offline, on a host, and in a session that does not share grabbing (its items stay host-only).
+        /// </summary>
+        public CoopItemClient ItemClient { get; set; }
+
+        static ItemSync SyncOf(SalvageItem item)
+        {
+            return item != null && item.TryGetComponent(out ItemSync sync) && sync.Active ? sync : null;
         }
 
         /// <summary>Forgets every Away reason of the local player (leaving a session).</summary>
@@ -172,8 +196,9 @@ namespace TrashAstronauts.Mission
         /// <summary>
         /// The host started a contract: begin exactly that one (<see cref="BeginRun"/>, so salvage ids come
         /// from the host's run number and match on every machine). On a client every item then follows the
-        /// host: kinematic, not grabbable, moved only by the poses that arrive. A repeat of the run already in
-        /// progress does nothing; parameters that fail their own plan hash are refused.
+        /// host: kinematic, moved only by the poses that arrive, until a local hand takes it (with the
+        /// session's <see cref="ItemClient"/>; without one it cannot be grabbed here). A repeat of the run
+        /// already in progress does nothing; parameters that fail their own plan hash are refused.
         /// </summary>
         public bool ApplyRunStart(in RunStartParams run)
         {
@@ -193,14 +218,16 @@ namespace TrashAstronauts.Mission
 
             if (Net != null && Net.IsClient)
             {
+                bool shared = ItemClient != null && !ItemClient.Disposed;
                 for (int i = 0; i < m_RunItems.Count; i++)
                 {
                     var item = m_RunItems[i];
                     if (item == null) continue;
                     item.SetSimulatedHere(false);
-                    item.SetHostOnly(true);
+                    item.SetHostOnly(!shared);
                     CoopItemReplica.For(item).ResetForRun();
                 }
+                if (shared) ItemClient.BeginRun();
             }
             m_ClockAge = 0f;
             m_HaveClock = true;
@@ -273,6 +300,8 @@ namespace TrashAstronauts.Mission
         {
             if (item == null) return false;
             CancelLocalSelection(item);
+            var sync = SyncOf(item);
+            if (sync != null) sync.OnDeposited();
             bool booked = Session.ApplyRemoteDeposit(item.SalvageId, by, finalValue, trickBonus);
             if (!item.IsSecured)
             {
@@ -313,6 +342,8 @@ namespace TrashAstronauts.Mission
             double localTime = double.NaN)
         {
             if (item == null || item.SimulatedHere) return false;
+            var sync = SyncOf(item);
+            if (sync != null && !sync.AcceptPose((byte)epoch)) return false;
             return CoopItemReplica.For(item).Push(position, rotation, epoch, held, atRest, localTime);
         }
 
@@ -320,6 +351,8 @@ namespace TrashAstronauts.Mission
         public bool ApplyItemRest(SalvageItem item, int epoch, Vector3 position, Quaternion rotation)
         {
             if (item == null || item.SimulatedHere) return false;
+            var sync = SyncOf(item);
+            if (sync != null && !sync.AcceptRest((byte)epoch)) return false;
             return CoopItemReplica.For(item).Rest(position, rotation, epoch);
         }
 

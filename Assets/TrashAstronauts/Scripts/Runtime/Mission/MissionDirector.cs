@@ -1016,7 +1016,9 @@ namespace TrashAstronauts.Mission
             if (item == null) return false;
             if (Net != null && Net.IsClient)
             {
-                Net.ReportSalvageDamage(item, newValue);
+                // With shared grabbing the item sync tells the host (ItemDamageReport); the ledger follows ItemValue.
+                if (ItemClient != null) ItemClient.ReportDamage(item, newValue);
+                else Net.ReportSalvageDamage(item, newValue);
                 return false;
             }
             if (!Session.DamageSalvage(item.SalvageId, newValue)) return false;
@@ -1199,7 +1201,8 @@ namespace TrashAstronauts.Mission
             {
                 foreach (var item in m_Items)
                 {
-                    if (item == null || item.IsSecured || item.IsHeld || item.IsMounted) continue;
+                    // Not one a crew member is holding or flying either: that copy only follows their stream.
+                    if (item == null || item.IsSecured || item.IsHeld || item.IsMounted || !item.SimulatedHere) continue;
                     if (bounds.Contains(item.transform.position)) continue;
                     Vector3 home = item.HasBeenCollected && lostAndFound != null ? lostAndFound.position : item.SpawnPosition;
                     item.RecoverTo(home);
