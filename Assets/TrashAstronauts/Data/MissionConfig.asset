@@ -15,11 +15,11 @@ MonoBehaviour:
   quotaCredits: 900
   contractBonusCredits: 150
   quotaSafetyMargin: 1.3
-  baseOxygenSeconds: 600
+  baseOxygenSeconds: 800
   oxygenLowFraction: 0.3
   oxygenCriticalFraction: 0.12
   oxygenUpgradeCost: 600
-  oxygenUpgradeBonusSeconds: 180
+  oxygenUpgradeBonusSeconds: 240
   maxOxygenUpgradeLevel: 1
   smallScrapCount: 6
   electronicsCount: 3
