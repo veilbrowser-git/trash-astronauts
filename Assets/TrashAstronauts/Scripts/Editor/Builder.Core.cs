@@ -290,6 +290,34 @@ namespace TrashAstronauts.EditorTools
             return mat;
         }
 
+        static readonly Dictionary<TrashAstronauts.World.SurfaceKind, PhysicsMaterial> s_SurfaceMaterials = new Dictionary<TrashAstronauts.World.SurfaceKind, PhysicsMaterial>();
+
+        /// <summary>
+        /// A physic material per surface kind (bare metal, painted metal, rubber/plastic, glass/ceramic).
+        /// Friction averages with what it touches; bounce takes the livelier of the two, because the
+        /// ship's walls have no material of their own and an object's own springiness decides its rebound.
+        /// </summary>
+        static PhysicsMaterial SurfaceMaterial(TrashAstronauts.World.SurfaceKind kind)
+        {
+            if (s_SurfaceMaterials.TryGetValue(kind, out var cached) && cached != null) return cached;
+            string path = GeneratedDir + "/Surface_" + kind + ".physicMaterial";
+            var mat = AssetDatabase.LoadAssetAtPath<PhysicsMaterial>(path);
+            if (mat == null)
+            {
+                mat = new PhysicsMaterial(kind.ToString());
+                AssetDatabase.CreateAsset(mat, path);
+            }
+            TrashAstronauts.World.RealPhysics.Describe(kind, out float staticFriction, out float dynamicFriction, out float bounciness);
+            mat.staticFriction = staticFriction;
+            mat.dynamicFriction = dynamicFriction;
+            mat.bounciness = bounciness;
+            mat.frictionCombine = PhysicsMaterialCombine.Average;
+            mat.bounceCombine = PhysicsMaterialCombine.Maximum;
+            EditorUtility.SetDirty(mat);
+            s_SurfaceMaterials[kind] = mat;
+            return mat;
+        }
+
         // ------------------------------------------------------------------ procedural textures
 
         static Texture2D MakeTexture(string name, int size, Action<Color32[], int, System.Random> paint)

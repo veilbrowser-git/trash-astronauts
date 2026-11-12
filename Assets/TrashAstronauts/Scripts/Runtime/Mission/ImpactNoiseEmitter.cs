@@ -18,6 +18,8 @@ namespace TrashAstronauts.Mission
         [Tooltip("Scales gameplay loudness. Heavy objects are louder.")]
         public float loudnessScale = 1f;
         public bool heavy;
+        [Tooltip("What the surface is made of: rubber thuds, bare metal clangs.")]
+        public TrashAstronauts.World.SurfaceKind surface = TrashAstronauts.World.SurfaceKind.PaintedMetal;
         public float audioSpeedThreshold = 0.7f;
         public float audioCooldown = 0.2f;
 

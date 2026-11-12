@@ -52,16 +52,33 @@ namespace TrashAstronauts.EditorTools
                 s_Defs["novelty_rubber_duck"].bonusSpawn = true;
                 EditorUtility.SetDirty(s_Defs["novelty_rubber_duck"]);
             }
+            // Real masses (kg), written every build so they win over the first-build values above.
+            SetMass("scrap_hull_plate", 3f);          // aluminium hull skin with steel ribs
+            SetMass("scrap_cable_coil", 6f);          // a spool of copper is dense
+            SetMass("elec_nav_board", 0.6f);          // fibreglass board, chips and a heatsink
+            SetMass("elec_comms_relay", 3.5f);        // steel case full of electronics
+            SetMass("reactor_regulator_core", 40f);   // steel shell and cage round a dense core
+            SetMass("novelty_orbital_toaster", 1.8f); // a chrome kitchen toaster
+            SetMass("novelty_rubber_duck", 0.1f);     // hollow vinyl
             // How easily each thing is damaged by being banged about (scrap and the duck do not care).
             SetFragility("elec_nav_board", 0.6f);
             SetFragility("elec_comms_relay", 0.7f);
             SetFragility("reactor_regulator_core", 0.5f);
             SetFragility("novelty_orbital_toaster", 0.8f);
             // The creature has to be able to catch someone who is only drifting.
+            // A suited person with a life-support pack: throws, shoves and thrust are worked out against this.
+            if (!Mathf.Approximately(s_Config.playerMass, RealPhysics.PlayerBodyMass)) s_Config.playerMass = RealPhysics.PlayerBodyMass;
             if (s_Config.enemy.chaseSpeed < 3f) s_Config.enemy.chaseSpeed = 3f;
             if (s_Config.enemy.chaseLoseSightSeconds < 5f) s_Config.enemy.chaseLoseSightSeconds = 5f;
             EditorUtility.SetDirty(s_Config);
             AssetDatabase.SaveAssets();
+        }
+
+        static void SetMass(string id, float kg)
+        {
+            if (!s_Defs.TryGetValue(id, out var def) || Mathf.Approximately(def.mass, kg)) return;
+            def.mass = kg;
+            EditorUtility.SetDirty(def);
         }
 
         static void SetFragility(string id, float value)
@@ -106,15 +123,11 @@ namespace TrashAstronauts.EditorTools
             var rb = go.AddComponent<Rigidbody>();
             rb.useGravity = false;
             rb.mass = mass;
-            rb.linearDamping = 0.18f;
-            rb.angularDamping = 0.2f;
-            rb.maxAngularVelocity = 14f;
-            rb.interpolation = RigidbodyInterpolation.Interpolate;
-            rb.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
+            RealPhysics.ConfigureLooseBody(rb);
             return go;
         }
 
-        static void MakeGrabbable(GameObject go, bool heavy, out XRGrabInteractable grab, out HoverHighlight highlight, out ImpactNoiseEmitter impact)
+        static void MakeGrabbable(GameObject go, bool heavy, SurfaceKind surface, out XRGrabInteractable grab, out HoverHighlight highlight, out ImpactNoiseEmitter impact)
         {
             grab = go.AddComponent<XRGrabInteractable>();
             grab.movementType = XRBaseInteractable.MovementType.VelocityTracking;
@@ -138,18 +151,19 @@ namespace TrashAstronauts.EditorTools
 
             highlight = go.AddComponent<HoverHighlight>();
             highlight.renderers = go.GetComponentsInChildren<MeshRenderer>();
-            foreach (var collider in go.GetComponentsInChildren<Collider>()) collider.sharedMaterial = ZeroGMaterial();
+            foreach (var collider in go.GetComponentsInChildren<Collider>()) collider.sharedMaterial = SurfaceMaterial(surface);
 
             impact = go.AddComponent<ImpactNoiseEmitter>();
+            impact.surface = surface;
             impact.heavy = heavy;
             impact.loudnessScale = heavy ? 1.2f : 1f;
         }
 
-        static GameObject FinishSalvage(GameObject go, string defId, bool training = false)
+        static GameObject FinishSalvage(GameObject go, string defId, SurfaceKind surface, bool training = false)
         {
             SalvageDefinition def = defId != null ? s_Defs[defId] : null;
             bool heavy = def != null && def.bulky;
-            MakeGrabbable(go, heavy, out var grab, out var highlight, out var impact);
+            MakeGrabbable(go, heavy, surface, out var grab, out var highlight, out var impact);
 
             var tagText = Text(go.transform, "Scan Tag", "", new Vector3(0, 0.22f, 0), Quaternion.identity, 0.35f, new Vector2(0.6f, 0.15f), new Color(0.6f, 1f, 0.85f));
             tagText.fontStyle = FontStyles.Bold;
@@ -179,7 +193,7 @@ namespace TrashAstronauts.EditorTools
             Transform t;
 
             // Small scrap: bent hull plate with stiffening ribs and bolts
-            go = FloatingRoot("Salvage_HullPlate", 1.2f, GameLayers.Salvage);
+            go = FloatingRoot("Salvage_HullPlate", 3f, GameLayers.Salvage);
             t = go.transform;
             go.AddComponent<BoxCollider>().size = new Vector3(0.27f, 0.05f, 0.19f);
             CBox(t, "Plate", Vector3.zero, new Vector3(0.26f, 0.018f, 0.18f), M("Scrap"), 0.004f);
@@ -189,10 +203,10 @@ namespace TrashAstronauts.EditorTools
                 foreach (float z in new[] { -0.075f, 0.075f })
                     Part(t, "Bolt", Tube(0.008f, 0.01f, 6), new Vector3(x, 0.014f, z), M("Brass"));
             CBox(t, "Scorch", new Vector3(-0.06f, 0.0095f, 0.02f), new Vector3(0.07f, 0.002f, 0.05f), M("Chip"), 0.0005f, new Vector3(0, 25, 0));
-            FinishSalvage(go, "scrap_hull_plate");
+            FinishSalvage(go, "scrap_hull_plate", SurfaceKind.BareMetal);
 
             // Small scrap: spool of copper cable
-            go = FloatingRoot("Salvage_CableCoil", 1f, GameLayers.Salvage);
+            go = FloatingRoot("Salvage_CableCoil", 6f, GameLayers.Salvage);
             t = go.transform;
             go.AddComponent<BoxCollider>().size = new Vector3(0.23f, 0.09f, 0.23f);
             for (int i = 0; i < 3; i++) Part(t, "Winding", Torus(0.078f, 0.016f), new Vector3(0, -0.026f + i * 0.026f, 0), M("Copper"));
@@ -200,10 +214,10 @@ namespace TrashAstronauts.EditorTools
             Part(t, "Flange Top", Tube(0.108f, 0.007f, 18), new Vector3(0, 0.043f, 0), M("Steel"));
             Part(t, "Flange Bottom", Tube(0.108f, 0.007f, 18), new Vector3(0, -0.043f, 0), M("Steel"));
             Part(t, "Loose End", Tube(0.008f, 0.09f, 6), new Vector3(0.11f, 0.02f, 0.03f), M("Copper"), new Vector3(70, 20, 0));
-            FinishSalvage(go, "scrap_cable_coil");
+            FinishSalvage(go, "scrap_cable_coil", SurfaceKind.BareMetal);
 
             // Electronics: navigation board
-            go = FloatingRoot("Salvage_NavBoard", 1.5f, GameLayers.Salvage);
+            go = FloatingRoot("Salvage_NavBoard", 0.6f, GameLayers.Salvage);
             t = go.transform;
             go.AddComponent<BoxCollider>().size = new Vector3(0.25f, 0.05f, 0.17f);
             CBox(t, "Board", Vector3.zero, new Vector3(0.24f, 0.008f, 0.16f), M("Pcb"), 0.002f);
@@ -215,10 +229,10 @@ namespace TrashAstronauts.EditorTools
             for (int i = 0; i < 4; i++) Part(t, "Capacitor", Tube(0.008f, 0.022f, 8), new Vector3(0.075f + (i % 2) * 0.022f, 0.015f, 0.02f + (i / 2) * 0.024f), M("Chrome"));
             CBox(t, "Led A", new Vector3(-0.1f, 0.008f, -0.06f), new Vector3(0.01f, 0.008f, 0.01f), M("Led"), 0.002f);
             CBox(t, "Led B", new Vector3(-0.08f, 0.008f, -0.06f), new Vector3(0.01f, 0.008f, 0.01f), M("GlowRed"), 0.002f);
-            FinishSalvage(go, "elec_nav_board");
+            FinishSalvage(go, "elec_nav_board", SurfaceKind.GlassCeramic);
 
             // Electronics: comms relay
-            go = FloatingRoot("Salvage_CommsRelay", 2.5f, GameLayers.Salvage);
+            go = FloatingRoot("Salvage_CommsRelay", 3.5f, GameLayers.Salvage);
             t = go.transform;
             go.AddComponent<BoxCollider>().size = new Vector3(0.18f, 0.15f, 0.22f);
             CBox(t, "Body", Vector3.zero, new Vector3(0.17f, 0.12f, 0.2f), M("ToolBody"), 0.014f);
@@ -232,10 +246,10 @@ namespace TrashAstronauts.EditorTools
             CBox(t, "Handle", new Vector3(-0.02f, 0.075f, 0f), new Vector3(0.02f, 0.016f, 0.13f), M("PaintOrange"), 0.005f);
             CBox(t, "Handle Post A", new Vector3(-0.02f, 0.066f, 0.055f), new Vector3(0.018f, 0.02f, 0.018f), M("Steel"), 0.003f);
             CBox(t, "Handle Post B", new Vector3(-0.02f, 0.066f, -0.055f), new Vector3(0.018f, 0.02f, 0.018f), M("Steel"), 0.003f);
-            FinishSalvage(go, "elec_comms_relay");
+            FinishSalvage(go, "elec_comms_relay", SurfaceKind.PaintedMetal);
 
             // Reactor component: bulky regulator core in a protective cage
-            go = FloatingRoot("Salvage_ReactorCore", 14f, GameLayers.Salvage);
+            go = FloatingRoot("Salvage_ReactorCore", 40f, GameLayers.Salvage);
             t = go.transform;
             var capsule = go.AddComponent<CapsuleCollider>();
             capsule.radius = 0.15f;
@@ -256,10 +270,10 @@ namespace TrashAstronauts.EditorTools
             CBox(t, "Handle Post A", new Vector3(0.09f, 0.28f, 0), new Vector3(0.022f, 0.06f, 0.026f), M("Steel"), 0.005f);
             CBox(t, "Handle Post B", new Vector3(-0.09f, 0.28f, 0), new Vector3(0.022f, 0.06f, 0.026f), M("Steel"), 0.005f);
             CBox(t, "Warning Plate", new Vector3(0, 0.13f, -0.119f), new Vector3(0.07f, 0.04f, 0.004f), M("Hazard"), 0.001f);
-            FinishSalvage(go, "reactor_regulator_core");
+            FinishSalvage(go, "reactor_regulator_core", SurfaceKind.PaintedMetal);
 
             // Novelty: the suspiciously expensive toaster
-            go = FloatingRoot("Salvage_OrbitalToaster", 2f, GameLayers.Salvage);
+            go = FloatingRoot("Salvage_OrbitalToaster", 1.8f, GameLayers.Salvage);
             t = go.transform;
             go.AddComponent<BoxCollider>().size = new Vector3(0.28f, 0.2f, 0.17f);
             CBox(t, "Body", Vector3.zero, new Vector3(0.26f, 0.16f, 0.15f), M("Chrome"), 0.03f);
@@ -276,10 +290,10 @@ namespace TrashAstronauts.EditorTools
                 foreach (float z in new[] { -0.055f, 0.055f })
                     Part(t, "Foot", Tube(0.012f, 0.012f, 8), new Vector3(x, -0.1f, z), M("Rubber"));
             Part(t, "Cord Stub", Tube(0.007f, 0.06f, 6), new Vector3(-0.08f, -0.05f, 0.09f), M("Rubber"), new Vector3(70, 0, 0));
-            FinishSalvage(go, "novelty_orbital_toaster");
+            FinishSalvage(go, "novelty_orbital_toaster", SurfaceKind.BareMetal);
 
             // The hidden bonus: a rubber duck that squeaks (loudly) when its trigger is squeezed.
-            go = FloatingRoot("Salvage_RubberDuck", 0.15f, GameLayers.Salvage);
+            go = FloatingRoot("Salvage_RubberDuck", 0.1f, GameLayers.Salvage);
             t = go.transform;
             go.AddComponent<SphereCollider>().radius = 0.065f;
             var duck = Empty(t, "Visual", Vector3.zero).transform;
@@ -294,18 +308,18 @@ namespace TrashAstronauts.EditorTools
             }
             var squeaky = go.AddComponent<SqueakyToy>();
             squeaky.squashTarget = duck;
-            FinishSalvage(go, "novelty_rubber_duck");
+            FinishSalvage(go, "novelty_rubber_duck", SurfaceKind.RubberPlastic);
 
             // Tutorial practice scrap (worth nothing)
-            go = FloatingRoot("Salvage_TrainingScrap", 1f, GameLayers.Salvage);
+            go = FloatingRoot("Salvage_TrainingScrap", 1.5f, GameLayers.Salvage);
             t = go.transform;
             go.AddComponent<BoxCollider>().size = new Vector3(0.21f, 0.04f, 0.15f);
             CBox(t, "Plate", Vector3.zero, new Vector3(0.2f, 0.028f, 0.14f), M("ScrapTraining"), 0.006f);
             CBox(t, "Grip Bar", new Vector3(0, 0.022f, 0), new Vector3(0.12f, 0.014f, 0.02f), M("Steel"), 0.004f);
-            s_TrainingScrapPrefab = FinishSalvage(go, null, true);
+            s_TrainingScrapPrefab = FinishSalvage(go, null, SurfaceKind.PaintedMetal, true);
 
             // Worthless junk: good for throwing as a distraction.
-            go = FloatingRoot("Junk_Can", 0.6f, GameLayers.Salvage);
+            go = FloatingRoot("Junk_Can", 0.35f, GameLayers.Salvage);
             t = go.transform;
             var canCollider = go.AddComponent<CapsuleCollider>();
             canCollider.radius = 0.048f;
@@ -313,11 +327,11 @@ namespace TrashAstronauts.EditorTools
             Part(t, "Can", Lathe("Can", 14, new Vector2(0.04f, -0.07f), new Vector2(0.046f, -0.066f), new Vector2(0.046f, 0.066f), new Vector2(0.04f, 0.07f)), Vector3.zero, M("Junk"));
             Part(t, "Label", Tube(0.0468f, 0.07f, 14), Vector3.zero, M("PaintOrange"));
             Part(t, "Rim", Torus(0.043f, 0.004f, 14, 6), new Vector3(0, 0.068f, 0), M("Steel"));
-            MakeGrabbable(go, false, out _, out _, out _);
+            MakeGrabbable(go, false, SurfaceKind.PaintedMetal, out _, out _, out _);
             go.AddComponent<FloatingDebris>();
             s_JunkCanPrefab = SavePrefab(go, go.name);
 
-            go = FloatingRoot("Junk_Crate", 2.5f, GameLayers.Salvage);
+            go = FloatingRoot("Junk_Crate", 5f, GameLayers.Salvage);
             t = go.transform;
             go.AddComponent<BoxCollider>().size = new Vector3(0.29f, 0.23f, 0.23f);
             CBox(t, "Crate", Vector3.zero, new Vector3(0.28f, 0.22f, 0.22f), M("Container"), 0.012f);
@@ -325,7 +339,7 @@ namespace TrashAstronauts.EditorTools
             CBox(t, "Strap B", new Vector3(0.07f, 0, 0), new Vector3(0.03f, 0.226f, 0.226f), M("Rubber"), 0.004f);
             CBox(t, "Lid Seam", new Vector3(0, 0.06f, 0), new Vector3(0.284f, 0.006f, 0.224f), M("Chip"), 0.001f);
             CBox(t, "Label", new Vector3(0, -0.02f, -0.111f), new Vector3(0.09f, 0.05f, 0.003f), M("PaintWhite"), 0.001f);
-            MakeGrabbable(go, false, out _, out _, out _);
+            MakeGrabbable(go, false, SurfaceKind.RubberPlastic, out _, out _, out _);
             go.AddComponent<FloatingDebris>();
             s_JunkCratePrefab = SavePrefab(go, go.name);
         }
