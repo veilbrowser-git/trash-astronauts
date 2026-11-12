@@ -63,7 +63,9 @@ namespace TrashAstronauts.Tools
             {
                 end = origin + direction * hit.distance;
                 var drone = hit.collider.GetComponentInParent<EnemyDrone>();
-                if (drone != null && drone.Tranquilize(director.Config.tranqSleepSeconds))
+                // On a co-op client the creature is the host's: the hit is reported, and the host puts it to sleep.
+                bool onAClient = director.Net != null && director.Net.IsClient;
+                if (drone != null && (onAClient ? ReportHit(director, drone, origin, hit.point) : drone.Tranquilize(director.Config.tranqSleepSeconds)))
                 {
                     hitCreature = true;
                     Hits++;
@@ -83,6 +85,17 @@ namespace TrashAstronauts.Tools
             }
             RefreshReadout();
             return hitCreature;
+        }
+
+        /// <summary>How many hits this tool has reported to the host instead of sedating (co-op client).</summary>
+        public int HitsReported { get; private set; }
+
+        bool ReportHit(MissionDirector director, EnemyDrone drone, Vector3 origin, Vector3 hitPoint)
+        {
+            if (!drone.IsRunning || drone.IsScaring) return false;
+            HitsReported++;
+            director.Net.ReportTranqHit(origin, hitPoint);
+            return true;
         }
 
         IEnumerator ShowTracer(Vector3 from, Vector3 to)

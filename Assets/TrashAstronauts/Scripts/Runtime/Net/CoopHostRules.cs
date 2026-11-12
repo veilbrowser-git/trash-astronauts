@@ -37,6 +37,18 @@ namespace TrashAstronauts.Net
 
         public MissionDirector Director => m_Director;
         public CoopItemSampler Sampler => m_Sampler;
+        /// <summary>The creature, its noise and darts, and the blackouts (stage 4).</summary>
+        public CoopCreatureHost Creature { get; }
+
+        /// <summary>
+        /// Stage 4 switch: contracts started from now on carry the creature (never the Mimic) and blackouts.
+        /// Off by default, which keeps the ride-along contract. Turned off again with the rules.
+        /// </summary>
+        public bool CreatureEnabled
+        {
+            get => m_Director.CoopCreatureEnabled;
+            set => m_Director.CoopCreatureEnabled = value;
+        }
 
         public CoopHostRules(MissionDirector director, ICoopBroadcast broadcast)
         {
@@ -58,6 +70,7 @@ namespace TrashAstronauts.Net
             m_Session.PhaseChanged += OnPhaseChanged;
             if (m_Locker != null) m_Locker.Accepted += OnLockerAccepted;
             m_Sampler.CameToRest += OnCameToRest;
+            Creature = new CoopCreatureHost(director, broadcast);
 
             var ids = director.NetIds;
             for (int i = 0; i < ids.Doors.Count; i++)
@@ -84,6 +97,7 @@ namespace TrashAstronauts.Net
             if (m_Director != null)
             {
                 m_Director.CoopRideAlong = false;
+                m_Director.CoopCreatureEnabled = false;
                 m_Director.MissionStarted -= OnMissionStarted;
                 m_Director.MissionEnded -= OnMissionEnded;
                 m_Director.SalvageDamaged -= OnSalvageDamaged;
@@ -95,6 +109,7 @@ namespace TrashAstronauts.Net
             m_Session.PhaseChanged -= OnPhaseChanged;
             if (m_Locker != null) m_Locker.Accepted -= OnLockerAccepted;
             m_Sampler.CameToRest -= OnCameToRest;
+            Creature.Dispose();
             foreach (var door in m_Doors)
             {
                 if (door != null) door.Changed -= OnDoorChanged;
@@ -171,6 +186,15 @@ namespace TrashAstronauts.Net
             var player = m_Director.FindPlayer(new PlayerId(slot));
             if (player != null && player.IsRemote) player.IsAway = away;
         }
+
+        /// <summary>A crew member's noise (IHostWorld.OnNoise): see <see cref="CoopCreatureHost.HostNoise"/>.</summary>
+        public bool HostNoise(NetVec3 position, float loudness, NoiseKind kind, byte bySlot) => Creature.HostNoise(position, loudness, kind, bySlot);
+
+        /// <summary>A crew member's dart hit (IHostWorld.OnTranqHitReport): see <see cref="CoopCreatureHost.HostTranqHitReport"/>.</summary>
+        public bool HostTranqHitReport(NetVec3 origin, NetVec3 hitPoint, byte bySlot) => Creature.HostTranqHitReport(origin, hitPoint, bySlot);
+
+        /// <summary>The CreatureState sample due now, if any (10/20 Hz): see <see cref="CoopCreatureHost.TrySampleCreature"/>.</summary>
+        public bool TrySampleCreature(double now, out CreatureSnapshot snapshot) => Creature.TrySampleCreature(now, out snapshot);
 
         // ------------------------------------------------------------------ state for the adapter
 
