@@ -12,6 +12,8 @@ namespace TrashAstronauts.Core
         ScannerRange = 1,
         /// <summary>One-time upgrade: the cutter takes longer to overheat.</summary>
         CutterCoolant = 2,
+        /// <summary>One-time upgrade: a lamp on the helmet, with its own battery and switch.</summary>
+        HeadLamp = 3,
     }
 
     [Serializable]
@@ -117,6 +119,8 @@ namespace TrashAstronauts.Core
         [Min(0)] public int cutterUpgradeCost = 350;
         [Tooltip("With the coolant upgrade the cutter takes this many times longer to overheat.")]
         [Min(1f)] public float cutterUpgradeHeatMultiplier = 1.6f;
+        [Tooltip("The helmet lamp: cheap enough to be a first or second purchase (a contract pays about 1000).")]
+        [Min(0)] public int headLampCost = 250;
 
         [Header("Fun")]
         [Tooltip("Salvage thrown into the locker from at least this far away earns a trick-shot bonus.")]
@@ -154,6 +158,7 @@ namespace TrashAstronauts.Core
                 case ShopItem.TranqDart: return tranqDartCost;
                 case ShopItem.ScannerRange: return scannerUpgradeCost;
                 case ShopItem.CutterCoolant: return cutterUpgradeCost;
+                case ShopItem.HeadLamp: return headLampCost;
                 default: return 0;
             }
         }

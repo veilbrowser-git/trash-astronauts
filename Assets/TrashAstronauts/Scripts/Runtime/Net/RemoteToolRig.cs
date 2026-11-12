@@ -20,7 +20,9 @@ namespace TrashAstronauts.Net
     ///   <see cref="MaxRealLights"/> remote flashlights to this headset (chosen every frame with hysteresis);
     /// - cutter firing: the flame, a glow and the cutter loop from that hand (3D, occluded by walls); flame on a weld:
     ///   sparks at the tip and their crackle;
-    /// - scanner in hand: its screen lights up; tranquilizer: <see cref="ShowTracer"/> draws a brief tracer.
+    /// - scanner in hand: its screen lights up; tranquilizer: <see cref="ShowTracer"/> draws a brief tracer;
+    /// - helmet lamp on (<see cref="RemoteHeadLamp"/>): a glow at the lamp housing and a wide soft cone. Helmet lamps
+    ///   and flashlights share the same <see cref="MaxRealLights"/> real lights, nearest first.
     ///
     /// <see cref="RemoteAvatar"/> calls <see cref="Apply"/> with every drawn sample. Nothing here exists offline:
     /// it is only part of the RemoteCrew prefab.
@@ -29,7 +31,7 @@ namespace TrashAstronauts.Net
     {
         /// <summary>Slots of the per-tool arrays: the ids of <see cref="AvatarSampler"/> (index 0 = no tool, unused).</summary>
         public const int Slots = 5;
-        /// <summary>Real spot lights shared by all remote flashlights (Quest budget). The rest keep only the cone.</summary>
+        /// <summary>Real spot lights shared by all remote flashlights and helmet lamps (Quest budget). The rest keep only the cone.</summary>
         public static int MaxRealLights = 2;
         /// <summary>A lit flashlight keeps its real light until another is this much closer (fraction of its distance).</summary>
         public const float LightHysteresis = 0.8f;
@@ -55,6 +57,9 @@ namespace TrashAstronauts.Net
         public GameObject flashlightBeam;
         public Light flashlightSpot;
 
+        [Header("Helmet lamp")]
+        public RemoteHeadLamp headLamp;
+
         [Header("Plasma cutter")]
         public Transform cutterTip;
         public GameObject cutterFlame;
@@ -74,8 +79,10 @@ namespace TrashAstronauts.Net
         public float tracerSeconds = 0.12f;
 
         static readonly List<RemoteToolRig> s_Live = new List<RemoteToolRig>();
-        static readonly RemoteToolRig[] s_Candidates = new RemoteToolRig[NetProtocol.MaxPlayers * 2];
-        static readonly float[] s_Scores = new float[NetProtocol.MaxPlayers * 2];
+        // Two lights a rig at most (flashlight, helmet lamp); room for twice the crew in case stand-ins overlap a frame.
+        static readonly RemoteToolRig[] s_Candidates = new RemoteToolRig[NetProtocol.MaxPlayers * 4];
+        static readonly bool[] s_IsLamp = new bool[NetProtocol.MaxPlayers * 4];
+        static readonly float[] s_Scores = new float[NetProtocol.MaxPlayers * 4];
         static int s_BudgetFrame = -1;
         static readonly int k_Emission = Shader.PropertyToID("_EmissionColor");
 
@@ -117,6 +124,7 @@ namespace TrashAstronauts.Net
         {
             s_Live.Remove(this);
             SetRealLight(false);
+            if (headLamp != null) headLamp.SetRealLight(false);
             if (cutterLoop != null && cutterLoop.isPlaying) cutterLoop.Stop();
             LoopOn = false;
             CutterFiring = false;
@@ -139,6 +147,7 @@ namespace TrashAstronauts.Net
             m_Placed = true;
 
             SetFlashlight(s.HasFlag(AvatarFlags.FlashlightOn), first);
+            if (headLamp != null) headLamp.Set(s.HasFlag(AvatarFlags.HeadLampOn), first);
             SetCutter(s.HasFlag(AvatarFlags.CutterFiring), s.HasFlag(AvatarFlags.Cutting));
             bool scanner = s.leftTool == AvatarSampler.Scanner || s.rightTool == AvatarSampler.Scanner;
             if (scanner != ScannerHeld || first)
@@ -271,36 +280,59 @@ namespace TrashAstronauts.Net
         }
 
         /// <summary>
-        /// Hands the real spot lights to the lit remote flashlights nearest this headset, at most
-        /// <see cref="MaxRealLights"/>. A flashlight that has one keeps it until another is clearly closer
+        /// Hands the real spot lights to the lit remote flashlights and helmet lamps nearest this headset, at most
+        /// <see cref="MaxRealLights"/> in all. A light that has one keeps it until another is clearly closer
         /// (<see cref="LightHysteresis"/>), so two crew mates at similar distances do not make the lights flicker.
         /// </summary>
         public static void UpdateLightBudget()
         {
             Vector3? viewer = ViewerPosition();
             int count = 0;
-            for (int i = 0; i < s_Live.Count && count < s_Candidates.Length; i++)
+            for (int i = 0; i < s_Live.Count; i++)
             {
                 var rig = s_Live[i];
-                if (rig == null || rig.flashlightSpot == null) continue;
-                if (!rig.FlashlightOn || !rig.Shown || viewer == null) { rig.SetRealLight(false); continue; }
-                float d = Vector3.Distance(viewer.Value, rig.flashlightSpot.transform.position);
-                if (rig.HasRealLight) d *= LightHysteresis;
-                // insertion sort, nearest first
-                int at = count++;
-                while (at > 0 && s_Scores[at - 1] > d)
+                if (rig == null) continue;
+                bool shown = rig.Shown && viewer != null;
+                if (rig.flashlightSpot != null)
                 {
-                    s_Scores[at] = s_Scores[at - 1];
-                    s_Candidates[at] = s_Candidates[at - 1];
-                    at--;
+                    if (!rig.FlashlightOn || !shown || count >= s_Candidates.Length) rig.SetRealLight(false);
+                    else Consider(ref count, rig, false, Vector3.Distance(viewer.Value, rig.flashlightSpot.transform.position), rig.HasRealLight);
                 }
-                s_Scores[at] = d;
-                s_Candidates[at] = rig;
+                var lamp = rig.headLamp;
+                if (lamp != null && lamp.spot != null)
+                {
+                    if (!lamp.On || !shown || count >= s_Candidates.Length) lamp.SetRealLight(false);
+                    else Consider(ref count, rig, true, Vector3.Distance(viewer.Value, lamp.spot.transform.position), lamp.HasRealLight);
+                }
             }
             int max = Mathf.Max(0, MaxRealLights);
-            for (int i = max; i < count; i++) s_Candidates[i].SetRealLight(false); // take first, then give
-            for (int i = 0; i < count && i < max; i++) s_Candidates[i].SetRealLight(true);
+            for (int i = max; i < count; i++) Give(i, false); // take first, then give
+            for (int i = 0; i < count && i < max; i++) Give(i, true);
             for (int i = 0; i < count; i++) s_Candidates[i] = null;
+        }
+
+        static void Consider(ref int count, RemoteToolRig rig, bool lamp, float distance, bool hasLight)
+        {
+            if (hasLight) distance *= LightHysteresis;
+            // insertion sort, nearest first
+            int at = count++;
+            while (at > 0 && s_Scores[at - 1] > distance)
+            {
+                s_Scores[at] = s_Scores[at - 1];
+                s_Candidates[at] = s_Candidates[at - 1];
+                s_IsLamp[at] = s_IsLamp[at - 1];
+                at--;
+            }
+            s_Scores[at] = distance;
+            s_Candidates[at] = rig;
+            s_IsLamp[at] = lamp;
+        }
+
+        static void Give(int index, bool on)
+        {
+            var rig = s_Candidates[index];
+            if (s_IsLamp[index]) rig.headLamp.SetRealLight(on);
+            else rig.SetRealLight(on);
         }
     }
 }

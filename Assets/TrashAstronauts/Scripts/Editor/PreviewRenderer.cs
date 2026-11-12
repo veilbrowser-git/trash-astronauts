@@ -9,7 +9,7 @@ namespace TrashAstronauts.EditorTools
     /// Renders a few still images of the generated scene to Docs/Previews so the level can be eyeballed
     /// without a headset. Menu: Trash Astronauts > Advanced > Render Preview Images.
     /// </summary>
-    public static class PreviewRenderer
+    public static partial class PreviewRenderer
     {
         [MenuItem("Trash Astronauts/Advanced/Render Preview Images", priority = 60)]
         public static void RenderPreviews()
@@ -186,6 +186,7 @@ namespace TrashAstronauts.EditorTools
             SettingsShot();
             SuitColourShots();
             RemoteToolShots();
+            HeadLampShots(); // PreviewRenderer.HeadLamp.cs
 
             Shot("08_top_down", new Vector3(-1f, 46f, 22f), new Vector3(-1f, 0f, 22.01f), true);
             Shot("18_flight_deck", new Vector3(-0.8f, 1.6f, -3.3f), new Vector3(0.3f, 1.3f, -6.2f));
