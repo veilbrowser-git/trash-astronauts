@@ -33,7 +33,8 @@ namespace TrashAstronauts.EditorTools
                 existing.SetVertices(new List<Vector3>(built.vertices));
                 existing.SetNormals(new List<Vector3>(built.normals));
                 existing.SetUVs(0, new List<Vector2>(built.uv));
-                existing.SetTriangles(built.triangles, 0);
+                existing.subMeshCount = Mathf.Max(1, built.subMeshCount);
+                for (int sub = 0; sub < built.subMeshCount; sub++) existing.SetTriangles(built.GetTriangles(sub), sub);
                 existing.RecalculateBounds();
                 EditorUtility.SetDirty(existing);
                 UnityEngine.Object.DestroyImmediate(built);

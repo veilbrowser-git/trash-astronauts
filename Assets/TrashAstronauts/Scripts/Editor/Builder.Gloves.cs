@@ -51,6 +51,8 @@ namespace TrashAstronauts.EditorTools
             public GlovePartInfo[] parts;
             public readonly Dictionary<string, Mesh> meshes = new Dictionary<string, Mesh>();
             public Material material;
+            /// <summary>The atlas with its accent bands in each suit palette colour ([0] = the atlas itself).</summary>
+            public Texture2D[] bandAtlases;
         }
 
         static GloveModel s_GloveModel;
@@ -71,6 +73,7 @@ namespace TrashAstronauts.EditorTools
             var holder = Empty(glove, "Model", Vector3.zero, null, GameLayers.Hand);
             holder.transform.localScale = new Vector3(left ? -1f : 1f, 1f, 1f);
             var made = new Dictionary<string, Transform>();
+            var renderers = new List<Renderer>();
             foreach (var part in model.parts)
             {
                 if (!model.meshes.ContainsKey(part.name)) continue;
@@ -84,6 +87,7 @@ namespace TrashAstronauts.EditorTools
                 var renderer = go.AddComponent<MeshRenderer>();
                 renderer.sharedMaterial = model.material;
                 Cheap(renderer);
+                renderers.Add(renderer);
                 made[part.name] = go.transform;
             }
 
@@ -101,6 +105,8 @@ namespace TrashAstronauts.EditorTools
                 visual.thumbJoints[i] = made[GloveThumbParts[i]];
                 visual.thumbBase[i] = visual.thumbJoints[i].localRotation;
             }
+            visual.bandRenderers = renderers.ToArray();
+            visual.bandAtlases = model.bandAtlases;
             visual.Apply(0f, 0f); // save the prefab in the relaxed rest pose
             return true;
         }
@@ -160,6 +166,7 @@ namespace TrashAstronauts.EditorTools
 
             var model = new GloveModel { parts = info.parts };
             model.material = Lit("GloveSuit", Color.white, info.smoothness, atlas);
+            model.bandAtlases = BuildGloveBandAtlases(atlasPath, atlas);
             foreach (var part in info.parts)
             {
                 if (part.vertexCount <= 0 || part.indexCount <= 0) continue;
@@ -196,9 +203,96 @@ namespace TrashAstronauts.EditorTools
             return model;
         }
 
+        /// <summary>
+        /// The glove's accent bands (the gauntlet band and the stripe across the back-of-hand plate) are painted orange
+        /// into the atlas, sharing triangles with the white fabric, so they cannot be tinted by colour alone. Instead the
+        /// atlas is repainted once per suit palette colour: every strongly orange pixel takes the new colour at the same
+        /// brightness (so the folds, seams and scuffs stay), everything else is left alone. Entry 0 is the atlas as it is.
+        /// GloveVisual swaps these in through a property block. Unchanged files are not rewritten.
+        /// </summary>
+        static Texture2D[] BuildGloveBandAtlases(string atlasPath, Texture2D atlas)
+        {
+            var result = new Texture2D[PlayerAvatar.SuitColors.Length];
+            result[0] = atlas;
+            var source = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            if (!source.LoadImage(File.ReadAllBytes(atlasPath)))
+            {
+                UnityEngine.Object.DestroyImmediate(source);
+                return result;
+            }
+            Color32[] pixels = source.GetPixels32();
+            var mask = new float[pixels.Length];
+            var value = new float[pixels.Length];
+            for (int i = 0; i < pixels.Length; i++)
+            {
+                float r = pixels[i].r / 255f, g = pixels[i].g / 255f, b = pixels[i].b / 255f;
+                value[i] = r;
+                mask[i] = BandMask(r, g, b);
+            }
+            const float bandValue = 0.93f; // the red channel of the painted orange (build_hands.py)
+            var painted = new Color32[pixels.Length];
+            for (int c = 1; c < result.Length; c++)
+            {
+                Color target = PlayerAvatar.SuitColors[c];
+                for (int i = 0; i < pixels.Length; i++)
+                {
+                    if (mask[i] <= 0f) { painted[i] = pixels[i]; continue; }
+                    float f = Mathf.Min(1.1f, value[i] / bandValue);
+                    Color32 p = pixels[i];
+                    painted[i] = new Color32(
+                        (byte)Mathf.Clamp(Mathf.RoundToInt(Mathf.Lerp(p.r, 255f * target.r * f, mask[i])), 0, 255),
+                        (byte)Mathf.Clamp(Mathf.RoundToInt(Mathf.Lerp(p.g, 255f * target.g * f, mask[i])), 0, 255),
+                        (byte)Mathf.Clamp(Mathf.RoundToInt(Mathf.Lerp(p.b, 255f * target.b * f, mask[i])), 0, 255),
+                        p.a);
+                }
+                var variant = new Texture2D(source.width, source.height, TextureFormat.RGBA32, false);
+                variant.SetPixels32(painted);
+                byte[] png = variant.EncodeToPNG();
+                UnityEngine.Object.DestroyImmediate(variant);
+                string path = TextureDir + "/Glove_" + GloveModelId + "_band_" + c + ".png";
+                if (!File.Exists(path) || !SameBytes(File.ReadAllBytes(path), png))
+                {
+                    File.WriteAllBytes(path, png);
+                    AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+                }
+                var importer = (TextureImporter)AssetImporter.GetAtPath(path);
+                if (importer != null && (importer.wrapMode != TextureWrapMode.Clamp || !importer.mipmapEnabled || importer.maxTextureSize != 512 || importer.anisoLevel != 2))
+                {
+                    importer.wrapMode = TextureWrapMode.Clamp;
+                    importer.mipmapEnabled = true;
+                    importer.maxTextureSize = 512;
+                    importer.anisoLevel = 2;
+                    importer.SaveAndReimport();
+                }
+                result[c] = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+            }
+            UnityEngine.Object.DestroyImmediate(source);
+            return result;
+        }
+
+        /// <summary>How surely a pixel (gamma 0..1) belongs to an orange accent band: strongly coloured, red highest, blue lowest, hue orange.</summary>
+        public static float BandMask(float r, float g, float b)
+        {
+            if (r < g || r < b || b > g) return 0f;
+            float chroma = r - b;
+            if (chroma < 0.12f) return 0f;
+            float hue = (g - b) / chroma; // 0 = red, 1 = yellow; the painted orange is about 0.39
+            if (hue < 0.12f || hue > 0.72f) return 0f;
+            return Mathf.Clamp01((chroma - 0.12f) / 0.18f);
+        }
+
+        static bool SameBytes(byte[] a, byte[] b)
+        {
+            if (a.Length != b.Length) return false;
+            for (int i = 0; i < a.Length; i++) if (a[i] != b[i]) return false;
+            return true;
+        }
+
         static bool GloveModelAlive(GloveModel model)
         {
             if (model == null || model.material == null) return false;
+            if (model.bandAtlases == null) return false;
+            foreach (var t in model.bandAtlases) if (t == null) return false;
             foreach (var mesh in model.meshes.Values) if (mesh == null) return false;
             return true;
         }

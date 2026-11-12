@@ -42,6 +42,8 @@ namespace TrashAstronauts.Core.Net
         public ushort tugNumber;
         /// <summary>The host player's handedness (0 right, 1 left).</summary>
         public byte handedness;
+        /// <summary>The host player's suit colour (0 = slot colour, 1..12 = suit palette; see <see cref="SuitLook"/>).</summary>
+        public byte suitColour;
         /// <summary>Seeds the connection ids.</summary>
         public int seed = 1;
     }
@@ -65,6 +67,7 @@ namespace TrashAstronauts.Core.Net
             public ushort connId;
             public uint nonce;
             public byte handedness;
+            public byte suitColour;
             public readonly ReliableChannel channel = new ReliableChannel();
             public double acceptedAt;
             public double lastHeard;
@@ -122,6 +125,7 @@ namespace TrashAstronauts.Core.Net
         bool m_Closed;
         bool m_Disposed;
         byte m_Handedness;
+        byte m_SuitColour;
 
         AvatarSnapshot m_LocalAvatar;
         bool m_HasLocalAvatar;
@@ -166,6 +170,7 @@ namespace TrashAstronauts.Core.Net
             m_World = world ?? throw new ArgumentNullException(nameof(world));
             m_Config = config ?? new NetHostConfig();
             m_Handedness = (byte)(m_Config.handedness & 1);
+            m_SuitColour = SuitLook.Clamp(m_Config.suitColour);
             m_Random = new Random(m_Config.seed);
             for (int i = 0; i < m_Peers.Length; i++)
             {
@@ -230,6 +235,13 @@ namespace TrashAstronauts.Core.Net
         {
             if (slot == 0) return m_Handedness;
             return slot > 0 && slot < m_Peers.Length && m_Peers[slot].used ? m_Peers[slot].handedness : (byte)0;
+        }
+
+        /// <summary>A slot's suit colour (0 = slot colour, 1..12 = suit palette). 0 for an empty slot.</summary>
+        public byte SuitColour(int slot)
+        {
+            if (slot == 0) return m_SuitColour;
+            return slot > 0 && slot < m_Peers.Length && m_Peers[slot].used ? m_Peers[slot].suitColour : SuitLook.Default;
         }
 
         /// <summary>Reliable messages waiting for a slot (0 for an empty slot). Bounded by 512.</summary>
@@ -476,6 +488,7 @@ namespace TrashAstronauts.Core.Net
             peer.endpoint = from;
             peer.nonce = hello.clientNonce;
             peer.handedness = hello.handedness;
+            peer.suitColour = hello.suitColour;
             peer.connId = NewConnId();
             peer.channel.Reset(peer.connId);
             peer.acceptedAt = m_Now;
@@ -826,7 +839,9 @@ namespace TrashAstronauts.Core.Net
                 {
                     if (!SettingsChangedMsg.Read(ref r, out SettingsChangedMsg m)) { m_Stats.malformed++; return; }
                     peer.handedness = m.handedness;
+                    peer.suitColour = m.suitColour;
                     m_World.OnPlayerSettings(slot, m.handedness);
+                    if (m_World is ICrewLookListener settingsLook) settingsLook.OnCrewLook(slot, m.suitColour);
                     BroadcastRoster(slot, RosterChange.Settings, m.handedness, slot);
                     break;
                 }
@@ -923,9 +938,9 @@ namespace TrashAstronauts.Core.Net
             // The Welcome is queued before the game hears of the join, so whatever the game broadcasts from
             // inside OnPlayerJoined reaches the joiner after its Welcome, never before it.
             m_Welcome.roster = 0u;
-            m_Welcome.SetSlot(0, true, m_Handedness, false);
+            m_Welcome.SetSlot(0, true, m_Handedness, false, m_SuitColour);
             for (int i = 1; i < m_Peers.Length; i++)
-                if (m_Peers[i].used && m_Peers[i].confirmed) m_Welcome.SetSlot(i, true, m_Peers[i].handedness, m_Peers[i].away);
+                if (m_Peers[i].used && m_Peers[i].confirmed) m_Welcome.SetSlot(i, true, m_Peers[i].handedness, m_Peers[i].away, m_Peers[i].suitColour);
             m_Welcome.phase = m_World.Phase;
             m_Welcome.world.Clear();
             m_World.FillWorldState(ref m_Welcome.world);
@@ -935,6 +950,8 @@ namespace TrashAstronauts.Core.Net
 
             m_World.OnPlayerJoined(peer.slot, peer.handedness);
             if (!peer.used || !peer.confirmed) return; // the game closed the session or dropped the slot in the callback
+            if (m_World is ICrewLookListener joinLook) joinLook.OnCrewLook(peer.slot, peer.suitColour);
+            if (!peer.used || !peer.confirmed) return;
             BroadcastRoster(peer.slot, RosterChange.Joined, peer.handedness, peer.slot);
         }
 
@@ -1234,6 +1251,17 @@ namespace TrashAstronauts.Core.Net
             BroadcastRoster(0, RosterChange.Settings, handedness, -1);
         }
 
+        /// <summary>The host player changed handedness or suit colour (0 = slot colour, 1..12 = suit palette; out of range = 0).</summary>
+        public void SetLocalLook(byte handedness, byte suitColour)
+        {
+            handedness &= 1;
+            suitColour = SuitLook.Clamp(suitColour);
+            if (handedness == m_Handedness && suitColour == m_SuitColour) return;
+            m_Handedness = handedness;
+            m_SuitColour = suitColour;
+            BroadcastRoster(0, RosterChange.Settings, handedness, -1);
+        }
+
         public void SendWorldState(in WorldStateMsg state)
         {
             var w = new NetWriter(m_Scratch);
@@ -1366,7 +1394,7 @@ namespace TrashAstronauts.Core.Net
         void BroadcastRoster(byte slot, RosterChange change, byte handedness, int exceptSlot)
         {
             var w = new NetWriter(m_Small);
-            new RosterChangedMsg { slot = slot, change = change, handedness = handedness }.Write(ref w);
+            new RosterChangedMsg { slot = slot, change = change, handedness = handedness, suitColour = SuitColour(slot) }.Write(ref w);
             Broadcast(NetMsg.RosterChanged, ref w, exceptSlot);
         }
 

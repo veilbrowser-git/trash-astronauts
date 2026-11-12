@@ -11,8 +11,19 @@ namespace TrashAstronauts.Core.Net
     /// An IClientWorld that records what it is told and keeps the simplest possible mirror of it. Items get a
     /// real <see cref="ItemAuthority"/> each, so a bot can grab, carry, throw and hand back like a player.
     /// </summary>
-    public sealed class BotClientWorld : IClientWorld
+    public sealed class BotClientWorld : IClientWorld, ICrewLookListener
     {
+        /// <summary>Suit colour per slot as reported through <see cref="ICrewLookListener"/>, and how many reports came.</summary>
+        public readonly byte[] SuitColour = new byte[NetProtocol.MaxPlayers];
+        public int LookCalls;
+
+        public void OnCrewLook(byte slot, byte suitColour)
+        {
+            if (slot >= NetProtocol.MaxPlayers) return;
+            SuitColour[slot] = suitColour;
+            LookCalls++;
+        }
+
         /// <summary>How many times each message type reached this world, indexed by <see cref="NetMsg"/> id.</summary>
         public readonly int[] Calls = new int[256];
         /// <summary>Message types in arrival order (reliable ones only), capped at 4096.</summary>
@@ -291,8 +302,19 @@ namespace TrashAstronauts.Core.Net
     /// <see cref="NetSessionHost"/> and switch on the Auto* flags to get a host that says yes to everything, or
     /// leave them off and drive the session's Send* methods from the test script.
     /// </summary>
-    public sealed class ScriptedHostWorld : IHostWorld
+    public sealed class ScriptedHostWorld : IHostWorld, ICrewLookListener
     {
+        /// <summary>Suit colour per slot as reported through <see cref="ICrewLookListener"/>, and how many reports came.</summary>
+        public readonly byte[] SuitColour = new byte[NetProtocol.MaxPlayers];
+        public int LookCalls;
+
+        public void OnCrewLook(byte slot, byte suitColour)
+        {
+            if (slot >= NetProtocol.MaxPlayers) return;
+            SuitColour[slot] = suitColour;
+            LookCalls++;
+        }
+
         /// <summary>How many times each client message reached this world, indexed by <see cref="NetMsg"/> id (RosterChanged counts joins and leaves).</summary>
         public readonly int[] Calls = new int[256];
         public NetSessionHost Session;
