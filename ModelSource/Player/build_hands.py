@@ -162,7 +162,7 @@ FINGER_LEN = [(0.040, 0.026, 0.022), (0.044, 0.028, 0.023), (0.041, 0.027, 0.022
 FINGER_W = [0.0099, 0.0102, 0.0096, 0.0086]           # half widths of the proximal segment (gloved)
 FINGER_SPLAY = [-6.0, -1.0, 4.5, 11.0]                  # degrees about Y at the knuckle
 THUMB_BASE = np.array([-0.031, -0.043, -0.112])
-THUMB_DIRS = [(-0.72, -0.36, 0.66), (-0.55, -0.38, 0.78), (-0.42, -0.40, 0.84)]   # ~45 degrees out
+THUMB_DIRS = [(-0.72, -0.22, 0.66), (-0.56, -0.24, 0.79), (-0.44, -0.26, 0.86)]   # ~45 degrees out
 THUMB_LEN = (0.042, 0.032, 0.027)
 THUMB_W = (0.0150, 0.0130, 0.0118)
 
@@ -218,22 +218,33 @@ class Part:
         self.chunks = chunks
 
 
+def smooth_box(v, lo, hi, soft):
+    """1 inside [lo, hi], easing to 0 over `soft` outside it."""
+    return np.clip((v - lo) / soft + 1, 0, 1) * np.clip((hi - v) / soft + 1, 0, 1)
+
+
 def build_palm():
-    # Palm and back of the hand: a padded, slightly boxy block.
-    pos, tris, luv = capsule(-0.132, -0.017, 0.043, 0.0155, 0.0465, 0.0165, n=16, rings=12, p=3.2, e=0.42)
+    # Palm and back of the hand: an organic block, narrower and thinner at the wrist, round-edged, arched
+    # across the back, with a padded heel, thumb mound and finger-root pads underneath and a knuckle ridge on top.
+    pos, tris, luv = capsule(-0.134, -0.017, 0.037, 0.0138, 0.0472, 0.0162, n=18, rings=12, p=2.35, e=0.5)
     pos = pos.copy()
     x, y, z = pos[:, 0], pos[:, 1], pos[:, 2]
-    under = np.clip(-y / 0.0165, 0, 1)
-    over = np.clip(y / 0.0165, 0, 1)
-    # Padded heel of the palm, the thenar mound under the thumb, a shallow hollow in the middle.
-    heel = 0.0065 * gauss((z + 0.112) / 0.018) * (0.6 + 0.4 * gauss(x / 0.03))
-    thenar = 0.0055 * gauss((z + 0.092) / 0.022) * gauss((x + 0.028) / 0.014)
-    hypothenar = 0.003 * gauss((z + 0.09) / 0.025) * gauss((x - 0.032) / 0.012)
+    under = np.clip(-y / 0.015, 0, 1)
+    over = np.clip(y / 0.015, 0, 1)
+    heel = 0.006 * gauss((z + 0.112) / 0.018) * (0.6 + 0.4 * gauss(x / 0.03))
+    thenar = 0.0062 * gauss((z + 0.094) / 0.022) * gauss((x + 0.027) / 0.014)
+    hypothenar = 0.003 * gauss((z + 0.09) / 0.025) * gauss((x - 0.031) / 0.012)
     hollow = -0.0025 * gauss((z + 0.07) / 0.015) * gauss(x / 0.018)
-    pads = 0.0025 * gauss((z + 0.034) / 0.009) * (np.abs(x) < 0.04)  # padding under the finger roots
+    pads = 0.0025 * gauss((z + 0.034) / 0.009) * gauss(x / 0.04)
     y -= under * (heel + thenar + hypothenar + hollow + pads)
-    # Back of the hand: tendons/knuckle rise toward the fingers, slight dome.
-    y += over * (0.0022 * gauss((z + 0.03) / 0.012) + 0.002 * gauss(x / 0.03))
+    # Arched across the back (the metacarpals), a knuckle ridge with a bump over each knuckle, and the back
+    # plate as a thin pad (about 1.5 mm) that follows the curve.
+    arch = 0.0045 * np.clip(1 - (x / 0.048) ** 2, 0, 1)
+    ridge = 0.0026 * gauss((z + 0.03) / 0.009) * gauss(x / 0.042)
+    for fx in (-0.0305, -0.010, 0.0105, 0.030):
+        ridge += 0.0016 * gauss((z + 0.027) / 0.007) * gauss((x - fx) / 0.006)
+    plate = 0.0015 * smooth_box(x, -0.027, 0.027, 0.003) * smooth_box(z, -0.108, -0.043, 0.003)
+    y += over * (ridge + plate) + arch
     pos[:, 1] = y + PALM_CENTRE[1]
     palm_luv = np.stack([(x + 0.05) / 0.10, (z + 0.135) / 0.12], axis=1)
     chunk = Chunk(pos, tris, luv, "fabric")
@@ -241,45 +252,42 @@ def build_palm():
     chunk.orient_outward()
     fn = chunk.face_normals()
     fn /= np.maximum(np.linalg.norm(fn, axis=1, keepdims=True), 1e-12)
-    chunk.region = ["palm" if n[1] < -0.5 else "back" if n[1] > 0.55 else "fabric" for n in fn]
+    chunk.region = ["palm" if n[1] < -0.5 else "back" if n[1] > 0.5 else "fabric" for n in fn]
     planar = [r in ("palm", "back") for r in chunk.region]
     chunk.planar_luv = palm_luv
     chunk.planar = planar
 
-    # Ridged rubber knuckle guard across the back of the knuckles.
-    kp, kt, kl = capsule(-0.047, 0.047, 0.0085, 0.0052, 0.0085, 0.0052, n=8, rings=9, p=2.4, e=0.4)
-    kp = np.stack([kp[:, 2], kp[:, 1], kp[:, 0]], axis=1)   # along X
-    kp += np.array([0.0, -0.0115, -0.033])
-    kp[:, 1] += 0.0015 * gauss(kp[:, 0] / 0.03)
-    knuckle = Chunk(kp, kt, kl, "knuckle")
-    knuckle.drop_degenerate()
-    knuckle.orient_outward()
-
-    # Gauntlet and the rigid wrist ring that the suit's forearm locks into.
-    profile = [
-        (-0.112, 0.036, 0.016, "fabric"),
-        (-0.124, 0.043, 0.022, "fabric"),
-        (-0.134, 0.0465, 0.028, "fabric"),
-        (-0.142, 0.0485, 0.0315, "orange"),
-        (-0.147, 0.0495, 0.0330, "orange"),
-        (-0.155, 0.0500, 0.0335, "fabric"),
-        (-0.160, 0.0505, 0.0340, "metal"),
-        (-0.162, 0.0545, 0.0380, "metal"),
-        (-0.170, 0.0560, 0.0395, "metal"),
-        (-0.178, 0.0560, 0.0395, "metal"),
-        (-0.182, 0.0535, 0.0370, "metal"),
-        (-0.184, 0.0470, 0.0310, "metal"),
+    # Gauntlet: tapers smoothly out of the palm into the cuff (one smooth surface).
+    gauntlet = [
+        (-0.110, 0.0335, 0.0125, "fabric"),
+        (-0.121, 0.0385, 0.0175, "fabric"),
+        (-0.131, 0.0435, 0.0240, "fabric"),
+        (-0.140, 0.0470, 0.0290, "orange"),
+        (-0.146, 0.0485, 0.0315, "orange"),
+        (-0.153, 0.0495, 0.0328, "fabric"),
+        (-0.1605, 0.0502, 0.0336, "fabric"),
     ]
-    cp, ct, cl, cr = lathe(profile, 24, (0.0, PALM_CENTRE[1]))
-    cuff = Chunk(cp, ct, cl, cr)
-    # Outward = away from the cuff's axis.
-    fn = cuff.face_normals()
-    cc = cuff.pos[cuff.tris].mean(axis=1)
-    radial = cc - np.array([0.0, PALM_CENTRE[1], 0.0])
-    radial[:, 2] = 0
-    if np.sum(np.einsum("ij,ij->i", fn, radial)) < 0:
-        cuff.tris = cuff.tris[:, ::-1].copy()
-    return [chunk, knuckle, cuff]
+    # The rigid wrist ring: its own surface, so its edges stay crisp (split normals at the hard edge).
+    ring = [
+        (-0.1595, 0.0500, 0.0334, "metal"),
+        (-0.1615, 0.0545, 0.0380, "metal"),
+        (-0.1645, 0.0560, 0.0395, "metal"),
+        (-0.1775, 0.0560, 0.0395, "metal"),
+        (-0.1810, 0.0540, 0.0375, "metal"),
+        (-0.1840, 0.0470, 0.0310, "metal"),
+    ]
+    out = [chunk]
+    for profile in (gauntlet, ring):
+        cp, ct, cl, cr = lathe(profile, 20, (0.0, PALM_CENTRE[1]))
+        cuff = Chunk(cp, ct, cl, cr)
+        fn = cuff.face_normals()
+        cc = cuff.pos[cuff.tris].mean(axis=1)
+        radial = cc - np.array([0.0, PALM_CENTRE[1], 0.0])
+        radial[:, 2] = 0
+        if np.sum(np.einsum("ij,ij->i", fn, radial)) < 0:
+            cuff.tris = cuff.tris[:, ::-1].copy()
+        out.append(cuff)
+    return out
 
 
 def finger_segment(L, w, distal, proximal_bellows, flesh=0.0, thumb=False):
@@ -529,7 +537,12 @@ def paint_atlas():
     band = plate & (v > 0.36) & (v < 0.46)
     t = np.where(band[..., None], np.array([0.93, 0.42, 0.1]) * (0.92 + 0.08 * fbm(h, w, 55, 5, 3))[..., None], t)
     rim = plate & ~rounded(0.215, 0.785, 0.24, 0.76, 0.09)
-    t = np.where(rim[..., None], t * 0.62, t)
+    t = np.where(rim[..., None], t * 0.84, t)
+    # Ribbed rubber knuckle band over the knuckle ridge (z = -0.03 -> v = 0.875).
+    knuckles = rounded(0.07, 0.93, 0.83, 0.93, 0.04)
+    ribs = 0.5 + 0.5 * np.cos((v - 0.83) / 0.1 * 2 * math.pi * 3)
+    rubber_k = np.array([0.33, 0.34, 0.35]) * (0.8 + 0.22 * ribs + 0.06 * fbm(h, w, 57, 4, 3))[..., None]
+    t = np.where(knuckles[..., None], rubber_k, t)
     for ru, rv in ((0.25, 0.28), (0.75, 0.28), (0.25, 0.72), (0.75, 0.72)):
         rivet = (np.abs(u - ru) < 0.012) & (np.abs(v - rv) < 0.04)
         t = np.where(rivet[..., None], np.array([0.55, 0.56, 0.58]), t)

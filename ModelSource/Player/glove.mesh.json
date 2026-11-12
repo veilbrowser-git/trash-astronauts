@@ -1,9 +1,9 @@
 {
  "id": "glove",
  "smoothness": 0.25,
- "vertexTotal": 3044,
- "indexTotal": 12672,
- "triangles": 4224,
+ "vertexTotal": 2937,
+ "indexTotal": 12174,
+ "triangles": 4058,
  "palmCentre": [
   0.0,
   -0.03,
@@ -56,10 +56,10 @@
    "length": 0.0,
    "material": "glove",
    "vertexStart": 0,
-   "vertexCount": 720,
+   "vertexCount": 613,
    "indexStart": 0,
-   "indexCount": 2952,
-   "triangles": 984
+   "indexCount": 2454,
+   "triangles": 818
   },
   {
    "name": "index_1",
@@ -77,9 +77,9 @@
    ],
    "length": 0.04,
    "material": "glove",
-   "vertexStart": 720,
+   "vertexStart": 613,
    "vertexCount": 167,
-   "indexStart": 2952,
+   "indexStart": 2454,
    "indexCount": 648,
    "triangles": 216
   },
@@ -99,9 +99,9 @@
    ],
    "length": 0.026,
    "material": "glove",
-   "vertexStart": 887,
+   "vertexStart": 780,
    "vertexCount": 141,
-   "indexStart": 3600,
+   "indexStart": 3102,
    "indexCount": 648,
    "triangles": 216
   },
@@ -121,9 +121,9 @@
    ],
    "length": 0.022,
    "material": "glove",
-   "vertexStart": 1028,
+   "vertexStart": 921,
    "vertexCount": 162,
-   "indexStart": 4248,
+   "indexStart": 3750,
    "indexCount": 648,
    "triangles": 216
   },
@@ -143,9 +143,9 @@
    ],
    "length": 0.044,
    "material": "glove",
-   "vertexStart": 1190,
+   "vertexStart": 1083,
    "vertexCount": 167,
-   "indexStart": 4896,
+   "indexStart": 4398,
    "indexCount": 648,
    "triangles": 216
   },
@@ -165,9 +165,9 @@
    ],
    "length": 0.028,
    "material": "glove",
-   "vertexStart": 1357,
+   "vertexStart": 1250,
    "vertexCount": 141,
-   "indexStart": 5544,
+   "indexStart": 5046,
    "indexCount": 648,
    "triangles": 216
   },
@@ -187,9 +187,9 @@
    ],
    "length": 0.023,
    "material": "glove",
-   "vertexStart": 1498,
+   "vertexStart": 1391,
    "vertexCount": 162,
-   "indexStart": 6192,
+   "indexStart": 5694,
    "indexCount": 648,
    "triangles": 216
   },
@@ -209,9 +209,9 @@
    ],
    "length": 0.041,
    "material": "glove",
-   "vertexStart": 1660,
+   "vertexStart": 1553,
    "vertexCount": 167,
-   "indexStart": 6840,
+   "indexStart": 6342,
    "indexCount": 648,
    "triangles": 216
   },
@@ -231,9 +231,9 @@
    ],
    "length": 0.027,
    "material": "glove",
-   "vertexStart": 1827,
+   "vertexStart": 1720,
    "vertexCount": 141,
-   "indexStart": 7488,
+   "indexStart": 6990,
    "indexCount": 648,
    "triangles": 216
   },
@@ -253,9 +253,9 @@
    ],
    "length": 0.022,
    "material": "glove",
-   "vertexStart": 1968,
+   "vertexStart": 1861,
    "vertexCount": 162,
-   "indexStart": 8136,
+   "indexStart": 7638,
    "indexCount": 648,
    "triangles": 216
   },
@@ -275,9 +275,9 @@
    ],
    "length": 0.032,
    "material": "glove",
-   "vertexStart": 2130,
+   "vertexStart": 2023,
    "vertexCount": 167,
-   "indexStart": 8784,
+   "indexStart": 8286,
    "indexCount": 648,
    "triangles": 216
   },
@@ -297,9 +297,9 @@
    ],
    "length": 0.021,
    "material": "glove",
-   "vertexStart": 2297,
+   "vertexStart": 2190,
    "vertexCount": 141,
-   "indexStart": 9432,
+   "indexStart": 8934,
    "indexCount": 648,
    "triangles": 216
   },
@@ -319,9 +319,9 @@
    ],
    "length": 0.019,
    "material": "glove",
-   "vertexStart": 2438,
+   "vertexStart": 2331,
    "vertexCount": 162,
-   "indexStart": 10080,
+   "indexStart": 9582,
    "indexCount": 648,
    "triangles": 216
   },
@@ -334,16 +334,16 @@
     -0.112
    ],
    "rotation": [
-    -0.01823194001873523,
-    -0.4273790666677814,
-    0.43832155902519776,
-    0.7904991718092116
+    -0.08660701877474236,
+    -0.4036019238328332,
+    0.44299471082958775,
+    0.7958394295047194
    ],
    "length": 0.042,
    "material": "glove",
-   "vertexStart": 2600,
+   "vertexStart": 2493,
    "vertexCount": 141,
-   "indexStart": 10728,
+   "indexStart": 10230,
    "indexCount": 648,
    "triangles": 216
   },
@@ -356,16 +356,16 @@
     0.042
    ],
    "rotation": [
-    0.08720960509131626,
-    0.05066694357568354,
-    0.02247713088162248,
-    0.994646733366096
+    0.09100662107688047,
+    0.04951820646669323,
+    0.026856598420120902,
+    0.9942557343409147
    ],
    "length": 0.032,
    "material": "glove",
-   "vertexStart": 2741,
+   "vertexStart": 2634,
    "vertexCount": 141,
-   "indexStart": 11376,
+   "indexStart": 10878,
    "indexCount": 648,
    "triangles": 216
   },
@@ -378,16 +378,16 @@
     0.032
    ],
    "rotation": [
-    0.06527488273961925,
-    0.026680191676973525,
-    0.007233043182794189,
-    0.9974843558380877
+    0.06521865303982728,
+    0.026062818551260396,
+    0.00923079222100149,
+    0.9974878692293994
    ],
    "length": 0.027,
    "material": "glove",
-   "vertexStart": 2882,
+   "vertexStart": 2775,
    "vertexCount": 162,
-   "indexStart": 12024,
+   "indexStart": 11526,
    "indexCount": 648,
    "triangles": 216
   }
