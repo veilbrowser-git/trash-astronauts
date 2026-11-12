@@ -192,6 +192,18 @@ namespace TrashAstronauts.EditorTools
                 Shot("27_survey_lab", new Vector3(0f, 1.6f, 12.2f), new Vector3(1.5f, 1.2f, 19f));
                 Shot("28_survey_observation_deck", new Vector3(0f, 1.6f, 32f), new Vector3(-1f, 1.5f, 36.4f));
                 Shot("29_survey_top_down", new Vector3(-1f, 46f, 22f), new Vector3(-1f, 0f, 22.01f), true);
+                int cave = System.Array.FindIndex(mapDirector.maps, m => m.mapId == "lava_tube");
+                if (cave >= 0)
+                {
+                    Dock(cave);
+                    Shot("37_cave_mouth", new Vector3(-4.6f, 1.7f, 8.3f), new Vector3(6f, 1.2f, 13.2f));
+                    Shot("38_cave_main_tunnel", new Vector3(0f, 1.6f, 14.2f), new Vector3(0f, 1.3f, 33f));
+                    Shot("39_cave_skylight", new Vector3(-2.2f, 1.5f, 19.2f), new Vector3(-7f, 3.6f, 23.5f));
+                    Shot("40_cave_habitat", new Vector3(2.3f, 1.6f, 14.3f), new Vector3(8.5f, 1.2f, 18f));
+                    Shot("41_cave_drill_chamber", new Vector3(-0.4f, 1.7f, 34.0f), new Vector3(2f, 1.4f, 41f));
+                    Shot("42_cave_back_passage", new Vector3(-8.1f, 1.6f, 28.4f), new Vector3(-8.1f, 1.2f, 38f));
+                    Shot("43_cave_top_down", new Vector3(-1f, 46f, 24f), new Vector3(-1f, 0f, 24.01f), true);
+                }
                 Dock(0);
                 mapDirector.enemies[0].gameObject.SetActive(true);
             }
@@ -220,7 +232,7 @@ namespace TrashAstronauts.EditorTools
                 RenderSettings.ambientLight = new Color(0.6f, 0.6f, 0.6f);
                 foreach (var r in Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None))
                 {
-                    if (r.enabled && (r.name == "Ceiling" || r.bounds.min.y > 2.1f))
+                    if (r.enabled && (r.name == "Ceiling" || r.name.EndsWith("Ceiling") || r.bounds.min.y > 2.1f))
                     {
                         r.enabled = false;
                         hidden.Add(r);

@@ -30,13 +30,13 @@ namespace TrashAstronauts.EditorTools
 
         static void CaveMaterials()
         {
-            var basalt = MakeTexture("Basalt", 512, (px, n, rng) => PaintRock(px, n, BasaltHeight, new Color(0.15f, 0.145f, 0.14f), new Color(0.26f, 0.25f, 0.24f)));
+            var basalt = MakeTexture("Basalt", 512, (px, n, rng) => PaintRock(px, n, BasaltHeight, new Color(0.2f, 0.195f, 0.19f), new Color(0.36f, 0.35f, 0.34f)));
             var basaltN = MakeNormalMap("Basalt_N", 512, (x, y) => BasaltHeight(x, y, 512), 3.5f);
             var regolith = MakeTexture("Regolith", 512, (px, n, rng) => PaintRock(px, n, RegolithHeight, new Color(0.34f, 0.335f, 0.33f), new Color(0.5f, 0.49f, 0.48f)));
             var regolithN = MakeNormalMap("Regolith_N", 512, (x, y) => RegolithHeight(x, y, 512), 2.5f);
-            Lit("Basalt", new Color(0.85f, 0.85f, 0.88f), 0.12f, basalt, null, basaltN);
+            Lit("Basalt", new Color(1f, 1f, 1f), 0.12f, basalt, null, basaltN);
             Lit("Regolith", new Color(0.95f, 0.95f, 0.95f), 0.05f, regolith, null, regolithN);
-            Lit("RockCeiling", new Color(0.6f, 0.6f, 0.62f), 0.1f, basalt, null, basaltN);
+            Lit("RockCeiling", new Color(0.8f, 0.8f, 0.82f), 0.1f, basalt, null, basaltN);
         }
 
         // ------------------------------------------------------------------ tileable noise for the rock textures
@@ -124,15 +124,16 @@ namespace TrashAstronauts.EditorTools
         }
 
         /// <summary>A rock chamber: like Room() but basalt and regolith, no ceiling beams.</summary>
-        static void CaveRoom(string name, float x0, float x1, float z0, float z1, float height, string walls, params Opening[] openings)
+        static void CaveRoom(string name, float x0, float x1, float z0, float z1, float height, string walls, string railSides, params Opening[] openings)
         {
             CaveSlabs(name + " Slabs", x0, x1, z0, z1, height);
-            CaveWallsAndRails(name, x0, x1, z0, z1, height, walls, openings);
+            CaveWallsAndRails(name, x0, x1, z0, z1, height, walls, railSides, openings);
             const float inset = 0.35f;
             TeleportArea(name, x0 + inset, x1 - inset, z0 + inset, z1 - inset);
         }
 
-        static void CaveWallsAndRails(string name, float x0, float x1, float z0, float z1, float height, string walls, params Opening[] openings)
+        /// <param name="railSides">Which sides get handrails (a cave is not a ship: guide rails only along the main walls).</param>
+        static void CaveWallsAndRails(string name, float x0, float x1, float z0, float z1, float height, string walls, string railSides, params Opening[] openings)
         {
             foreach (char side in "SNWE")
             {
@@ -157,7 +158,7 @@ namespace TrashAstronauts.EditorTools
                         else TeleportArea(name + " Doorway", a.x - 0.6f, a.x + 0.6f, o.at - 0.5f, o.at + 0.5f);
                     }
                 }
-                RailLine(a, b, inward, gaps);
+                if (railSides.IndexOf(side) >= 0) RailLine(a, b, inward, gaps);
             }
         }
 
@@ -180,10 +181,9 @@ namespace TrashAstronauts.EditorTools
                 Part(root, "Leg", Tube(0.018f, 0.75f, 6), dir * 0.22f + Vector3.up * 0.3f, M("Steel"), Quaternion.FromToRotation(Vector3.up, (Vector3.up * 0.6f - dir * 0.45f).normalized).eulerAngles);
             }
             CBox(root, "Lamp Head", new Vector3(0, height + 0.08f, 0), new Vector3(0.34f, 0.22f, 0.2f), M("Trim"), 0.03f);
-            var lens = Box(root, "Lamp Lens", new Vector3(x, height + 0.08f, z - 0.105f), new Vector3(0.28f, 0.16f, 0.015f), M("GlowWarm"), GameLayers.Default, false, false);
+            // One glowing block through the head: a lens on both faces, one renderer.
+            var lens = Box(root, "Lamp Lens", new Vector3(x, height + 0.08f, z), new Vector3(0.28f, 0.16f, 0.23f), M("GlowWarm"), GameLayers.Default, false, false);
             s_WreckGlow.Add(lens.GetComponent<MeshRenderer>());
-            var lensBack = Box(root, "Lamp Lens Back", new Vector3(x, height + 0.08f, z + 0.105f), new Vector3(0.28f, 0.16f, 0.015f), M("GlowWarm"), GameLayers.Default, false, false);
-            s_WreckGlow.Add(lensBack.GetComponent<MeshRenderer>());
             return RoomLight(name + " Light", x, height + 0.1f, z, color, intensity, range);
         }
 
@@ -196,6 +196,173 @@ namespace TrashAstronauts.EditorTools
             {
                 var col = go.AddComponent<SphereCollider>();
                 col.radius = Mathf.Min(radii.x, Mathf.Min(radii.y, radii.z)) * 0.95f;
+            }
+        }
+
+        // ------------------------------------------------------------------ organic rock and combining
+
+        /// <summary>
+        /// A smooth 3D warp of space used to roughen every rock surface. It depends only on the world
+        /// position, so neighbouring slabs and wall pieces bend the same way and meet without cracks.
+        /// Small near the floor (the floor stays walkable and matches its flat collider), larger overhead.
+        /// </summary>
+        static Vector3 CaveWarp(Vector3 p)
+        {
+            float amp = Mathf.Lerp(0.04f, 0.2f, Mathf.InverseLerp(0.05f, 0.9f, p.y));
+            const float f = 0.55f;
+            float N(float a, float b, float c, float o) =>
+                (Mathf.PerlinNoise(a * f + o, b * f + c * 0.7f * f + o * 0.37f) + 0.5f * Mathf.PerlinNoise(a * f * 2.3f + c * 0.9f + o, b * f * 2.3f - o)) / 0.75f - 1f;
+            return new Vector3(N(p.x, p.z, p.y, 3.1f), 0.55f * N(p.z, p.y, p.x, 11.3f), N(p.y, p.x, p.z, 17.9f)) * amp;
+        }
+
+        /// <summary>A box's surface in world space, subdivided about every 0.4 m and warped by CaveWarp.</summary>
+        static Mesh WarpedBox(Vector3 center, Vector3 size)
+        {
+            var verts = new List<Vector3>();
+            var uvs = new List<Vector2>();
+            var tris = new List<int>();
+            Vector3 h = size * 0.5f;
+            void Face(Vector3 normal, Vector3 right, Vector3 up, float w, float ht, float depth)
+            {
+                Vector3 c = center + normal * depth;
+                // Skip the outsides nobody sees: under the floor and above the ceiling.
+                if (normal.y < -0.5f && c.y < -0.05f) return;
+                if (normal.y > 0.5f && c.y > 1f && size.y < 0.5f) return;
+                int nx = Mathf.Max(1, Mathf.CeilToInt(w / 0.4f)), ny = Mathf.Max(1, Mathf.CeilToInt(ht / 0.4f));
+                int start = verts.Count;
+                for (int j = 0; j <= ny; j++)
+                {
+                    for (int i = 0; i <= nx; i++)
+                    {
+                        float a = -w * 0.5f + w * i / nx, b = -ht * 0.5f + ht * j / ny;
+                        Vector3 p = c + right * a + up * b;
+                        verts.Add(p + CaveWarp(p));
+                        Vector3 world = p;
+                        uvs.Add(new Vector2(Vector3.Dot(world, right), Vector3.Dot(world, up)) * 0.35f);
+                    }
+                }
+                bool flip = Vector3.Dot(Vector3.Cross(up, right), normal) <= 0f;
+                for (int j = 0; j < ny; j++)
+                {
+                    for (int i = 0; i < nx; i++)
+                    {
+                        int v0 = start + j * (nx + 1) + i, v1 = v0 + nx + 1, v2 = v1 + 1, v3 = v0 + 1;
+                        if (!flip) tris.AddRange(new[] { v0, v1, v2, v0, v2, v3 });
+                        else tris.AddRange(new[] { v0, v2, v1, v0, v3, v2 });
+                    }
+                }
+            }
+            Face(Vector3.forward, Vector3.right, Vector3.up, size.x, size.y, h.z);
+            Face(Vector3.back, Vector3.right, Vector3.up, size.x, size.y, h.z);
+            Face(Vector3.right, Vector3.forward, Vector3.up, size.z, size.y, h.x);
+            Face(Vector3.left, Vector3.forward, Vector3.up, size.z, size.y, h.x);
+            Face(Vector3.up, Vector3.right, Vector3.forward, size.x, size.z, h.y);
+            Face(Vector3.down, Vector3.right, Vector3.forward, size.x, size.z, h.y);
+            var mesh = new Mesh { indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
+            mesh.SetVertices(verts);
+            mesh.SetUVs(0, uvs);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateNormals();
+            return mesh;
+        }
+
+        static Mesh SaveCaveMesh(string key, Mesh built)
+        {
+            EnsureFolder(MeshDir);
+            string path = MeshDir + "/" + key + ".asset";
+            built.name = key;
+            var existing = UnityEditor.AssetDatabase.LoadAssetAtPath<Mesh>(path);
+            if (existing != null)
+            {
+                UnityEditor.EditorUtility.CopySerialized(built, existing);
+                existing.name = key;
+                UnityEditor.EditorUtility.SetDirty(existing);
+                UnityEngine.Object.DestroyImmediate(built);
+                return existing;
+            }
+            UnityEditor.AssetDatabase.CreateAsset(built, path);
+            return built;
+        }
+
+        /// <summary>
+        /// The cave's finishing pass: rock walls lose their metal trim, every rock slab and wall piece is
+        /// replaced by a warped, subdivided, smooth-shaded copy of itself (its box collider stays exactly
+        /// where it was, so the play space stays watertight and the creature's surface probes still work),
+        /// and all static scenery is merged into one mesh per material.
+        /// </summary>
+        static void CaveRockAndCombine(Transform root)
+        {
+            var rock = new HashSet<Material> { M("Basalt"), M("RockCeiling"), M("Regolith") };
+            var all = root.GetComponentsInChildren<MeshRenderer>(true);
+
+            // Metal trim does not belong on bare rock.
+            foreach (var r in all)
+            {
+                if (r == null || (r.name != "Skirting" && r.name != "Cornice")) continue;
+                var segment = r.transform.parent != null ? r.transform.parent.GetComponentInChildren<MeshRenderer>() : null;
+                if (segment != null && rock.Contains(segment.sharedMaterial)) UnityEngine.Object.DestroyImmediate(r.gameObject);
+            }
+
+            var groups = new Dictionary<Material, List<CombineInstance>>();
+            var merged = new List<MeshRenderer>();
+            var temporary = new List<Mesh>();
+            foreach (var r in root.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                var go = r.gameObject;
+                if (r.sharedMaterials.Length != 1 || r.sharedMaterial == null) continue;
+                if (s_WreckGlow.Contains(r) || go.GetComponent<TMPro.TMP_Text>() != null) continue;
+                if (go.GetComponentInParent<Rigidbody>(true) != null) continue; // doors, panels, loose junk move
+                // Anything driven by a script stays separate (doors, panels, buttons); a handrail's bar lights up
+                // on its own, its brackets do not.
+                bool scripted = false;
+                foreach (var behaviour in go.GetComponentsInParent<MonoBehaviour>(true))
+                {
+                    if (behaviour is WreckMap) continue;
+                    if (behaviour is HoverHighlight highlight && (highlight.renderers == null || !highlight.renderers.Contains(r))) continue;
+                    scripted = true;
+                    break;
+                }
+                if (scripted) continue;
+                var filter = go.GetComponent<MeshFilter>();
+                if (filter == null || filter.sharedMesh == null) continue;
+                if (!groups.TryGetValue(r.sharedMaterial, out var list)) groups[r.sharedMaterial] = list = new List<CombineInstance>();
+                var box = go.GetComponent<BoxCollider>();
+                if (rock.Contains(r.sharedMaterial) && box != null && go.transform.rotation == Quaternion.identity && go.transform.lossyScale == Vector3.one)
+                {
+                    var warped = WarpedBox(go.transform.TransformPoint(box.center), box.size);
+                    temporary.Add(warped);
+                    list.Add(new CombineInstance { mesh = warped, transform = Matrix4x4.identity });
+                }
+                else list.Add(new CombineInstance { mesh = filter.sharedMesh, transform = go.transform.localToWorldMatrix });
+                merged.Add(r);
+            }
+
+            var level = root.Find("Level");
+            var parent = Empty(level, "Combined Scenery", Vector3.zero, null, GameLayers.Default).transform;
+            foreach (var pair in groups.OrderBy(g => g.Key.name))
+            {
+                var mesh = new Mesh { indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
+                mesh.CombineMeshes(pair.Value.ToArray(), true, true);
+                mesh.RecalculateBounds();
+                mesh.RecalculateTangents();
+                mesh = SaveCaveMesh("Cave_" + pair.Key.name, mesh);
+                var go = Empty(parent, "Combined " + pair.Key.name, Vector3.zero, null, GameLayers.Default);
+                go.AddComponent<MeshFilter>().sharedMesh = mesh;
+                var renderer = go.AddComponent<MeshRenderer>();
+                renderer.sharedMaterial = pair.Key;
+                Cheap(renderer);
+                go.isStatic = true;
+            }
+            foreach (var mesh in temporary) UnityEngine.Object.DestroyImmediate(mesh);
+
+            // The originals keep their colliders; their renderers go.
+            foreach (var r in merged)
+            {
+                var go = r.gameObject;
+                var filter = go.GetComponent<MeshFilter>();
+                UnityEngine.Object.DestroyImmediate(r);
+                if (filter != null) UnityEngine.Object.DestroyImmediate(filter);
+                if (go.transform.childCount == 0 && go.GetComponents<Component>().Length == 1) UnityEngine.Object.DestroyImmediate(go);
             }
         }
 
@@ -218,9 +385,10 @@ namespace TrashAstronauts.EditorTools
             CaveSlabs("D Mouth Slabs", -6f, 9.6f, 7.6f, 13.6f, MH);
             Wall("D Mouth S West", new Vector2(-6f, 7.6f), new Vector2(-2.18f, 7.6f), MH, M("Basalt"));
             Wall("D Mouth S East", new Vector2(2.18f, 7.6f), new Vector2(9.6f, 7.6f), MH, M("Basalt"));
-            Wall("D Mouth N", new Vector2(-6f, 13.6f), new Vector2(9.6f, 13.6f), MH, M("Basalt"),
-                new Gap(1.1f, 2.2f, 2.6f), new Gap(6f, 3.0f, 3.0f), new Gap(12f, 1.6f, 2.1f));
-            CaveWallsAndRails("D Mouth", -6f, 9.6f, 7.6f, 13.6f, MH, "WE",
+            Wall("D Mouth N", new Vector2(-6f, 13.6f), new Vector2(1.6f, 13.6f), MH, M("Basalt"),
+                new Gap(1.1f, 2.2f, 2.6f), new Gap(6f, 3.0f, 3.0f));
+            Wall("D Hab Front", new Vector2(1.6f, 13.6f), new Vector2(9.6f, 13.6f), MH, hab, new Gap(4.4f, 1.6f, 2.1f)); // the module's front, facing the mouth
+            CaveWallsAndRails("D Mouth", -6f, 9.6f, 7.6f, 13.6f, MH, "WE", "WE",
                 new Opening('S', 0f, 4.4f, 2.2f), new Opening('N', -4.9f, 2.2f, 2.6f), new Opening('N', 0f, 3.0f, 3.0f), new Opening('N', 6f, 1.6f, 2.1f));
             TeleportArea("D Mouth", -5.65f, 9.25f, 7.95f, 13.25f);
             TeleportArea("D Mouth Airlock Doorway", -0.5f, 0.5f, 7.2f, 8.2f);
@@ -232,8 +400,9 @@ namespace TrashAstronauts.EditorTools
             CaveSlabs("D Tunnel Slabs", -1.6f, 1.6f, 13.6f, 33.6f, TH);
             Wall("D Tunnel W South", new Vector2(-1.6f, 13.6f), new Vector2(-1.6f, 18f), TH, M("Basalt"));
             Wall("D Tunnel W North", new Vector2(-1.6f, 28f), new Vector2(-1.6f, 33.6f), TH, M("Basalt"));
-            Wall("D Tunnel E", new Vector2(1.6f, 13.6f), new Vector2(1.6f, 33.6f), TH, M("Basalt"), new Gap(22f - 13.6f, 1.0f, 2.0f));
-            CaveWallsAndRails("D Tunnel", -1.6f, 1.6f, 13.6f, 33.6f, TH, "", new Opening('W', 23f, 2.4f, 2.6f), new Opening('E', 22f, 1.0f, 2.0f));
+            Wall("D Hab West", new Vector2(1.6f, 13.6f), new Vector2(1.6f, 24.6f), TH, hab, new Gap(22f - 13.6f, 1.0f, 2.0f));
+            Wall("D Tunnel E", new Vector2(1.6f, 24.6f), new Vector2(1.6f, 33.6f), TH, M("Basalt"));
+            CaveWallsAndRails("D Tunnel", -1.6f, 1.6f, 13.6f, 33.6f, TH, "", "WE", new Opening('W', 23f, 2.4f, 2.6f), new Opening('E', 22f, 1.0f, 2.0f));
             TeleportArea("D Tunnel", -1.25f, 1.25f, 13.95f, 33.25f);
 
             // --- habitat module: two pressurised rooms with metal walls
@@ -243,8 +412,8 @@ namespace TrashAstronauts.EditorTools
             var habDoor = BuildDoor("Habitat Door", "lt_door_hab", new Vector3(6f, 0, 13.6f), 1.6f, 2.1f, false, false, true);
 
             // --- side tunnel, skylight chamber, back passage, drill chamber
-            CaveRoom("D Side Tunnel", -6f, -3.8f, 13.6f, 18f, 2.8f, "WE", new Opening('S', -4.9f, 2.2f, 2.6f), new Opening('N', -4.9f, 2.2f, 2.6f));
-            CaveRoom("D Skylight", -12f, -1.6f, 18f, 28f, SH, "SNWE", new Opening('S', -4.9f, 2.2f, 2.6f), new Opening('E', 23f, 2.4f, 2.6f), new Opening('N', -8.1f, 2.0f, 2.4f));
+            CaveRoom("D Side Tunnel", -6f, -3.8f, 13.6f, 18f, 2.8f, "WE", "W", new Opening('S', -4.9f, 2.2f, 2.6f), new Opening('N', -4.9f, 2.2f, 2.6f));
+            CaveRoom("D Skylight", -12f, -1.6f, 18f, 28f, SH, "SNWE", "WN", new Opening('S', -4.9f, 2.2f, 2.6f), new Opening('E', 23f, 2.4f, 2.6f), new Opening('N', -8.1f, 2.0f, 2.4f));
             CaveSlabs("D Passage A Slabs", -9.2f, -7f, 28f, 36.6f, PH);
             CaveSlabs("D Passage B Slabs", -9.2f, -6f, 36.6f, 38.8f, PH);
             Wall("D Passage W", new Vector2(-9.2f, 28f), new Vector2(-9.2f, 38.8f), PH, M("Basalt"));
@@ -255,7 +424,7 @@ namespace TrashAstronauts.EditorTools
             TeleportArea("D Passage B", -8.85f, -5.6f, 36.95f, 38.45f);
             Rail(new Vector3(-9f, RailY, 28.6f), new Vector3(-9f, RailY, 38.2f));
             Rail(new Vector3(-6.6f, RailY, 38.6f), new Vector3(-8.6f, RailY, 38.6f));
-            CaveRoom("D Drill", -6f, 6f, 33.6f, 41.4f, DH, "SNWE", new Opening('S', 0f, 3.0f, 3.0f), new Opening('W', 37.7f, 1.8f, 2.4f));
+            CaveRoom("D Drill", -6f, 6f, 33.6f, 41.4f, DH, "SNWE", "NE", new Opening('S', 0f, 3.0f, 3.0f), new Opening('W', 37.7f, 1.8f, 2.4f));
 
             // --- the skylight: a collapsed section of roof, open to the stars
             // (built as a frame of ceiling around a hole, a shaft above it and a sky cap)
@@ -280,7 +449,7 @@ namespace TrashAstronauts.EditorTools
                 Rock(new Vector3(-6.3f, 0, 22.4f), new Vector3(0.6f, 0.4f, 0.55f), 302, true);
                 Rock(new Vector3(-7.9f, 0, 22.1f), new Vector3(0.5f, 0.35f, 0.45f), 303, true);
                 Rock(new Vector3(-6.6f, 0, 24.1f), new Vector3(0.45f, 0.3f, 0.5f), 304, false);
-                var earthshine = PointLight(s_Lights, "Earthshine", new Vector3(-7f, SH - 0.3f, 23f), new Color(0.55f, 0.65f, 0.85f), 1.6f, 7f);
+                var earthshine = PointLight(s_Lights, "Earthshine", new Vector3(-7f, SH - 0.3f, 23f), new Color(0.55f, 0.65f, 0.85f), 2.6f, 9f);
                 earthshine.gameObject.name = "Earthshine (not powered)";
             }
 
@@ -351,20 +520,20 @@ namespace TrashAstronauts.EditorTools
             Poster("SHIFT LOG 41\nDrill team did not come back up.\nThe lights in the tube keep dying.", new Vector3(9.6f - T * 0.5f - 0.012f, 1.5f, 23.2f), Vector3.left, 0.95f, 0.55f, 0.36f);
 
             // Work lights on stands down the tunnel (two of them knocked over), lamps in the habitat.
-            WorkLight("D Work Light Mouth W", -3.0f, 11.6f, 2.0f, sodium, 3.4f, 9f);
-            WorkLight("D Work Light Mouth E", 6.6f, 9.0f, 2.0f, sodium, 3.0f, 8f);
-            WorkLight("D Work Light Tunnel 1", -1.05f, 16.8f, 1.9f, sodium, 2.6f, 7f);
-            WorkLight("D Work Light Tunnel 2", 1.05f, 20.6f, 1.9f, sodium, 2.4f, 7f, true);
-            WorkLight("D Work Light Tunnel 3", -1.05f, 25.6f, 1.9f, sodium, 2.6f, 7f);
-            WorkLight("D Work Light Tunnel 4", 1.05f, 29.2f, 1.9f, sodium, 2.4f, 7f);
-            WorkLight("D Work Light Tunnel 5", -1.05f, 32.4f, 1.9f, sodium, 2.4f, 7f, true);
-            WorkLight("D Work Light Skylight", -2.6f, 26.8f, 2.2f, sodium, 2.8f, 9f);
-            WorkLight("D Work Light Side", -4.0f, 17.4f, 1.8f, sodium, 2.0f, 6f, true);
-            WorkLight("D Work Light Drill W", -4.6f, 36.4f, 2.4f, new Color(1f, 0.55f, 0.3f), 3.4f, 10f);
-            WorkLight("D Work Light Drill E", 4.8f, 36.8f, 2.4f, sodium, 3.0f, 10f);
+            WorkLight("D Work Light Mouth W", -3.0f, 11.6f, 2.0f, sodium, 4.8f, 11f);
+            WorkLight("D Work Light Mouth E", 6.6f, 9.0f, 2.0f, sodium, 4.2f, 10f);
+            WorkLight("D Work Light Tunnel 1", -1.05f, 16.8f, 1.9f, sodium, 3.6f, 9f);
+            WorkLight("D Work Light Tunnel 2", 1.05f, 20.6f, 1.9f, sodium, 3.4f, 9f, true);
+            WorkLight("D Work Light Tunnel 3", -1.05f, 25.6f, 1.9f, sodium, 3.6f, 9f);
+            WorkLight("D Work Light Tunnel 4", 1.05f, 29.2f, 1.9f, sodium, 3.4f, 9f);
+            WorkLight("D Work Light Tunnel 5", -1.05f, 32.4f, 1.9f, sodium, 3.4f, 9f, true);
+            WorkLight("D Work Light Skylight", -2.6f, 26.8f, 2.2f, sodium, 3.9f, 11f);
+            WorkLight("D Work Light Side", -4.0f, 17.4f, 1.8f, sodium, 2.8f, 8f, true);
+            WorkLight("D Work Light Drill W", -4.6f, 36.4f, 2.4f, new Color(1f, 0.55f, 0.3f), 4.8f, 12f);
+            WorkLight("D Work Light Drill E", 4.8f, 36.8f, 2.4f, sodium, 4.2f, 12f);
             RoomLight("D Hab Living Light", 5.6f, 2.4f, 16.1f, white, 3.0f, 8f);
             RoomLight("D Hab Workshop Light", 5.6f, 2.4f, 21.6f, new Color(0.6f, 1f, 0.75f), 2.8f, 8f);
-            RoomLight("D Passage Light", -8.1f, 2.1f, 33f, new Color(1f, 0.5f, 0.25f), 1.6f, 6f);
+            RoomLight("D Passage Light", -8.1f, 2.1f, 33f, new Color(1f, 0.5f, 0.25f), 2.8f, 8f);
             Strip("D Hab Living Strip", new Vector3(5.6f, HH - 0.03f, 16.1f), new Vector3(4f, 0.03f, 0.1f), "GlowWhite");
             Strip("D Hab Workshop Strip", new Vector3(5.6f, HH - 0.03f, 21.6f), new Vector3(4f, 0.03f, 0.1f), "GlowTeal");
 
@@ -411,6 +580,26 @@ namespace TrashAstronauts.EditorTools
             Link("KNW", "P2", "P1", "P0", "D1", "D0");
             Link("D0", "D2", "D3", "D0");
             Link("D1", "D2");
+
+            // Fallen rock along the foot of the walls, so the tube does not read as a box.
+            var scatter = new System.Random(4242);
+            foreach (var p in new[]
+            {
+                new Vector3(-5.75f, 0, 9.4f), new Vector3(-5.8f, 0, 11.2f), new Vector3(9.35f, 0, 10.6f), new Vector3(-1.95f, 0, 7.85f),
+                new Vector3(-1.35f, 0, 19.0f), new Vector3(-1.35f, 0, 30.2f), new Vector3(1.35f, 0, 27.0f), new Vector3(1.35f, 0, 32.2f),
+                new Vector3(-11.75f, 0, 19.0f), new Vector3(-11.8f, 0, 21.6f), new Vector3(-11.7f, 0, 25.0f), new Vector3(-2.0f, 0, 27.7f),
+                new Vector3(-11.0f, 0, 27.75f), new Vector3(-5.8f, 0, 34.4f), new Vector3(5.75f, 0, 37.6f), new Vector3(-1.2f, 0, 41.15f),
+                new Vector3(5.7f, 0, 40.6f), new Vector3(-3.95f, 0, 14.4f), new Vector3(-8.95f, 0, 30.0f), new Vector3(-7.25f, 0, 34.8f),
+            })
+            {
+                float r = 0.22f + (float)scatter.NextDouble() * 0.25f;
+                Rock(p, new Vector3(r * 1.3f, r * 0.8f, r), 400 + (int)(p.x * 10 + p.z * 100), false);
+            }
+            foreach (var t in s_Props.GetComponentsInChildren<Transform>(true))
+            {
+                if (t.name == "Mast" || t.name == "Leg" || t.name == "Lamp Head" || t.name == "Boulder" || t.name == "Rig Mast" || t.name == "Drill Bit") t.gameObject.isStatic = true;
+            }
+            CaveRockAndCombine(root);
 
             var dock = Empty(root, "Creature Dock", new Vector3(4.8f, 1.45f, 35.2f), Quaternion.Euler(0, 200f, 0)).transform;
             var hum = MapHum("D Drill Hum", new Vector3(3f, 1.4f, 40f), 0.38f);

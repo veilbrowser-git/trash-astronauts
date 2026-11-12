@@ -1,5 +1,6 @@
 using System.Linq;
 using NUnit.Framework;
+using TrashAstronauts.Core;
 using TrashAstronauts.Mission;
 using TrashAstronauts.World;
 using UnityEditor.SceneManagement;
@@ -42,6 +43,47 @@ namespace TrashAstronauts.Tests
             Assert.IsFalse(gravity.Contains(new Vector3(0f, 1.2f, 7.4f)), "The airlock is weightless.");
             Assert.IsFalse(gravity.Contains(new Vector3(0f, 1.2f, -1f)), "The tug is weightless.");
             Assert.IsFalse(director.safeZone.Contains(gravity.transform.TransformPoint(gravity.center)));
+        }
+
+        static bool IsText(Renderer r) => r.GetComponents<Component>().Any(c => c != null && c.GetType().Name.StartsWith("TextMeshPro"));
+
+        [Test]
+        public void TheCave_StaysWithinItsQuestBudget_TrianglesAndRenderers()
+        {
+            var (_, cave) = Open();
+            var renderers = cave.GetComponentsInChildren<Renderer>(true).Where(r => r.enabled).ToArray();
+            long triangles = 0;
+            foreach (var r in renderers)
+            {
+                var filter = r.GetComponent<MeshFilter>();
+                if (filter != null && filter.sharedMesh != null)
+                    for (int i = 0; i < filter.sharedMesh.subMeshCount; i++) triangles += filter.sharedMesh.GetIndexCount(i) / 3;
+            }
+            // Things that move or light up on their own need their own renderers and are counted apart: handrail
+            // bars (they glow when a hand comes near), doors, cut panels, loose junk and text labels.
+            bool Interactive(Renderer r) => IsText(r) || r.GetComponentInParent<HoverHighlight>(true) != null || r.GetComponentInParent<Rigidbody>(true) != null
+                || r.GetComponentInParent<Cuttable>(true) != null || r.GetComponentInParent<SlidingDoor>(true) != null;
+            var scenery = renderers.Where(r => !Interactive(r)).ToArray();
+            int rails = renderers.Count(r => r.GetComponentInParent<HoverHighlight>(true) != null && r.GetComponentInParent<Rigidbody>(true) == null);
+            int interactive = renderers.Count(r => Interactive(r) && !IsText(r));
+            string summary = triangles + " triangles, " + scenery.Length + " scenery renderers, " + interactive + " interactive (" + rails + " handrails), "
+                + renderers.Length + " in all including text";
+            Debug.Log("[LunarCave] Budget: " + summary);
+            Assert.LessOrEqual(triangles, 120000, summary);
+            Assert.LessOrEqual(scenery.Length, 80, summary);
+            Assert.LessOrEqual(interactive, 100, summary); // mostly handrail bars; a guard against regressions
+            Assert.IsTrue(renderers.All(r => r.shadowCastingMode == UnityEngine.Rendering.ShadowCastingMode.Off || IsText(r)), "No realtime shadows on Quest.");
+
+            // The rock is generated: warped, smooth-shaded, with a tiling rock texture and its normal map.
+            var basalt = renderers.FirstOrDefault(r => r.name == "Combined Basalt");
+            Assert.IsNotNull(basalt, "The rock walls should be merged into one mesh.");
+            var mat = basalt.sharedMaterial;
+            Assert.IsNotNull(mat.GetTexture("_BaseMap"));
+            Assert.IsNotNull(mat.GetTexture("_BumpMap"));
+            Assert.IsTrue(mat.IsKeywordEnabled("_NORMALMAP"));
+            Assert.LessOrEqual(mat.GetTexture("_BaseMap").width, 512);
+            var mesh = basalt.GetComponent<MeshFilter>().sharedMesh;
+            Assert.Greater(mesh.tangents.Length, 0, "A normal-mapped mesh needs tangents.");
         }
 
         [Test]
