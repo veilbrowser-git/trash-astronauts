@@ -93,6 +93,7 @@ namespace TrashAstronauts.EditorTools
             }
             // Occlusion is added after the strip (it is a script, but one that only changes what is heard).
             AddOcclusion(rig.cutterLoop);
+            BuildRemoteHeadLamp(rig, suit); // the crew mate's helmet lamp (Builder.HeadLamp.cs)
 
             for (int id = 1; id < RemoteToolRig.Slots; id++)
             {

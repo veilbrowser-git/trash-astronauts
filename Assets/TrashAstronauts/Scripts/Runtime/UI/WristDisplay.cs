@@ -169,7 +169,7 @@ namespace TrashAstronauts.UI
             {
                 case MissionPhase.Active:
                     Set(salvageText, "SECURED " + session.SecuredValue + " / " + session.Quota + " cr"
-                        + (session.QuotaMet ? "\nQUOTA MET" : "") + LightNote());
+                        + (session.QuotaMet ? "\nQUOTA MET" : "") + LightNote() + Tools.HeadLamp.WristNote(player));
                     break;
                 case MissionPhase.Results:
                     Set(salvageText, "CONTRACT OVER\nSee mission board");

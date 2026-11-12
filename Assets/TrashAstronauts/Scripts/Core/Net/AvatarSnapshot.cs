@@ -12,6 +12,8 @@ namespace TrashAstronauts.Core.Net
         public const byte Cutting = 16;
         public const byte Away = 32;
         public const byte LeftHanded = 64;
+        /// <summary>The helmet lamp is switched on (bought in the store; HeadLamp on the local rig).</summary>
+        public const byte HeadLampOn = 128;
     }
 
     /// <summary>
@@ -65,7 +67,7 @@ namespace TrashAstronauts.Core.Net
             Quant.WriteQuat(ref w, rightHandRotation);
             w.U8((byte)(Quant.ToBits(leftIndexCurl, 4) | (Quant.ToBits(leftGripCurl, 4) << 4)));
             w.U8((byte)(Quant.ToBits(rightIndexCurl, 4) | (Quant.ToBits(rightGripCurl, 4) << 4)));
-            w.U8((byte)(flags & 0x7F));
+            w.U8(flags);
             w.U8((byte)((leftTool & 15) | ((rightTool & 15) << 4)));
             w.U8(Quant.ToByte(exertion));
         }
@@ -85,7 +87,7 @@ namespace TrashAstronauts.Core.Net
             s.leftGripCurl = Quant.FromBits(left >> 4, 4);
             s.rightIndexCurl = Quant.FromBits(right & 15, 4);
             s.rightGripCurl = Quant.FromBits(right >> 4, 4);
-            s.flags = (byte)(r.U8() & 0x7F);
+            s.flags = r.U8();
             byte tools = r.U8();
             s.leftTool = (byte)(tools & 15);
             s.rightTool = (byte)(tools >> 4);

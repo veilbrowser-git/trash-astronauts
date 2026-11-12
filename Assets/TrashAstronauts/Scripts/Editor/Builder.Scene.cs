@@ -1030,6 +1030,7 @@ namespace TrashAstronauts.EditorTools
             folder.hinges = new[] { awningHinge, shutterHinge };
             folder.foldedAngles = new[] { new Vector3(-88f, 0f, 0f), new Vector3(-90f, 0f, 0f) };
             folder.goods = goods;
+            BuildHeadLampShelf(stall, goods, panel); // fourth column: the helmet lamp (Builder.HeadLamp.cs)
             return panel;
         }
 

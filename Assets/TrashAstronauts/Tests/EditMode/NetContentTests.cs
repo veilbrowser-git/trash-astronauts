@@ -90,15 +90,16 @@ namespace TrashAstronauts.Tests
             Assert.IsNotNull(prefab);
             Assert.IsEmpty(prefab.GetComponentsInChildren<Camera>(true));
             Assert.IsEmpty(prefab.GetComponentsInChildren<AudioListener>(true));
-            // One light only: the crew flashlight's spot, saved switched off (RemoteToolRig hands it out to the nearest
-            // one or two lit flashlights at runtime), and never casting shadows.
+            // Two lights only: the crew flashlight's spot and the helmet lamp's, saved switched off (RemoteToolRig hands
+            // them out from one shared budget to the nearest one or two lit ones at runtime), and never casting shadows.
             var lights = prefab.GetComponentsInChildren<Light>(true);
-            Assert.LessOrEqual(lights.Length, 1, "No light but the flashlight's spot.");
+            var toolRig = prefab.GetComponent<RemoteToolRig>();
+            Assert.LessOrEqual(lights.Length, 2, "No light but the flashlight's spot and the helmet lamp's.");
             foreach (var light in lights)
             {
                 Assert.IsFalse(light.enabled, "Saved switched off.");
                 Assert.AreEqual(LightShadows.None, light.shadows, "No shadow-casting light.");
-                Assert.AreSame(prefab.GetComponent<RemoteToolRig>().flashlightSpot, light);
+                Assert.IsTrue(light == toolRig.flashlightSpot || (toolRig.headLamp != null && light == toolRig.headLamp.spot), light.name + " is not budgeted.");
             }
             Assert.IsEmpty(prefab.GetComponentsInChildren<XRBaseInteractor>(true));
             Assert.IsEmpty(prefab.GetComponentsInChildren<CharacterController>(true));

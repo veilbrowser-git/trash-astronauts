@@ -951,6 +951,7 @@ namespace TrashAstronauts.EditorTools
             display.noiseBarRenderer = noiseFill.GetComponent<MeshRenderer>();
             display.voiceText = Text(wrist.transform, "Voice", "NOISE: quiet", new Vector3(0, -0.063f, -0.001f), Quaternion.identity, 0.055f, new Vector2(0.12f, 0.012f), new Color(0.6f, 1f, 0.7f));
             context.wristDisplay = wrist.transform;
+            BuildHeadLamp(context, camGo.transform, wrist.transform); // helmet lamp + LAMP wrist button (Builder.HeadLamp.cs)
 
             context.visor = visor;
 

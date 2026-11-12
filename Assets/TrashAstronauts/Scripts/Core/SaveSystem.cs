@@ -30,6 +30,8 @@ namespace TrashAstronauts.Core
         public int tranqDarts;
         public bool scannerUpgrade;
         public bool cutterUpgrade;
+        /// <summary>Bought the helmet lamp. Saves from before it existed load as not owned.</summary>
+        public bool headLamp;
         public int runsStarted;
         public int contractsCompleted;
         /// <summary>The biggest payout from a single contract.</summary>
@@ -290,6 +292,7 @@ namespace TrashAstronauts.Core
             {
                 case ShopItem.ScannerRange: return Data.scannerUpgrade;
                 case ShopItem.CutterCoolant: return Data.cutterUpgrade;
+                case ShopItem.HeadLamp: return Data.headLamp;
                 default: return false; // consumables are never "owned"
             }
         }
@@ -311,6 +314,7 @@ namespace TrashAstronauts.Core
                 case ShopItem.TranqDart: Data.tranqDarts++; break;
                 case ShopItem.ScannerRange: Data.scannerUpgrade = true; break;
                 case ShopItem.CutterCoolant: Data.cutterUpgrade = true; break;
+                case ShopItem.HeadLamp: Data.headLamp = true; break;
             }
             NotifyChangedAndSave();
             return true;

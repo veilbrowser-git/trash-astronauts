@@ -20,6 +20,8 @@ namespace TrashAstronauts.World
         public const int TeleportSurface = 14;
         public const int Zone = 15;
         public const int Enemy = 16;
+        /// <summary>The wearer's own suit and glove meshes while the helmet lamp is lit (it does not light this layer). No colliders.</summary>
+        public const int LocalSuit = 18;
 
 
         public static readonly (int index, string name)[] Names =
@@ -35,6 +37,7 @@ namespace TrashAstronauts.World
             (TeleportSurface, "TeleportSurface"),
             (Zone, "Zone"),
             (Enemy, "Enemy"),
+            (LocalSuit, "LocalSuit"),
         };
 
         public const int EnvironmentMask = 1 << Environment;
