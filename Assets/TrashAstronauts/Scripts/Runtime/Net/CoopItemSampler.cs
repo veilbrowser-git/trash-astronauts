@@ -18,8 +18,13 @@ namespace TrashAstronauts.Net
     {
         public const int MaxMovingPerTick = 12;
         public const float RestSeconds = 0.5f;
-        /// <summary>Below these an item counts as still.</summary>
-        public const float StillSpeed = 0.05f, StillSpin = 0.2f;
+        /// <summary>
+        /// Below these an item counts as still: really still, because in zero-g a slow drift never stops by itself,
+        /// and an item declared at rest while it drifts on would jump on the crew's headsets.
+        /// </summary>
+        public const float StillSpeed = 0.01f, StillSpin = 0.05f;
+        /// <summary>A resting item that has moved this far from where it was last rested is streamed again (metres).</summary>
+        public const float RestDrift = 0.02f;
 
         /// <summary>The cap on held or moving items per tick (<see cref="MaxMovingPerTick"/> unless changed).</summary>
         public int maxMoving = MaxMovingPerTick;
@@ -30,6 +35,7 @@ namespace TrashAstronauts.Net
         readonly List<float> m_Priority = new List<float>(64);
         float[] m_SlowFor = new float[0];
         bool[] m_Resting = new bool[0];
+        Vector3[] m_RestAt = new Vector3[0];
         int m_RoundRobin;
 
         /// <summary>An item settled (has been slow for <see cref="RestSeconds"/>). Raised once per settling.</summary>
@@ -49,10 +55,13 @@ namespace TrashAstronauts.Net
             int count = m_Director.RunItems.Count;
             m_SlowFor = new float[count];
             m_Resting = new bool[count];
+            m_RestAt = new Vector3[count];
+            var items = m_Director.RunItems;
             for (int i = 0; i < count; i++)
             {
                 m_SlowFor[i] = RestSeconds;
                 m_Resting[i] = true;
+                m_RestAt[i] = items[i] != null ? items[i].transform.position : Vector3.zero;
             }
             m_RoundRobin = 0;
         }
@@ -96,11 +105,21 @@ namespace TrashAstronauts.Net
                     m_Resting[i] = false;
                     continue;
                 }
-                if (m_Resting[i]) continue;
+                if (m_Resting[i])
+                {
+                    // Crept away from where everyone was told it rests: stream it again until it settles anew.
+                    if ((item.transform.position - m_RestAt[i]).sqrMagnitude > RestDrift * RestDrift)
+                    {
+                        m_Resting[i] = false;
+                        m_SlowFor[i] = 0f;
+                    }
+                    continue;
+                }
                 m_SlowFor[i] += dt;
                 if (m_SlowFor[i] >= RestSeconds)
                 {
                     m_Resting[i] = true;
+                    m_RestAt[i] = item.transform.position;
                     CameToRest?.Invoke(item);
                 }
             }
@@ -118,15 +137,19 @@ namespace TrashAstronauts.Net
             if (m_Resting.Length != items.Count) ResetForRun();
 
             // Whom the poses are for: the other crew members' heads (every player when there are none).
+            // Index loops: foreach over the IReadOnlyList would box an enumerator on every 20 Hz tick.
             m_Viewers.Clear();
-            foreach (var player in m_Director.Players)
+            var players = m_Director.Players;
+            for (int p = 0; p < players.Count; p++)
             {
+                var player = players[p];
                 if (player != null && player.IsRemote) m_Viewers.Add(player.HeadPosition);
             }
             if (m_Viewers.Count == 0)
             {
-                foreach (var player in m_Director.Players)
+                for (int p = 0; p < players.Count; p++)
                 {
+                    var player = players[p];
                     if (player != null) m_Viewers.Add(player.HeadPosition);
                 }
             }

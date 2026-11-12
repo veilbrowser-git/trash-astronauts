@@ -1,0 +1,27 @@
+<!--
+  Managed code stripping (IL2CPP, Android) must keep the code the online buttons reach only through reflection
+  and JSON deserialisation: Unity Services Core and its registration, anonymous Authentication, Lobby and Relay
+  (both in Unity.Services.Multiplayer), Wire, QoS and the Newtonsoft.Json models. Without this, a stripped
+  player could fail only on a device, at the first HOST ONLINE or FIND ONLINE. Same-Wi-Fi and single-player
+  do not need any of it. ignoreIfMissing keeps the build working if a package drops one of these assemblies.
+-->
+<linker>
+  <assembly fullname="Unity.Services.Core" preserve="all" ignoreIfMissing="true" />
+  <assembly fullname="Unity.Services.Core.Internal" preserve="all" ignoreIfMissing="true" />
+  <assembly fullname="Unity.Services.Core.Components" preserve="all" ignoreIfMissing="true" />
+  <assembly fullname="Unity.Services.Core.Configuration" preserve="all" ignoreIfMissing="true" />
+  <assembly fullname="Unity.Services.Core.Device" preserve="all" ignoreIfMissing="true" />
+  <assembly fullname="Unity.Services.Core.Environments" preserve="all" ignoreIfMissing="true" />
+  <assembly fullname="Unity.Services.Core.Environments.Internal" preserve="all" ignoreIfMissing="true" />
+  <assembly fullname="Unity.Services.Core.Networking" preserve="all" ignoreIfMissing="true" />
+  <assembly fullname="Unity.Services.Core.Registration" preserve="all" ignoreIfMissing="true" />
+  <assembly fullname="Unity.Services.Core.Scheduler" preserve="all" ignoreIfMissing="true" />
+  <assembly fullname="Unity.Services.Core.Telemetry" preserve="all" ignoreIfMissing="true" />
+  <assembly fullname="Unity.Services.Core.Threading" preserve="all" ignoreIfMissing="true" />
+  <assembly fullname="Unity.Services.Authentication" preserve="all" ignoreIfMissing="true" />
+  <assembly fullname="Unity.Services.Multiplayer" preserve="all" ignoreIfMissing="true" />
+  <assembly fullname="Unity.Services.Wire.Internal" preserve="all" ignoreIfMissing="true" />
+  <assembly fullname="Unity.Services.QoS" preserve="all" ignoreIfMissing="true" />
+  <assembly fullname="Newtonsoft.Json" preserve="all" ignoreIfMissing="true" />
+  <assembly fullname="TrashAstronauts.Online" preserve="all" ignoreIfMissing="true" />
+</linker>

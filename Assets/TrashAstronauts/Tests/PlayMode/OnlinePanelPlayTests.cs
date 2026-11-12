@@ -47,6 +47,7 @@ namespace TrashAstronauts.Tests
             public string StatusText => "FAKE " + State;
             public ushort TugNumber { get; set; }
             public string Code { get; set; }
+            public bool IsListed { get; set; } = true;
 
             public Task<OnlineHostResult> HostAsync(ushort tugNumber, string versionKey, MissionPhase phase, int playerCount = 1)
             {
@@ -98,6 +99,28 @@ namespace TrashAstronauts.Tests
                 LeaveCalls++;
                 State = OnlineLinkState.Idle;
             }
+        }
+
+        /// <summary>
+        /// A Relay connection stand-in: an in-memory transport whose Relay health the test sets (the real
+        /// RelayTransport needs Unity's servers).
+        /// </summary>
+        sealed class FakeRelay : INetTransport, IRelayLink
+        {
+            public readonly MemoryTransport Inner;
+            public FakeRelay(MemoryTransport inner, bool host) { Inner = inner; IsHost = host; ConnectionCount = host ? 0 : 1; }
+            public bool IsHost { get; }
+            public bool LinkLost { get; set; }
+            public bool AllocationInvalid { get; set; }
+            public bool RelayLost { get; set; }
+            public int Disconnects { get; set; }
+            public int ConnectionCount { get; set; }
+            public int Flushes;
+            public void Flush() => Flushes++;
+            public NetEndpoint Local => Inner.Local;
+            public bool Send(NetEndpoint to, byte[] data, int length) => Inner.Send(to, data, length);
+            public bool Receive(out NetEndpoint from, byte[] buffer, out int length) => Inner.Receive(out from, buffer, out length);
+            public void Dispose() => Inner.Dispose();
         }
 
         static OnlineGame Game(ushort tug, int players, string phaseKey) => new OnlineGame
@@ -176,6 +199,12 @@ namespace TrashAstronauts.Tests
             StringAssert.Contains("TUG 4821  ONLINE", Status);
             StringAssert.Contains("CODE  K7Q2ZD", Status);
             StringAssert.Contains("CREW 1/4:  ORANGE (YOU)", Status);
+            StringAssert.DoesNotContain("NOT LISTED", Status);
+            m_Link.IsListed = false; // the lobby entry went away (heartbeat refused, deleted...)
+            StringAssert.Contains("NOT LISTED", Status, "The panel reads the listing live.");
+            m_Link.IsListed = true;
+            Assert.AreEqual(NetSession.OnlineInterpolationDelay, m_Net.InterpolationDelay, "Online: drawn further behind for internet jitter.");
+            Assert.AreEqual(NetSession.OnlineInterpolationDelay, CoopItemReplica.Delay);
             Assert.IsFalse(m_Director.ContractStartBlocked);
             Assert.Greater(m_Link.TickCalls, 0, "The lobby listing is kept alive.");
             Assert.AreEqual(1, m_Link.LastPlayers);
@@ -202,6 +231,7 @@ namespace TrashAstronauts.Tests
             yield return Frames(100, 0.05); // the closed host answers stragglers, then lets go
             Assert.IsTrue(hostTransport.IsDisposed, "The online host's transport is closed.");
             Assert.IsTrue(m_Net.IsOffline);
+            Assert.AreEqual(SnapshotBuffer<PoseSnapshot>.InterpolationDelay, CoopItemReplica.Delay, "Back to the Wi-Fi delay.");
             int ticks = m_Link.TickCalls;
             yield return Frames(20);
             Assert.AreEqual(ticks, m_Link.TickCalls, "Nothing online runs after LEAVE.");
@@ -335,12 +365,122 @@ namespace TrashAstronauts.Tests
             Assert.IsTrue(m_Net.IsOffline);
             Assert.IsFalse(m_Director.ContractStartBlocked);
             Assert.Greater(m_Link.LeaveCalls, 0);
+
+            // The abandoned step is still winding down inside the link: the online buttons wait for it instead of
+            // letting the next press be answered "still working".
+            Assert.IsTrue(m_Net.OnlineSettling);
+            m_Board.Refresh();
+            Assert.IsFalse(m_Board.hostOnlineButton.Interactable);
+            Assert.IsFalse(m_Board.findOnlineButton.Interactable);
+            Assert.IsTrue(m_Board.hostButton.Interactable, "Same-Wi-Fi play is not held up.");
+            StringAssert.StartsWith("CLOSING THE LAST ONLINE STEP", Status);
+            Assert.IsFalse(m_Net.FindOnline());
+            int hostCalls = m_Link.HostCalls;
+
             var late = m_Hub.Create();
             m_Link.Host.SetResult(new OnlineHostResult { Ok = true, Transport = late, TugNumber = 1, Code = "LATE00", Listed = true });
             yield return Frames(3);
             Assert.IsTrue(late.IsDisposed, "What the cancelled step opened is closed when it arrives.");
             Assert.AreEqual(LobbyMode.Offline, m_Net.Mode);
             Assert.IsNull(m_Director.Net);
+            Assert.IsFalse(m_Net.OnlineSettling);
+            m_Board.Refresh();
+            Assert.IsTrue(m_Board.hostOnlineButton.Interactable, "Back as soon as the old step is over.");
+            yield return Press(m_Board.hostOnlineButton);
+            Assert.AreEqual(hostCalls + 1, m_Link.HostCalls);
+            yield return Press(m_Board.leaveButton);
+        }
+
+        [UnityTest]
+        public IEnumerator Relay_AClientWhoseRelayLinkDrops_LeavesAtOnce_NotAfter60s_AndItsAwayNoticeIsFlushed()
+        {
+            yield return Board();
+            var host = AddScriptedHost(tug: 4821);
+            Assert.IsTrue(m_Net.JoinOnlineCode("ABC123"));
+            var relay = new FakeRelay(m_Hub.Create(), false);
+            m_Link.Join.SetResult(new OnlineJoinResult { Ok = true, Transport = relay, Host = host.Endpoint });
+            yield return Until(() => m_Net.Mode == LobbyMode.Joined);
+            Assert.IsTrue(m_Net.IsOnline);
+
+            // Going away: the notice is put on the wire at once (the app may be suspended right after).
+            int flushes = relay.Flushes;
+            m_Net.SendMessage("OnApplicationPause", true);
+            Assert.Greater(relay.Flushes, flushes, "The Away notice was flushed out through Relay.");
+            m_Net.SendMessage("OnApplicationPause", false);
+
+            // Relay drops the connection (the host slept past Relay's limit, or its allocation died).
+            relay.LinkLost = true;
+            double before = m_Clock;
+            yield return Frames(2);
+            Assert.AreEqual(LobbyMode.Offline, m_Net.Mode, "Ended at once, not after 60 s of HOST NOT RESPONDING.");
+            Assert.Less(m_Clock - before, 1.0);
+            Assert.AreEqual(LobbyNotice.LinkLost, m_Net.Notice);
+            StringAssert.StartsWith("LINK LOST", Notice);
+            Assert.IsTrue(relay.Inner.IsDisposed);
+            Assert.IsNull(m_Director.Net);
+            Assert.Greater(m_Link.LeaveCalls, 0);
+
+            // The same for an allocation that went invalid.
+            Assert.IsTrue(m_Net.JoinOnlineCode("ABC123"));
+            var second = new FakeRelay(m_Hub.Create(), false);
+            m_Link.Join.SetResult(new OnlineJoinResult { Ok = true, Transport = second, Host = host.Endpoint });
+            yield return Until(() => m_Net.Mode == LobbyMode.Joined);
+            second.AllocationInvalid = true;
+            yield return Frames(2);
+            Assert.AreEqual(LobbyMode.Offline, m_Net.Mode);
+            Assert.AreEqual(LobbyNotice.LinkLost, m_Net.Notice);
+        }
+
+        [UnityTest]
+        public IEnumerator Relay_AHostWhoseRelaySideDies_ClosesTheGame_UnlistsIt_AndSaysLinkLost()
+        {
+            yield return Board();
+
+            // The allocation went invalid (Relay dropped the sleeping host): close, unlist, LINK LOST.
+            yield return Press(m_Board.hostOnlineButton);
+            var relay = new FakeRelay(m_Hub.Create(), true);
+            m_Link.Host.SetResult(new OnlineHostResult { Ok = true, Transport = relay, TugNumber = 4821, Code = "K7Q2ZD", Listed = true });
+            yield return Until(() => m_Net.Mode == LobbyMode.Hosting);
+            var bot = AddBot(relay.Local);
+            yield return Until(() => m_Net.Crew(1) != null);
+            relay.ConnectionCount = 1;
+            int leaves = m_Link.LeaveCalls;
+            relay.AllocationInvalid = true;
+            yield return Frames(2);
+            Assert.AreEqual(LobbyMode.Offline, m_Net.Mode, "Not left claiming HOSTING ... ONLINE.");
+            Assert.Greater(m_Link.LeaveCalls, leaves, "The dead game is taken off the list.");
+            Assert.IsNull(m_Director.Net);
+            StringAssert.StartsWith("LINK LOST", Notice);
+            yield return Until(() => bot.World.Ended != SessionEndReason.None);
+            bot.Frozen = true;
+            yield return Frames(100, 0.05);
+
+            // Every crew member's connection dropped at once while the roster still lists them: the same.
+            yield return Press(m_Board.hostOnlineButton);
+            var again = new FakeRelay(m_Hub.Create(), true);
+            m_Link.Host.SetResult(new OnlineHostResult { Ok = true, Transport = again, TugNumber = 4822, Code = "K7Q2ZE", Listed = true });
+            yield return Until(() => m_Net.Mode == LobbyMode.Hosting);
+            var bot2 = AddBot(again.Local);
+            yield return Until(() => m_Net.Crew(1) != null);
+            again.ConnectionCount = 1;
+            yield return Frames(3);
+            Assert.AreEqual(LobbyMode.Hosting, m_Net.Mode, "Healthy: still hosting.");
+            bot2.Frozen = true; // the client's side went silent...
+            again.ConnectionCount = 0; // ...and Relay dropped its connection
+            again.Disconnects = 1;
+            yield return Frames(2);
+            Assert.AreEqual(LobbyMode.Offline, m_Net.Mode);
+            StringAssert.StartsWith("LINK LOST", Notice);
+
+            // The Relay server connection itself lost.
+            yield return Frames(100, 0.05);
+            yield return Press(m_Board.hostOnlineButton);
+            var third = new FakeRelay(m_Hub.Create(), true);
+            m_Link.Host.SetResult(new OnlineHostResult { Ok = true, Transport = third, TugNumber = 4823, Code = "K7Q2ZF", Listed = true });
+            yield return Until(() => m_Net.Mode == LobbyMode.Hosting);
+            third.RelayLost = true;
+            yield return Frames(2);
+            Assert.AreEqual(LobbyMode.Offline, m_Net.Mode);
         }
 
         [UnityTest]

@@ -182,7 +182,7 @@ namespace TrashAstronauts.UI
                 case LobbyNotice.ContractInProgress: return "CONTRACT IN PROGRESS\nThat crew is out on a contract. Try when they are back.";
                 case LobbyNotice.NoAnswer: return "NO ANSWER\nNo reply from that tug. Is it still hosting?";
                 case LobbyNotice.HostClosed: return "HOST LEFT\nThe host closed the crew. You are playing alone.";
-                case LobbyNotice.LinkLost: return "LINK LOST\nNothing heard from the host for too long.";
+                case LobbyNotice.LinkLost: return "LINK LOST\nThe connection to the crew was lost. You are playing alone.";
                 case LobbyNotice.Dropped: return "DROPPED\nThe host stopped hearing this headset.";
                 case LobbyNotice.BadCode: return "BAD CODE\nC is 0 to 255, D is 1 to 254.";
                 default: return "";
@@ -243,8 +243,9 @@ namespace TrashAstronauts.UI
             SetButton(hostButton, canStart);
             SetButton(findButton, canStart);
             SetButton(codeButton, canStart);
-            SetButton(hostOnlineButton, canStart);
-            SetButton(findOnlineButton, canStart);
+            bool settling = session.OnlineSettling;
+            SetButton(hostOnlineButton, canStart && !settling);
+            SetButton(findOnlineButton, canStart && !settling);
             SetButton(leaveButton, mode != LobbyMode.Offline || busy != OnlineStep.None || session.OnlineListShown);
 
             bool onlineList = mode == LobbyMode.Offline && session.OnlineListShown;
@@ -298,6 +299,7 @@ namespace TrashAstronauts.UI
                     return "JOINED " + m_JoiningLabel + (online ? "  ONLINE" : "") + "\nYOUR SUIT IS " + ColourNames[Mathf.Clamp(session.LocalSlot, 0, 3)] + "\n" + RosterLine()
                         + (session.HostSilent ? "\nHOST NOT RESPONDING..." : "");
                 default:
+                    if (session.OnlineSettling) return "CLOSING THE LAST ONLINE STEP...\nThe online buttons come back in a moment.";
                     if (session.OnlineListShown)
                     {
                         int games = session.OnlineGames.Count;

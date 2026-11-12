@@ -45,6 +45,12 @@ namespace TrashAstronauts.Net
         public int PosesAccepted { get; private set; }
         public int PosesDropped { get; private set; }
 
+        /// <summary>
+        /// How far in the past items are drawn: SnapshotBuffer.InterpolationDelay (100 ms) on Wi-Fi; NetSession sets
+        /// NetSession.OnlineInterpolationDelay for an online session and puts it back when the session ends.
+        /// </summary>
+        public static double Delay = SnapshotBuffer<PoseSnapshot>.InterpolationDelay;
+
         /// <summary>This machine's clock for samples: unscaled, like the network's.</summary>
         public static double LocalNow => Time.unscaledTimeAsDouble;
 
@@ -123,7 +129,7 @@ namespace TrashAstronauts.Net
         {
             if (m_Item == null) m_Item = GetComponent<SalvageItem>();
             if (m_Item == null || m_Item.IsSecured || m_Item.IsMounted || m_Item.SimulatedHere || m_Buffer.Count == 0) return;
-            double renderTime = SnapshotBuffer<PoseSnapshot>.RenderTime(LocalNow);
+            double renderTime = LocalNow - Delay;
             PoseSnapshot pose;
             // Something at rest stays exactly where it was put: never carried on past it by extrapolation.
             if (AtRest && renderTime >= m_Buffer.NewestTime)

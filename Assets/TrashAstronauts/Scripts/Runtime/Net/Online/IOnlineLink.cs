@@ -17,6 +17,8 @@ namespace TrashAstronauts.Net.Online
         string StatusText { get; }
         ushort TugNumber { get; }
         string Code { get; }
+        /// <summary>Hosting: the game is in the lobby list right now (false once the listing is gone or failed).</summary>
+        bool IsListed { get; }
 
         Task<OnlineHostResult> HostAsync(ushort tugNumber, string versionKey, MissionPhase phase, int playerCount = 1);
         Task<OnlineFindResult> FindAsync(string versionKey);
@@ -29,5 +31,26 @@ namespace TrashAstronauts.Net.Online
         void Tick();
         /// <summary>Stops whatever is running and unlists a hosted game. Safe any time.</summary>
         void Leave();
+    }
+
+    /// <summary>
+    /// The health of an online (Relay) connection, read by NetSession every frame while a session runs over it:
+    /// RelayTransport is the real one; tests use a fake. A plain UDP or in-memory transport does not implement it.
+    /// </summary>
+    public interface IRelayLink
+    {
+        bool IsHost { get; }
+        /// <summary>Client: the connection to the host is gone.</summary>
+        bool LinkLost { get; }
+        /// <summary>Relay says the allocation no longer exists (expired, or the host's side went away).</summary>
+        bool AllocationInvalid { get; }
+        /// <summary>The connection to the Relay server itself was up and is gone.</summary>
+        bool RelayLost { get; }
+        /// <summary>Host: connections that dropped so far. Client: 1 once the link was lost.</summary>
+        int Disconnects { get; }
+        /// <summary>Host: connected clients. Client: 1 while connected.</summary>
+        int ConnectionCount { get; }
+        /// <summary>Puts queued sends on the wire now.</summary>
+        void Flush();
     }
 }

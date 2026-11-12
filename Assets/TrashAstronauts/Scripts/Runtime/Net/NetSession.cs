@@ -67,6 +67,11 @@ namespace TrashAstronauts.Net
         public const double HostLingerSeconds = 1.5;
         /// <summary>The mission clock and shared tank go to the crew this often.</summary>
         public const double ClockInterval = 0.5;
+        /// <summary>
+        /// How far in the past crew suits and streamed salvage are drawn over an online (Relay) link, where the
+        /// delay varies far more than on Wi-Fi (Wi-Fi uses SnapshotBuffer.InterpolationDelay, 100 ms).
+        /// </summary>
+        public const double OnlineInterpolationDelay = 0.19;
 
         public MissionDirector director;
         [Tooltip("Stand-in for another crew member (Builder.Net builds it).")]
@@ -90,7 +95,10 @@ namespace TrashAstronauts.Net
         SessionEndReason m_ClientEndReason;
         LobbyNotice m_OwnNotice;
         bool m_AppPaused;
+        bool m_ReportedAway;
         bool m_LocalAway;
+        int m_RelayDisconnects;
+        readonly List<Task> m_Abandoned = new List<Task>();
 
         // the shared contract
         CoopHostRules m_Rules;
@@ -109,7 +117,6 @@ namespace TrashAstronauts.Net
         bool m_Online;
         OnlineProblem m_OnlineProblem;
         string m_OnlineCode;
-        bool m_OnlineListed;
         int m_ReportedCount = -1;
         MissionPhase m_ReportedPhase;
 
@@ -163,8 +170,23 @@ namespace TrashAstronauts.Net
         public OnlineProblem OnlineProblem => m_OnlineProblem;
         /// <summary>Hosting online: the 6-character Relay code a friend can type.</summary>
         public string OnlineCode => m_OnlineCode;
-        /// <summary>Hosting online: the game is in the lobby list (false: only the code works).</summary>
-        public bool OnlineListed => m_OnlineListed;
+        /// <summary>Hosting online: the game is in the lobby list right now (read live from the link; false: only the code works).</summary>
+        public bool OnlineListed => m_Online && m_Host != null && m_Link != null && m_Link.IsListed;
+        /// <summary>
+        /// An online step abandoned by LEAVE is still winding down (its service calls time out after up to 20 s).
+        /// The online buttons stay off until it has, so the next press is not answered "still working".
+        /// </summary>
+        public bool OnlineSettling
+        {
+            get
+            {
+                for (int i = m_Abandoned.Count - 1; i >= 0; i--)
+                    if (m_Abandoned[i] == null || m_Abandoned[i].IsCompleted) m_Abandoned.RemoveAt(i);
+                return m_Abandoned.Count > 0;
+            }
+        }
+        /// <summary>How far in the past the crew's suits and streamed salvage are drawn on this link.</summary>
+        public double InterpolationDelay => m_Online ? OnlineInterpolationDelay : SnapshotBuffer<AvatarSnapshot>.InterpolationDelay;
         /// <summary>The online link's own one-line status, or "" before any online button was pressed.</summary>
         public string OnlineLinkStatus => m_Link != null ? m_Link.StatusText : "";
         /// <summary>True once an online button was pressed in this scene (the link exists).</summary>
@@ -220,23 +242,30 @@ namespace TrashAstronauts.Net
         public void ReportTranqHit(Vector3 origin, Vector3 hitPoint) { }
         public void ForwardNoise(in NoiseEvent noise) { }
 
+        /// <summary>The director's own Away state changed (headset off, tracking or focus lost: MissionDirector.SetLocalAway).</summary>
         public void ReportPause(bool paused)
         {
-            m_AppPaused = paused;
+            m_ReportedAway = paused;
             RefreshAway();
         }
 
         /// <summary>
-        /// Away = the app is paused OR this headset's own hazard pause is on (headset off, tracking or focus lost).
-        /// Both sources are combined here, so resuming the app while tracking is still lost does not report "back".
+        /// Away = the app is paused OR the director says this player is away (a client: headset off, tracking or
+        /// focus lost) OR this headset's own hazard pause is on. The sources are kept apart and combined here, so
+        /// resuming the app while tracking is still lost does not report "back".
         /// The host's pause reaching a client is not this headset going away. A client tells the host
         /// (PauseNotice). A host shows it through the Away bit of its own avatar; its hazard pause also goes to
         /// the crew as HostPause (CoopHostRules).
         /// </summary>
         void RefreshAway()
         {
-            m_LocalAway = m_AppPaused || (director != null && director.PausedHere);
-            if (m_Client != null) m_Client.SetAway(m_LocalAway, Now);
+            m_LocalAway = m_AppPaused || m_ReportedAway || (director != null && director.PausedHere);
+            if (m_Client != null)
+            {
+                m_Client.SetAway(m_LocalAway, Now);
+                // The app may be about to be suspended: put the notice on the wire now, not at the next update.
+                FlushRelay(m_Client.Transport);
+            }
         }
 
         /// <summary>True while this headset counts as away (app paused or hazard pause on).</summary>
@@ -311,6 +340,7 @@ namespace TrashAstronauts.Net
             ClockOverride = null;
             LocalAddressOverride = null;
             OnlineLinkFactory = null;
+            CoopItemReplica.Delay = SnapshotBuffer<PoseSnapshot>.InterpolationDelay;
         }
 
         /// <summary>
@@ -474,11 +504,12 @@ namespace TrashAstronauts.Net
         public bool HostOnline()
         {
             m_OwnNotice = LobbyNotice.None;
-            if (OnlineBusy != OnlineStep.None || m_Host != null || m_Client != null) return false;
+            if (OnlineBusy != OnlineStep.None || m_Host != null || m_Client != null || OnlineSettling) return false;
             MissionPhase phase = director.Phase;
             if (!m_Lobby.CanHost(phase)) return m_Lobby.Host(phase, false, 0u, 0); // NotInHub, or not from this mode
             DisposeLingering();
             LeaveLocalSearch();
+            if (OnlineSettling) return false;
             ForgetOnline();
             ushort tug = JoinCode.MakeTugNumber(NewSeed());
             m_HostTask = Link.HostAsync(tug, VersionKey, phase, 1);
@@ -493,6 +524,7 @@ namespace TrashAstronauts.Net
             m_OwnNotice = LobbyNotice.None;
             if (OnlineBusy != OnlineStep.None || m_Host != null || m_Client != null) return false;
             if (m_Lobby.Mode != LobbyMode.Offline && m_Lobby.Mode != LobbyMode.Searching && m_Lobby.Mode != LobbyMode.EnteringCode) return false;
+            if (OnlineSettling) return false;
             if (!LobbyState.PhaseAllowsSession(director.Phase))
             {
                 m_OwnNotice = LobbyNotice.NotInHub;
@@ -521,7 +553,7 @@ namespace TrashAstronauts.Net
         {
             m_OwnNotice = LobbyNotice.None;
             if (OnlineBusy != OnlineStep.None || m_Host != null || m_Client != null) return false;
-            if (m_Lobby.Mode != LobbyMode.Offline) return false;
+            if (m_Lobby.Mode != LobbyMode.Offline || OnlineSettling) return false;
             if (!LobbyState.PhaseAllowsSession(director.Phase))
             {
                 m_OwnNotice = LobbyNotice.NotInHub;
@@ -580,7 +612,6 @@ namespace TrashAstronauts.Net
                 return;
             }
             m_OnlineCode = result.Code;
-            m_OnlineListed = result.Listed;
             StartHosting(result.Transport, result.TugNumber, true);
         }
 
@@ -647,14 +678,21 @@ namespace TrashAstronauts.Net
             if (m_Link != null) m_Link.Leave();
             DisposeWhenDone(m_HostTask);
             DisposeWhenDone(m_JoinTask);
+            Abandon(m_HostTask);
+            Abandon(m_JoinTask);
+            Abandon(m_FindTask);
             m_HostTask = null;
             m_JoinTask = null;
             m_FindTask = null;
             m_Online = false;
             m_OnlineCode = null;
-            m_OnlineListed = false;
             m_ReportedCount = -1;
             ForgetOnline();
+        }
+
+        void Abandon(Task task)
+        {
+            if (task != null && !task.IsCompleted) m_Abandoned.Add(task);
         }
 
         static TaskScheduler MainThreadScheduler()
@@ -699,9 +737,11 @@ namespace TrashAstronauts.Net
                 seed = Environment.TickCount,
             };
             DisposeContract();
-            m_Rules = new CoopHostRules(director, new HostBroadcast(this));
+            m_Rules = new CoopHostRules(director, new HostBroadcast(this)) { Clock = () => Now };
             m_Host = new NetSessionHost(transport, new SceneHostWorld(this, director, m_Rules), config);
             m_Online = online;
+            m_RelayDisconnects = transport is IRelayLink relay ? relay.Disconnects : 0;
+            CoopItemReplica.Delay = InterpolationDelay;
             m_LastPoseTick = double.NegativeInfinity;
             m_NextClock = 0.0;
             m_ReportedCount = -1;
@@ -725,6 +765,7 @@ namespace TrashAstronauts.Net
             m_Apply = new CoopClientApply(director);
             m_Client = new NetSessionClient(transport, new SceneClientWorld(this, m_Apply), config);
             m_Online = online;
+            CoopItemReplica.Delay = InterpolationDelay;
             m_ClientEnded = false;
             HostSilent = false;
             m_Client.Connect(host, Now);
@@ -769,6 +810,7 @@ namespace TrashAstronauts.Net
             if (m_Rules != null) m_Rules.Dispose();
             m_Rules = null;
             m_Apply = null;
+            CoopItemReplica.Delay = SnapshotBuffer<PoseSnapshot>.InterpolationDelay;
         }
 
         // ================================================================== pump
@@ -788,15 +830,24 @@ namespace TrashAstronauts.Net
             if (m_Host != null)
             {
                 m_Host.Poll(now);
-                RenderCrew(now - SnapshotBuffer<AvatarSnapshot>.InterpolationDelay);
+                if (m_Online && m_Host.Transport is IRelayLink hostRelay && HostRelayLost(hostRelay))
+                {
+                    OnlineHostLost();
+                    return;
+                }
+                RenderCrew(now - InterpolationDelay);
                 if (m_Online && m_Link != null) KeepListing();
             }
 
             if (m_Client != null)
             {
                 m_Client.Poll(now);
+                // Over Relay a dead connection is known at once: do not sit on HOST NOT RESPONDING for 60 s.
+                if (!m_ClientEnded && m_Client != null && m_Online && m_Client.Transport is IRelayLink clientRelay
+                    && (clientRelay.LinkLost || clientRelay.AllocationInvalid || clientRelay.RelayLost))
+                    QueueClientEnded(SessionEndReason.HostTimeout);
                 if (m_ClientEnded) ClientEnded();
-                else RenderCrew(m_Client.RenderTime(now));
+                else RenderCrew(m_Client.HostTime(now) - InterpolationDelay);
             }
 
             if (m_SearchTransport != null && m_Discovery != null)
@@ -805,6 +856,28 @@ namespace TrashAstronauts.Net
                 m_Lobby.SearchTick(now, m_Discovery.Hosts.Count);
             }
             m_Lobby.OnRoster(PlayerCount);
+        }
+
+        /// <summary>
+        /// Hosting online, the Relay side is gone: the allocation is invalid, the connection to the Relay server
+        /// dropped (a headset that slept past Relay's 10 s idle limit), or every crew member's connection dropped at
+        /// once while the roster still lists them.
+        /// </summary>
+        bool HostRelayLost(IRelayLink relay)
+        {
+            if (relay.AllocationInvalid || relay.RelayLost) return true;
+            int disconnects = relay.Disconnects;
+            bool grew = disconnects > m_RelayDisconnects;
+            m_RelayDisconnects = disconnects;
+            return grew && relay.ConnectionCount == 0 && PlayerCount > 1;
+        }
+
+        /// <summary>The online game cannot go on: close it as LEAVE would (unlisting it), and say LINK LOST.</summary>
+        void OnlineHostLost()
+        {
+            Debug.LogWarning("[Net] The online host's Relay connection was lost; the session is closed.");
+            Leave();
+            m_OwnNotice = LobbyNotice.LinkLost;
         }
 
         /// <summary>Hosting online: the lobby heartbeat, and the listing's crew count and phase (so FIND shows "ON CONTRACT").</summary>
@@ -891,7 +964,7 @@ namespace TrashAstronauts.Net
         /// <summary>A Relay connection queues what is sent until the driver's next update; put it on the wire now.</summary>
         static void FlushRelay(INetTransport transport)
         {
-            if (transport is RelayTransport relay) relay.Flush();
+            if (transport is IRelayLink relay) relay.Flush();
         }
 
         // ================================================================== called by the scene worlds
@@ -904,6 +977,8 @@ namespace TrashAstronauts.Net
             ClearCrew();
             m_Present[localSlot] = true;
             director.Net = this;
+            // A headset already off or untracked when the Welcome came: from now on that is Away, not a hazard pause.
+            director.MovePausesToAway();
             ApplyLocalSlot(localSlot);
             // Every headset starts on the same spawn point: step onto this slot's own spot in the tug.
             director.PlaceAtCrewSpot(director.LocalPlayer);
@@ -1055,6 +1130,7 @@ namespace TrashAstronauts.Net
         void BackToSinglePlayer()
         {
             m_LocalSlot = 0;
+            m_ReportedAway = false;
             if (director == null) return;
             if (ReferenceEquals(director.Net, this)) director.LeaveSession();
             Sync();
