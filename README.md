@@ -2,11 +2,11 @@
 
 This branch holds only the built APK, so the `main` branch stays source-only.
 
-- `TrashAstronauts.apk` - version 0.11.4, built from commit 3017cca on `main`
+- `TrashAstronauts.apk` - version 0.12.0, built from commit 5d276b7 on `main`
 - Meta Quest 3 / 3S, ARM64, OpenXR, minimum Android API 32
 - Signed with the Android debug key (fine for sideloading, not for a store)
-- SHA-256: `ec73bedbe2280b73058772583fcb26f2222c32970408330d6bb81db01002f068`
-- 0.11.4: other players' tools show in their hands or holsters, their flashlights have beams that light the walls, their cutters show flame and sparks and welds burn down as they cut; a Suit Locker in the supply bay offers twelve suit colours that your crew sees. Includes voice chat and the co-op spider. Only the host can carry salvage. Not tried on headsets.
+- SHA-256: `c868298dd02f7c8ce940a323baa43e311c890bd39a799ee3862c0029b1786c85`
+- 0.12.0: every player can grab, carry, throw, catch and deposit salvage; picking up is easier (larger grab reach and a short-range pull to the palm); a helmet lamp is for sale in the company store. Includes online play, shared contracts, the co-op spider, voice chat, visible crew tools and suit colours. New parts tested with simulated players only.
 
 Install with developer mode on and the headset connected by USB:
 
