@@ -120,6 +120,7 @@ namespace TrashAstronauts.EditorTools
             settings.director = director;
             var shop = BuildShop(director);
             BuildSuitLocker(director);
+            BuildSalvageClaw(director);
             var net = AddNetSession(missionGo, director);
             BuildLobbyBoard(net);
 
