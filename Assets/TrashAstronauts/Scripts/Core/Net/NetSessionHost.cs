@@ -89,6 +89,9 @@ namespace TrashAstronauts.Core.Net
             public double datagramTime;
             /// <summary>The stamp given to this client's newest avatar (stamps never go backwards).</summary>
             public double lastAvatarStamp;
+            /// <summary>Voice rate limit: frames this client may still send now (refills at 60 a second, up to the burst).</summary>
+            public double voiceTokens;
+            public double voiceStamp;
         }
 
         const int k_MaxDatagramsPerPoll = 512;
@@ -132,9 +135,17 @@ namespace TrashAstronauts.Core.Net
         ItemPoseBatch m_PoseRead;
         ItemPoseBatch m_PoseWrite;
         WelcomeMsg m_Welcome;
+        VoiceMsg m_VoiceRead;
+        VoiceMsg m_VoiceWrite;
 
         /// <summary>Optional recorder; see <see cref="NetMessageTap"/>.</summary>
         public NetMessageTap Tap;
+
+        /// <summary>
+        /// Proximity voice chat: raised (inside <see cref="Poll"/>) for every voice frame a client sends, with that
+        /// client's slot. The host has already relayed it to the other clients. See <see cref="VoiceMsg"/>.
+        /// </summary>
+        public event NetVoiceHandler VoiceReceived;
 
         public NetHostConfig Config => m_Config;
         public NetStats Stats => m_Stats;
@@ -163,6 +174,8 @@ namespace TrashAstronauts.Core.Net
             }
             m_PoseRead.entries = new ItemPoseEntry[ItemPoseBatch.MaxEntries];
             m_PoseWrite.entries = new ItemPoseEntry[ItemPoseBatch.MaxEntries];
+            m_VoiceRead.data = new byte[VoiceMsg.MaxFrames * VoiceMsg.MaxFrameBytes];
+            m_VoiceWrite.data = new byte[VoiceMsg.MaxFrames * VoiceMsg.MaxFrameBytes];
         }
 
         // ================================================================== roster queries
@@ -479,6 +492,8 @@ namespace TrashAstronauts.Core.Net
             peer.lastAvatarStamp = double.NegativeInfinity;
             peer.noiseIndex = 0;
             for (int n = 0; n < peer.noiseTimes.Length; n++) peer.noiseTimes[n] = double.NegativeInfinity;
+            peer.voiceTokens = VoiceMsg.BurstFrames;
+            peer.voiceStamp = m_Now;
             SendAccept(peer);
         }
 
@@ -578,9 +593,15 @@ namespace TrashAstronauts.Core.Net
             // Pass 3: the streams, unless a newer datagram's streams have been applied already. A datagram that
             // was overtaken on the way still delivers its reliable messages (above), but its avatar, Away flag
             // and poses are older than what the host has and must not replace it.
-            if (peer.hasStreamSeq && (short)(header.seq - peer.streamSeq) <= 0) { m_Stats.staleStreams++; return; }
-            peer.streamSeq = header.seq;
-            peer.hasStreamSeq = true;
+            // Voice is the exception: its frames carry their own sequence numbers and the jitter buffer puts them
+            // back in order, so an overtaken datagram's voice is still used.
+            bool stale = peer.hasStreamSeq && (short)(header.seq - peer.streamSeq) <= 0;
+            if (stale) m_Stats.staleStreams++;
+            else
+            {
+                peer.streamSeq = header.seq;
+                peer.hasStreamSeq = true;
+            }
             r = new NetReader(m_Receive, bodyStart, length - bodyStart);
             while (!r.AtEnd)
             {
@@ -591,7 +612,12 @@ namespace TrashAstronauts.Core.Net
                     r.U16();
                     r.Skip(r.U16());
                 }
+                else if (stale && type != NetMsg.Voice)
+                {
+                    if (!SkipStream(type, ref r)) break;
+                }
                 else if (!HandleStream(peer, type, ref r)) break;
+                if (!peer.used || peer.connId != connId || m_Closed) return;
             }
         }
 
@@ -644,6 +670,7 @@ namespace TrashAstronauts.Core.Net
                 case NetMsg.AvatarState: return AvatarSnapshot.Read(ref r, out _);
                 case NetMsg.ItemPoses: return ItemPoseBatch.Read(ref r, ref m_PoseRead);
                 case NetMsg.Noise: return NoiseMsg.Read(ref r, out _);
+                case NetMsg.Voice: return VoiceMsg.Read(ref r, ref m_VoiceRead);
                 default: return false;
             }
         }
@@ -717,9 +744,70 @@ namespace TrashAstronauts.Core.Net
                     m_World.OnNoise(peer.slot, noise.position, noise.loudness > max ? max : noise.loudness, noise.kind);
                     return true;
                 }
+                case NetMsg.Voice:
+                {
+                    if (!VoiceMsg.Read(ref r, ref m_VoiceRead)) return false;
+                    Tap?.Invoke(false, peer.slot, type, m_Receive, start, r.Position - start, m_Now);
+                    HandleVoice(peer);
+                    return true;
+                }
                 default:
                     return false;
             }
+        }
+
+        // ================================================================== voice
+
+        /// <summary>A client's voice frames: rate-limit, hand to the host's own playback, relay to everyone else.</summary>
+        void HandleVoice(Peer from)
+        {
+            double elapsed = m_Now - from.voiceStamp;
+            from.voiceStamp = m_Now;
+            if (elapsed > 0) from.voiceTokens = Math.Min(VoiceMsg.BurstFrames, from.voiceTokens + elapsed * VoiceMsg.MaxFramesPerSecond);
+            if (from.away || from.voiceTokens < m_VoiceRead.count) { m_Stats.rejected++; return; }
+            from.voiceTokens -= m_VoiceRead.count;
+            m_VoiceRead.slot = from.slot; // never trust the slot a client wrote
+
+            for (int i = 1; i < m_Peers.Length; i++)
+            {
+                Peer to = m_Peers[i];
+                if (to != from) SendVoiceTo(to, ref m_VoiceRead);
+            }
+            var handler = VoiceReceived;
+            if (handler != null)
+                for (int f = 0; f < m_VoiceRead.count; f++)
+                    handler(from.slot, (ushort)(m_VoiceRead.sequence + f), m_VoiceRead.data, m_VoiceRead.Offset(f), m_VoiceRead.Length(f));
+        }
+
+        /// <summary>
+        /// Sends the host player's own voice: <paramref name="frameCount"/> (1 or 2) consecutive encoded frames of
+        /// <paramref name="frameBytes"/> each, to every connected client that is not Away, at once (not on the send
+        /// tick). Returns the number of clients it went to.
+        /// </summary>
+        public int SendVoice(ushort sequence, byte[] frames, int offset, int frameBytes, int frameCount)
+        {
+            if (m_Closed || m_Disposed) return 0;
+            if (!m_VoiceWrite.Set(NetProtocol.HostSlot, sequence, frames, offset, frameBytes, frameCount)) return 0;
+            int sent = 0;
+            for (int i = 1; i < m_Peers.Length; i++)
+                if (SendVoiceTo(m_Peers[i], ref m_VoiceWrite)) sent++;
+            return sent;
+        }
+
+        /// <summary>One datagram holding just this voice message (plus acks in the header), if the peer can take it.</summary>
+        bool SendVoiceTo(Peer to, ref VoiceMsg voice)
+        {
+            if (!to.used || !to.confirmed || to.away || to.silent) return false;
+            var w = new NetWriter(m_Send, 0, NetProtocol.MaxDatagram - 1);
+            WriteHeader(to, ref w);
+            w.U8(NetMsg.Voice);
+            int start = w.Position;
+            voice.Write(ref w);
+            if (w.Overflow) return false;
+            Tap?.Invoke(true, to.slot, NetMsg.Voice, m_Send, start, w.Position - start, m_Now);
+            m_Send[w.Position] = NetMsg.End;
+            SendRaw(to.endpoint, w.Position + 1);
+            return true;
         }
 
         static void StoreRelayPose(Peer peer, in ItemPoseEntry e)

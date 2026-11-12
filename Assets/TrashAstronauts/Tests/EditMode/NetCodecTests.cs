@@ -1111,6 +1111,12 @@ namespace TrashAstronauts.Tests
             Add(NetMsg.ItemPoses, (ref NetWriter w) => batch.Write(ref w), (ref NetReader r) => ItemPoseBatch.Read(ref r, ref readBatch));
             Add(NetMsg.Clock, (ref NetWriter w) => new ClockMsg { elapsedSeconds = 99999f, oxygenRemainingSeconds = 99999f, flags = 255 }.Write(ref w), (ref NetReader r) => ClockMsg.Read(ref r, out _));
             Add(NetMsg.Noise, (ref NetWriter w) => new NoiseMsg { position = far, loudness = 99f, kind = NoiseKind.Web }.Write(ref w), (ref NetReader r) => NoiseMsg.Read(ref r, out _));
+            var voiceFrames = new byte[2 * VoiceMsg.MaxFrameBytes];
+            random.NextBytes(voiceFrames);
+            var voice = new VoiceMsg();
+            voice.Set(3, 65535, voiceFrames, 0, VoiceMsg.MaxFrameBytes, VoiceMsg.MaxFrames);
+            var readVoice = new VoiceMsg();
+            Add(NetMsg.Voice, (ref NetWriter w) => voice.Write(ref w), (ref NetReader r) => VoiceMsg.Read(ref r, ref readVoice));
 
             var world = new WorldStateMsg { doorOpenMask = 0xFFFF, panelOpenMask = 0xFFFF, wireSnappedMask = 0xFFFFFFFF, wireBurntMask = 0xFFFFFFFF };
             for (int bit = 0; bit < NetProtocol.MaxCutPoints; bit++) world.SetWeldDone(bit);
@@ -1185,7 +1191,7 @@ namespace TrashAstronauts.Tests
             }
             Assert.AreEqual(NetMsg.All.Length, samples.Count, "a sample for a message that is not in NetMsg.All");
             Assert.AreEqual(-1, NetMsg.MaxSize(250));
-            Assert.AreEqual(52, NetMsg.All.Length, "7 connectionless + 6 streams + 39 reliable");
+            Assert.AreEqual(53, NetMsg.All.Length, "7 connectionless + 7 streams + 39 reliable");
 
             // every reliable message plus its overhead and the datagram header fits one datagram: no fragmentation
             Assert.LessOrEqual(DatagramHeader.Size + ReliableChannel.Overhead + NetProtocol.MaxMessageBytes, NetProtocol.MaxDatagram);
@@ -1197,7 +1203,7 @@ namespace TrashAstronauts.Tests
         [Test]
         public void Reliability_IsDecidedByTheId()
         {
-            foreach (byte id in new[] { NetMsg.Probe, NetMsg.HostInfo, NetMsg.Hello, NetMsg.Accept, NetMsg.Refuse, NetMsg.Gone, NetMsg.AvatarState, NetMsg.RemoteAvatar, NetMsg.CreatureState, NetMsg.ItemPoses, NetMsg.Clock, NetMsg.Noise })
+            foreach (byte id in new[] { NetMsg.Probe, NetMsg.HostInfo, NetMsg.Hello, NetMsg.Accept, NetMsg.Refuse, NetMsg.Gone, NetMsg.AvatarState, NetMsg.RemoteAvatar, NetMsg.CreatureState, NetMsg.ItemPoses, NetMsg.Clock, NetMsg.Noise, NetMsg.Voice })
                 Assert.IsFalse(NetMsg.IsReliable(id), NetMsg.Name(id));
             foreach (byte id in NetMsg.All)
                 if (id >= NetMsg.Welcome) Assert.IsTrue(NetMsg.IsReliable(id), NetMsg.Name(id));
