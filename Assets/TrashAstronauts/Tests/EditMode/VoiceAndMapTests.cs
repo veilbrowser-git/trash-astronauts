@@ -69,6 +69,67 @@ namespace TrashAstronauts.Tests
             Assert.That(emits, Is.InRange(8, 12));
         }
 
+        static float[] Tone(int rate, float seconds, float amplitude)
+        {
+            var samples = new float[Mathf.RoundToInt(rate * seconds)];
+            for (int i = 0; i < samples.Length; i++) samples[i] = amplitude * Mathf.Sin(2f * Mathf.PI * 220f * i / rate);
+            return samples;
+        }
+
+        static void Feed(PhraseRecorder recorder, float[] samples, bool speaking)
+        {
+            var block = new float[256];
+            for (int i = 0; i + block.Length <= samples.Length; i += block.Length)
+            {
+                System.Array.Copy(samples, i, block, 0, block.Length);
+                recorder.Feed(block, block.Length, speaking);
+            }
+        }
+
+        [Test]
+        public void PhraseRecorder_CutsSpeechIntoPhrases_KeepsOnlyTheLastFew_AndForgetsOnClear()
+        {
+            const int rate = 16000;
+            var recorder = new PhraseRecorder(rate);
+            Feed(recorder, new float[rate], false);
+            Assert.AreEqual(0, recorder.Count, "Silence is not a phrase.");
+
+            // One second of speech, then silence.
+            Feed(recorder, Tone(rate, 1f, 0.2f), true);
+            Assert.IsTrue(recorder.IsRecording);
+            Assert.AreEqual(0, recorder.Count, "The phrase is not finished until the speaker stops.");
+            Feed(recorder, new float[rate], false);
+            Assert.AreEqual(1, recorder.Count);
+            Assert.AreEqual(1, recorder.Version);
+            float seconds = recorder.Newest.Length / (float)rate;
+            Assert.That(seconds, Is.InRange(1.1f, 1.5f), "The phrase is the speech plus a little before and after.");
+            Assert.AreEqual(0.9f, recorder.Newest.Max(v => Mathf.Abs(v)), 0.02f, "Phrases are levelled.");
+            Assert.AreEqual(0f, recorder.Newest[0], 1e-4f, "Phrases fade in so they do not click.");
+
+            // A cough is too short to keep.
+            Feed(recorder, Tone(rate, 0.12f, 0.3f), true);
+            Feed(recorder, new float[rate], false);
+            Assert.AreEqual(1, recorder.Count);
+
+            // Someone who never stops talking is cut off at the maximum length.
+            Feed(recorder, Tone(rate, 6f, 0.2f), true);
+            Assert.GreaterOrEqual(recorder.Count, 2);
+            Assert.LessOrEqual(recorder.Get(1).Length, Mathf.RoundToInt(rate * (recorder.maxSeconds + 0.1f)));
+            Feed(recorder, new float[rate], false);
+
+            // Only the most recent few are kept.
+            for (int i = 0; i < 8; i++)
+            {
+                Feed(recorder, Tone(rate, 0.5f, 0.2f), true);
+                Feed(recorder, new float[rate], false);
+            }
+            Assert.AreEqual(recorder.maxPhrases, recorder.Count);
+
+            recorder.Clear();
+            Assert.AreEqual(0, recorder.Count);
+            Assert.IsNull(recorder.Newest);
+        }
+
         [Test]
         public void ThreeWrecks_AreInTheScene_OnlyTheFirstIsDocked_AndEachIsComplete()
         {

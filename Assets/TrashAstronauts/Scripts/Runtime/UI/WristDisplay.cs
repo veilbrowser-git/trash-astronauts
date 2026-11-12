@@ -103,7 +103,7 @@ namespace TrashAstronauts.UI
                 if (voice == null) mic = "";
                 else if (!voice.Listening) mic = voice.Status;
                 else if (voice.HeardRecently && session.Phase == MissionPhase.Active) mic = "MIC ))) IT CAN HEAR YOU";
-                else mic = "MIC " + new string('|', 1 + Mathf.RoundToInt(voice.Loudness * 7f));
+                else mic = (voice.CaptureActive ? "MIC REC " : "MIC ") + new string('|', 1 + Mathf.RoundToInt(voice.Loudness * 7f));
                 Set(voiceText, mic);
             }
         }

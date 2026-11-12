@@ -78,7 +78,7 @@ namespace TrashAstronauts.EditorTools
         static void BuildPrefabs()
         {
             BuildSalvagePrefabs();
-            s_CreaturePrefabs = new[] { BuildCreaturePrefab(0), BuildCreaturePrefab(1), BuildCreaturePrefab(2) };
+            s_CreaturePrefabs = new[] { BuildCreaturePrefab(0), BuildCreaturePrefab(1), BuildCreaturePrefab(2), BuildCreaturePrefab(3) };
             s_DronePrefab = s_CreaturePrefabs[0];
             s_RigPrefab = BuildPlayerRigPrefab();
             AssetDatabase.SaveAssets();
@@ -317,14 +317,15 @@ namespace TrashAstronauts.EditorTools
         /// jaw full of scavenged spikes, four long clawed limbs and trailing cables. No gore.
         /// </summary>
         /// <summary>
-        /// One of the three things that can be aboard. 0 = JANITOR-7 (balanced), 1 = the Listener (blind,
-        /// sharp hearing), 2 = the Warden (slow, long sight). They share a skeleton so one animator drives all.
+        /// One of the things that can be aboard. 0 = JANITOR-7 (balanced), 1 = the Listener (blind,
+        /// sharp hearing), 2 = the Warden (slow, long sight), 3 = the Mimic (plays the player's voice back).
+        /// They share a skeleton so one animator drives all.
         /// </summary>
         static GameObject BuildCreaturePrefab(int variant)
         {
-            bool listener = variant == 1, warden = variant == 2;
-            string hide = listener ? "PaleHide" : warden ? "WardenPlate" : "Carapace";
-            var go = new GameObject(variant == 0 ? "Drone_Janitor7" : listener ? "Creature_Listener" : "Creature_Warden") { layer = GameLayers.Enemy };
+            bool listener = variant == 1, warden = variant == 2, mimic = variant == 3;
+            string hide = listener ? "PaleHide" : warden ? "WardenPlate" : mimic ? "MimicHide" : "Carapace";
+            var go = new GameObject(variant == 0 ? "Drone_Janitor7" : listener ? "Creature_Listener" : warden ? "Creature_Warden" : "Creature_Mimic") { layer = GameLayers.Enemy };
             var rb = go.AddComponent<Rigidbody>();
             rb.isKinematic = true;
             rb.useGravity = false;
@@ -353,7 +354,7 @@ namespace TrashAstronauts.EditorTools
             var casing = Empty(body, "Old Casing", new Vector3(-0.2f, 0.05f, -0.3f), Quaternion.Euler(8f, -80f, 18f)).transform;
             CBox(casing, "Panel", Vector3.zero, new Vector3(0.24f, 0.15f, 0.012f), M("PaintWhite"), 0.004f);
             CBox(casing, "Stripe", new Vector3(0, -0.055f, -0.007f), new Vector3(0.24f, 0.03f, 0.002f), M("Hazard"), 0.0005f);
-            Text(casing, "Label", variant == 0 ? "JANITOR-7" : listener ? "ACOUSTICS-3" : "WARDEN-12", new Vector3(0, 0.02f, -0.008f), Quaternion.identity, 0.32f, new Vector2(0.22f, 0.06f), new Color(0.25f, 0.25f, 0.25f)).fontStyle = FontStyles.Bold;
+            Text(casing, "Label", variant == 0 ? "JANITOR-7" : listener ? "ACOUSTICS-3" : warden ? "WARDEN-12" : "COMMS-1", new Vector3(0, 0.02f, -0.008f), Quaternion.identity, 0.32f, new Vector2(0.22f, 0.06f), new Color(0.25f, 0.25f, 0.25f)).fontStyle = FontStyles.Bold;
 
             // Head: low and forward, a cluster of eyes over a hinged jaw.
             var head = Empty(body, "Head", new Vector3(0, -0.03f, 0.27f)).transform;
@@ -367,7 +368,7 @@ namespace TrashAstronauts.EditorTools
                 new Vector3(0.08f, 0.012f, 0.118f), new Vector3(-0.03f, -0.012f, 0.134f), new Vector3(0.035f, 0.072f, 0.12f),
             };
             float[] eyeSizes = { 0.03f, 0.026f, 0.02f, 0.022f, 0.018f, 0.016f };
-            for (int i = 0; i < (variant == 0 ? eyeOffsets.Length : 0); i++)
+            for (int i = 0; i < (variant == 0 ? eyeOffsets.Length : mimic ? 2 : 0); i++)
                 extraEyes.Add(Prim(head, "Eye " + i, PrimitiveType.Sphere, eyeOffsets[i], new Vector3(eyeSizes[i], eyeSizes[i], eyeSizes[i] * 0.6f), M("CreatureEye")).GetComponent<MeshRenderer>());
             for (int i = 0; i < 6; i++)
                 Part(head, "Upper Fang", Cone(0.011f, 0f, 0.05f + (i % 3) * 0.012f, 6), new Vector3(-0.075f + i * 0.03f, -0.07f, 0.125f - Mathf.Abs(i - 2.5f) * 0.008f), M("Bone"), new Vector3(180 + (i - 2.5f) * 4f, 0, 0));
@@ -389,6 +390,23 @@ namespace TrashAstronauts.EditorTools
                     for (int i = 0; i < 3; i++)
                         Prim(head, "Blind Pit", PrimitiveType.Sphere, new Vector3(side * (0.03f + i * 0.028f), 0.05f - i * 0.012f, 0.128f - i * 0.006f), new Vector3(0.018f, 0.018f, 0.008f), M("Claw"));
                 }
+            }
+            if (mimic)
+            {
+                // A loudspeaker horn where the throat should be, ringed with small slack mouths, and a
+                // crest of old antenna rods: it used to be the ship's intercom.
+                Part(head, "Voice Horn", Lathe("MimicHorn", 18, new Vector2(0.02f, 0f), new Vector2(0.05f, 0.05f), new Vector2(0.105f, 0.12f), new Vector2(0.115f, 0.12f), new Vector2(0.04f, -0.012f)),
+                    new Vector3(0, -0.13f, 0.1f), M("Bone"), new Vector3(78f, 0, 0));
+                Part(head, "Horn Grille", Tube(0.05f, 0.006f, 14), new Vector3(0, -0.15f, 0.17f), M("Vent"), new Vector3(78f, 0, 0));
+                for (int i = 0; i < 5; i++)
+                {
+                    float a = (i - 2) * 0.5f;
+                    var mouth = Empty(head, "Small Mouth " + i, new Vector3(Mathf.Sin(a) * 0.115f, 0.0f - Mathf.Abs(i - 2) * 0.012f, 0.1f + Mathf.Cos(a) * 0.045f), Quaternion.Euler(0, a * Mathf.Rad2Deg, 0)).transform;
+                    CBox(mouth, "Lip", Vector3.zero, new Vector3(0.05f, 0.022f, 0.02f), M("Sinew"), 0.008f);
+                    Prim(mouth, "Dark", PrimitiveType.Cube, new Vector3(0, 0, 0.006f), new Vector3(0.036f, 0.01f, 0.012f), M("Claw"));
+                }
+                for (int i = 0; i < 4; i++)
+                    Part(head, "Antenna", Tube(0.004f, 0.22f + (i % 2) * 0.12f, 5), new Vector3(-0.07f + i * 0.047f, 0.2f + (i % 2) * 0.05f, -0.04f), M("Chrome"), new Vector3(-14f + i * 4f, 0, (i - 1.5f) * 9f));
             }
             if (warden)
             {
@@ -499,6 +517,23 @@ namespace TrashAstronauts.EditorTools
                     investigateLingerSeconds = 4f, chaseLoseSightSeconds = 5f, searchSeconds = 10f, catchRadius = 1.2f, wakeDelaySeconds = 20f,
                 };
                 drone.sedationMultiplier = 0.6f;
+            }
+            else if (mimic)
+            {
+                drone.displayName = "THE MIMIC";
+                drone.trait = "Says your own words back to you. Do not answer it.";
+                drone.overrideTuning = true;
+                drone.tuning = new EnemyTuning
+                {
+                    sightRange = 8f, sightHalfAngle = 55f, sightAcquireSeconds = 0.9f, hearingRadiusAtFullLoudness = 21f,
+                    patrolSpeed = 0.9f, investigateSpeed = 1.7f, chaseSpeed = 2.1f, searchSpeed = 1.2f,
+                    investigateLingerSeconds = 5f, chaseLoseSightSeconds = 3f, searchSeconds = 8f, catchRadius = 0.95f, wakeDelaySeconds = 20f,
+                };
+                var speaker = Empty(head, "Mimic Speaker", new Vector3(0, -0.12f, 0.16f)).AddComponent<AudioSource>();
+                ConfigureSpatial(speaker, null, false, 0.85f, 2.5f, 26f);
+                var voiceMimic = go.AddComponent<VoiceMimic>();
+                voiceMimic.drone = drone;
+                voiceMimic.speaker = speaker;
             }
             else
             {

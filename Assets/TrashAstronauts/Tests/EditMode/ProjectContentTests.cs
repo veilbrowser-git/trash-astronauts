@@ -118,13 +118,34 @@ namespace TrashAstronauts.Tests
 
             var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
             var director = scene.GetRootGameObjects().SelectMany(g => g.GetComponentsInChildren<MissionDirector>(true)).Single();
-            Assert.AreEqual(3, director.enemies.Length);
+            Assert.AreEqual(4, director.enemies.Length);
             Assert.AreEqual(1, director.enemies.Count(e => e.gameObject.activeSelf), "Only one creature is aboard at a time.");
             foreach (var enemy in director.enemies)
             {
                 Assert.IsNotNull(enemy.dock);
                 Assert.Greater(enemy.patrolRoute.Length, 10);
             }
+        }
+
+        [Test]
+        public void Mimic_HasASpeaker_ItsOwnSenses_AndTheSameSkeleton()
+        {
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/TrashAstronauts/Prefabs/Creature_Mimic.prefab");
+            Assert.IsNotNull(prefab);
+            var drone = prefab.GetComponent<EnemyDrone>();
+            var mimic = prefab.GetComponent<VoiceMimic>();
+            Assert.IsNotNull(mimic);
+            Assert.AreSame(drone, mimic.drone);
+            Assert.IsNotNull(mimic.speaker);
+            Assert.AreEqual(1f, mimic.speaker.spatialBlend, "Its voice must come from where it is.");
+            Assert.IsFalse(mimic.speaker.playOnAwake);
+            Assert.Less(mimic.pitch, 1f, "It should sound lower than the player.");
+            Assert.AreEqual("THE MIMIC", drone.displayName);
+            Assert.IsTrue(drone.overrideTuning);
+            Assert.AreEqual(4, prefab.GetComponent<CreatureAnimator>().shoulders.Length);
+            Assert.Greater(prefab.GetComponentsInChildren<MeshRenderer>().Length, 60);
+            foreach (var name in new[] { "Drone_Janitor7", "Creature_Listener", "Creature_Warden" })
+                Assert.IsNull(AssetDatabase.LoadAssetAtPath<GameObject>("Assets/TrashAstronauts/Prefabs/" + name + ".prefab").GetComponent<VoiceMimic>(), "Only the Mimic records phrases.");
         }
 
         [Test]

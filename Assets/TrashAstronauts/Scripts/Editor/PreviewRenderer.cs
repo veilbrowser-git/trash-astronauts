@@ -47,12 +47,12 @@ namespace TrashAstronauts.EditorTools
             Shot("13_salvage_lineup", new Vector3(0f, 1.25f, -40.9f), new Vector3(0f, 1.2f, -40f));
             // All three creatures side by side on an empty stage: Janitor, Listener, Warden.
             var roster = new GameObject("Preview Roster") { hideFlags = HideFlags.HideAndDontSave };
-            string[] creatureNames = { "Drone_Janitor7", "Creature_Listener", "Creature_Warden" };
+            string[] creatureNames = { "Drone_Janitor7", "Creature_Listener", "Creature_Warden", "Creature_Mimic" };
             for (int i = 0; i < creatureNames.Length; i++)
             {
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(Builder.PrefabDir + "/" + creatureNames[i] + ".prefab");
                 if (prefab == null) continue;
-                var instance = Object.Instantiate(prefab, new Vector3(-1.7f + i * 1.7f, 1.4f, -60f), Quaternion.Euler(0f, 155f + i * 25f, 0f), roster.transform);
+                var instance = Object.Instantiate(prefab, new Vector3(-2.55f + i * 1.7f, 1.4f, -60f), Quaternion.Euler(0f, 150f + i * 20f, 0f), roster.transform);
                 instance.hideFlags = HideFlags.HideAndDontSave;
                 foreach (var l in instance.GetComponentsInChildren<Light>(true)) l.enabled = false;
             }
@@ -65,7 +65,8 @@ namespace TrashAstronauts.EditorTools
                 rosterLight.range = 7f;
                 rosterLight.intensity = 7f;
             }
-            Shot("14_creature_roster", new Vector3(0f, 1.4f, -62.6f), new Vector3(0f, 1.1f, -60f));
+            Shot("14_creature_roster", new Vector3(0f, 1.4f, -63.2f), new Vector3(0f, 1.1f, -60f));
+            Shot("14b_creature_mimic", new Vector3(2.0f, 1.3f, -61.4f), new Vector3(2.55f, 1.3f, -60f));
             Object.DestroyImmediate(roster);
 
             // Hands holding tools, posed exactly as the grab system will hold them.

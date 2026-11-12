@@ -64,11 +64,11 @@ namespace TrashAstronauts.Tests
         [UnityTest]
         public IEnumerator EachContract_PutsOneCreatureAboard_ChosenAtRandom()
         {
-            Assert.AreEqual(3, m_Director.enemies.Length);
+            Assert.AreEqual(4, m_Director.enemies.Length);
             Assert.AreEqual(1, m_Director.enemies.Count(e => e.gameObject.activeSelf), "In the hub only one creature exists.");
 
             var seen = new HashSet<string>();
-            for (int seed = 1; seed <= 24; seed++)
+            for (int seed = 1; seed <= 40; seed++)
             {
                 MissionDirector.SeedOverride = seed;
                 if (m_Director.Phase == MissionPhase.Active) m_Director.FailMission(FailureReason.Caught, PlayerId.Local);
@@ -80,7 +80,7 @@ namespace TrashAstronauts.Tests
                 Assert.Less(Vector3.Distance(m_Director.ActiveEnemy.transform.position, m_Director.ActiveEnemy.dock.position), 0.1f);
                 seen.Add(m_Director.ActiveEnemy.displayName);
             }
-            Assert.AreEqual(3, seen.Count, "Over 24 contracts every creature should turn up: " + string.Join(", ", seen));
+            Assert.AreEqual(4, seen.Count, "Over 40 contracts every creature should turn up: " + string.Join(", ", seen));
 
             // The same seed always brings the same creature (so a run can be reproduced).
             MissionDirector.SeedOverride = 7;
@@ -96,7 +96,7 @@ namespace TrashAstronauts.Tests
         [UnityTest]
         public IEnumerator EveryCreature_Wakes_Hunts_AndUsesItsOwnSenses()
         {
-            for (int index = 0; index < 3; index++)
+            for (int index = 0; index < 4; index++)
             {
                 MissionDirector.CreatureOverride = index;
                 if (m_Director.Phase == MissionPhase.Active) m_Director.FailMission(FailureReason.Caught, PlayerId.Local);
@@ -122,8 +122,8 @@ namespace TrashAstronauts.Tests
                 float radius = (creature.overrideTuning ? creature.tuning : m_Director.Config.enemy).hearingRadiusAtFullLoudness * 0.7f;
                 Assert.AreEqual(distance <= radius ? EnemyState.Investigate : EnemyState.Patrol, creature.State,
                     creature.displayName + " at " + distance.ToString("0.0") + " m with a hearing radius of " + radius.ToString("0.0") + " m");
+                if (index == 2) Assert.AreEqual(EnemyState.Patrol, creature.State, "The Warden should not have heard that.");
             }
-            Assert.AreEqual(EnemyState.Patrol, m_Director.enemies[2].State, "The Warden should not have heard that.");
         }
 
         [UnityTest]
