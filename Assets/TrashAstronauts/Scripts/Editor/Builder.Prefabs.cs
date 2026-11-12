@@ -1037,33 +1037,13 @@ namespace TrashAstronauts.EditorTools
             interactor.physicsTriggerInteraction = QueryTriggerInteraction.Collide;
             interactor.attachTransform = attach.transform;
 
-            // Glove: padded suit glove with two-jointed fingers that follow grip and trigger.
+            // Glove: the EVA glove modelled in Blender (build_hands.py), its finger segments following grip and
+            // trigger. If the model files are missing, the old padded stand-in glove made of boxes is built instead.
             var glove = Empty(go.transform, "Glove", new Vector3(left ? -0.065f : 0.065f, -0.035f, 0f), Quaternion.Euler(0f, 0f, left ? 90f : -90f), GameLayers.Hand);
             Transform g = glove.transform;
-            CBox(g, "Palm", new Vector3(0, -0.03f, -0.075f), new Vector3(0.086f, 0.032f, 0.098f), M("PaintWhite"), 0.011f);
-            CBox(g, "Back Plate", new Vector3(0, -0.011f, -0.078f), new Vector3(0.062f, 0.01f, 0.064f), M("PaintOrange"), 0.004f);
-            CBox(g, "Knuckle Guard", new Vector3(0, -0.018f, -0.03f), new Vector3(0.082f, 0.016f, 0.02f), M("Rubber"), 0.006f);
-            CBox(g, "Cuff", new Vector3(0, -0.03f, -0.152f), new Vector3(0.096f, 0.052f, 0.06f), M("PaintWhite"), 0.014f);
-            Part(g, "Cuff Ring", Torus(0.05f, 0.008f, 16, 6), new Vector3(0, -0.03f, -0.125f), M("Steel"), new Vector3(90, 0, 0));
-            Part(g, "Wrist Seal", Torus(0.048f, 0.006f, 16, 6), new Vector3(0, -0.03f, -0.18f), M("PaintOrange"), new Vector3(90, 0, 0));
-            var indexPivots = new List<Transform>();
-            var pivots = new List<Transform>();
-            float[] fingerX = { 0.031f, 0.0105f, -0.0105f, -0.031f };
-            float[] fingerLen = { 0.04f, 0.044f, 0.041f, 0.034f };
-            for (int i = 0; i < 4; i++)
-            {
-                var p1 = Empty(g, "Finger" + i, new Vector3(s * fingerX[i], -0.03f, -0.026f), null, GameLayers.Hand).transform;
-                CBox(p1, "Segment", new Vector3(0, 0, fingerLen[i] * 0.5f), new Vector3(0.0185f, 0.021f, fingerLen[i]), M("PaintWhite"), 0.006f);
-                var p2 = Empty(p1, "Joint2", new Vector3(0, 0, fingerLen[i]), null, GameLayers.Hand).transform;
-                CBox(p2, "Segment", new Vector3(0, 0, 0.017f), new Vector3(0.017f, 0.019f, 0.036f), M("PaintWhite"), 0.006f);
-                CBox(p2, "Pad", new Vector3(0, -0.006f, 0.022f), new Vector3(0.014f, 0.01f, 0.02f), M("Rubber"), 0.004f);
-                var list = i == 0 ? indexPivots : pivots;
-                list.Add(p1);
-                list.Add(p2);
-            }
-            var thumbPivot = Empty(g, "Thumb", new Vector3(s * 0.046f, -0.034f, -0.095f), null, GameLayers.Hand);
-            CBox(thumbPivot.transform, "Segment", new Vector3(s * 0.014f, 0, 0.026f), new Vector3(0.022f, 0.022f, 0.05f), M("PaintWhite"), 0.007f, new Vector3(0, s * 28f, 0));
-            CBox(thumbPivot.transform, "Tip", new Vector3(s * 0.03f, 0, 0.058f), new Vector3(0.02f, 0.02f, 0.034f), M("Rubber"), 0.007f, new Vector3(0, s * 18f, 0));
+            var gloveVisual = glove.AddComponent<GloveVisual>();
+            if (!BuildModelGlove(g, left, gloveVisual))
+                BuildStandInGlove(g, s, gloveVisual);
             var fingertip = Empty(g, "Fingertip", new Vector3(s * 0.031f, -0.03f, 0.055f), null, GameLayers.Hand);
 
             // Suit thruster on the back of the wrist: a nozzle, and a flame that shows while it fires.
@@ -1092,11 +1072,7 @@ namespace TrashAstronauts.EditorTools
             hand.thrusterVisual = thrusterFx;
             hand.thrusterAudio = thrusterAudio;
 
-            var gloveVisual = glove.AddComponent<GloveVisual>();
             gloveVisual.hand = hand;
-            gloveVisual.indexPivots = indexPivots.ToArray();
-            gloveVisual.gripPivots = pivots.ToArray();
-            gloveVisual.thumbPivot = thumbPivot.transform;
 
             var clamp = glove.AddComponent<HandWallClamp>();
             clamp.hand = hand;
@@ -1119,6 +1095,38 @@ namespace TrashAstronauts.EditorTools
             buttons.hand = hand;
             buttons.pointerLine = MakeLine(go.transform, "Pointer Line", 0.004f);
             return hand;
+        }
+
+        /// <summary>The old glove made of rounded boxes: built only when the Blender glove model is missing.</summary>
+        static void BuildStandInGlove(Transform g, float s, GloveVisual gloveVisual)
+        {
+            CBox(g, "Palm", new Vector3(0, -0.03f, -0.075f), new Vector3(0.086f, 0.032f, 0.098f), M("PaintWhite"), 0.011f);
+            CBox(g, "Back Plate", new Vector3(0, -0.011f, -0.078f), new Vector3(0.062f, 0.01f, 0.064f), M("PaintOrange"), 0.004f);
+            CBox(g, "Knuckle Guard", new Vector3(0, -0.018f, -0.03f), new Vector3(0.082f, 0.016f, 0.02f), M("Rubber"), 0.006f);
+            CBox(g, "Cuff", new Vector3(0, -0.03f, -0.152f), new Vector3(0.096f, 0.052f, 0.06f), M("PaintWhite"), 0.014f);
+            Part(g, "Cuff Ring", Torus(0.05f, 0.008f, 16, 6), new Vector3(0, -0.03f, -0.125f), M("Steel"), new Vector3(90, 0, 0));
+            Part(g, "Wrist Seal", Torus(0.048f, 0.006f, 16, 6), new Vector3(0, -0.03f, -0.18f), M("PaintOrange"), new Vector3(90, 0, 0));
+            var indexPivots = new List<Transform>();
+            var pivots = new List<Transform>();
+            float[] fingerX = { 0.031f, 0.0105f, -0.0105f, -0.031f };
+            float[] fingerLen = { 0.04f, 0.044f, 0.041f, 0.034f };
+            for (int i = 0; i < 4; i++)
+            {
+                var p1 = Empty(g, "Finger" + i, new Vector3(s * fingerX[i], -0.03f, -0.026f), null, GameLayers.Hand).transform;
+                CBox(p1, "Segment", new Vector3(0, 0, fingerLen[i] * 0.5f), new Vector3(0.0185f, 0.021f, fingerLen[i]), M("PaintWhite"), 0.006f);
+                var p2 = Empty(p1, "Joint2", new Vector3(0, 0, fingerLen[i]), null, GameLayers.Hand).transform;
+                CBox(p2, "Segment", new Vector3(0, 0, 0.017f), new Vector3(0.017f, 0.019f, 0.036f), M("PaintWhite"), 0.006f);
+                CBox(p2, "Pad", new Vector3(0, -0.006f, 0.022f), new Vector3(0.014f, 0.01f, 0.02f), M("Rubber"), 0.004f);
+                var list = i == 0 ? indexPivots : pivots;
+                list.Add(p1);
+                list.Add(p2);
+            }
+            var thumbPivot = Empty(g, "Thumb", new Vector3(s * 0.046f, -0.034f, -0.095f), null, GameLayers.Hand);
+            CBox(thumbPivot.transform, "Segment", new Vector3(s * 0.014f, 0, 0.026f), new Vector3(0.022f, 0.022f, 0.05f), M("PaintWhite"), 0.007f, new Vector3(0, s * 28f, 0));
+            CBox(thumbPivot.transform, "Tip", new Vector3(s * 0.03f, 0, 0.058f), new Vector3(0.02f, 0.02f, 0.034f), M("Rubber"), 0.007f, new Vector3(0, s * 18f, 0));
+            gloveVisual.indexPivots = indexPivots.ToArray();
+            gloveVisual.gripPivots = pivots.ToArray();
+            gloveVisual.thumbPivot = thumbPivot.transform;
         }
 
         static LineRenderer MakeLine(Transform parent, string name, float width)
