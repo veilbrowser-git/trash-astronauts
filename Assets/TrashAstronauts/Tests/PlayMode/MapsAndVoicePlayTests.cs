@@ -12,7 +12,7 @@ using UnityEngine.TestTools;
 
 namespace TrashAstronauts.Tests
 {
-    /// <summary>The three wrecks (one docked per contract) and the creature hearing the player's voice.</summary>
+    /// <summary>The four wrecks (one docked per contract) and the creature hearing the player's voice.</summary>
     public class MapsAndVoicePlayTests
     {
         MissionDirector m_Director;
@@ -64,7 +64,7 @@ namespace TrashAstronauts.Tests
         [UnityTest]
         public IEnumerator EachContract_DocksOneWreck_ChosenAtRandom_AndCleansUpTheLast()
         {
-            Assert.AreEqual(3, m_Director.maps.Length);
+            Assert.AreEqual(4, m_Director.maps.Length);
             Assert.AreSame(m_Director.maps[0], m_Director.ActiveMap, "The first wreck is docked while in the hub.");
 
             var seen = new HashSet<string>();
@@ -93,13 +93,13 @@ namespace TrashAstronauts.Tests
                 }
                 Assert.AreEqual(1, Object.FindObjectsByType<WreckMap>(FindObjectsSortMode.None).Length);
             }
-            Assert.AreEqual(3, seen.Count, "Over 24 contracts every wreck should come up: " + string.Join(", ", seen));
+            Assert.AreEqual(4, seen.Count, "Over 24 contracts every wreck should come up: " + string.Join(", ", seen));
         }
 
         [UnityTest]
         public IEnumerator EveryWreck_CanBePlayedByTeleport_AndItsLootIsWithinReach()
         {
-            for (int index = 0; index < 3; index++)
+            for (int index = 0; index < m_Director.maps.Length; index++)
             {
                 yield return Dock(index);
                 var map = m_Director.ActiveMap;
@@ -148,7 +148,7 @@ namespace TrashAstronauts.Tests
         [UnityTest]
         public IEnumerator EveryWreck_TheCreaturePatrolsItsWholeRoute_WithoutPassingThroughWalls_OrEnteringNoGoZones()
         {
-            for (int index = 0; index < 3; index++)
+            for (int index = 0; index < m_Director.maps.Length; index++)
             {
                 yield return Dock(index);
                 var map = m_Director.ActiveMap;
@@ -185,7 +185,7 @@ namespace TrashAstronauts.Tests
         [UnityTest]
         public IEnumerator EveryWreck_BlacksOutItsOwnLights_AndItsPanelsOpen()
         {
-            for (int index = 0; index < 3; index++)
+            for (int index = 0; index < m_Director.maps.Length; index++)
             {
                 yield return Dock(index);
                 var map = m_Director.ActiveMap;

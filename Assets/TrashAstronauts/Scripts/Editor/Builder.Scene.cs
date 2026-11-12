@@ -226,8 +226,9 @@ namespace TrashAstronauts.EditorTools
             var freighter = FinishFreighter(missionGo.transform, dock.transform, doorR, practicePanel, reactorHum);
             var barge = BuildOreBarge(sharedLights, sharedGlow);
             var survey = BuildSurveyShip(sharedLights, sharedGlow);
+            var cave = BuildLavaTube(sharedLights, sharedGlow);
             foreach (var creature in creatures) creature.transform.SetPositionAndRotation(dock.transform.position, dock.transform.rotation);
-            director.maps = new[] { freighter, barge, survey };
+            director.maps = new[] { freighter, barge, survey, cave };
             director.sharedCuttables = new[] { practicePanel };
             director.sharedDoors = new[] { doorA };
             // Every web belongs to a wreck today; one strung in the tug or the airlock would go here.
