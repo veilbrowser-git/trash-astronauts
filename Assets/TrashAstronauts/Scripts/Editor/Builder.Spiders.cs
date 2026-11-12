@@ -37,6 +37,8 @@ namespace TrashAstronauts.EditorTools
             public Transform head, abdomen, jaw;
             public readonly List<Transform> legs = new List<Transform>();
             public readonly List<Transform> lowerLegs = new List<Transform>();
+            /// <summary>The tip of each lower leg (its farthest vertex from the knee), for planting feet.</summary>
+            public readonly List<Transform> feet = new List<Transform>();
             public readonly List<Transform> palps = new List<Transform>();
             public readonly List<GameObject> eyes = new List<GameObject>();
             public int triangles, hairs;
@@ -143,7 +145,18 @@ namespace TrashAstronauts.EditorTools
                 if (part.name == "Head") model.head = t;
                 else if (part.name == "Abdomen") model.abdomen = t;
                 else if (part.name == "Jaw") model.jaw = t;
-                else if (part.name.StartsWith("LegLower_")) model.lowerLegs.Add(t);
+                else if (part.name.StartsWith("LegLower_"))
+                {
+                    model.lowerLegs.Add(t);
+                    Vector3 tip = Vector3.zero;
+                    for (int i = 0; i < part.vertexCount; i++)
+                    {
+                        int k = (part.vertexStart + i) * 3;
+                        var vertex = new Vector3(positions[k], positions[k + 1], positions[k + 2]);
+                        if (vertex.sqrMagnitude > tip.sqrMagnitude) tip = vertex;
+                    }
+                    model.feet.Add(Empty(t, "Foot", tip).transform);
+                }
                 else if (part.name.StartsWith("Leg_")) model.legs.Add(t);
                 else if (part.name.StartsWith("Palp_")) model.palps.Add(t);
             }

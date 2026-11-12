@@ -462,6 +462,7 @@ namespace TrashAstronauts.EditorTools
             animator.spider = true;
             animator.abdomen = spider.abdomen;
             animator.palps = spider.palps.ToArray();
+            animator.feet = spider.feet.ToArray();
 
             var walker = go.AddComponent<SurfaceWalker>();
             walker.drone = drone;
