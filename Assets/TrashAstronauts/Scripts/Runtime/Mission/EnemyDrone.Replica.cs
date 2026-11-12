@@ -255,6 +255,11 @@ namespace TrashAstronauts.Mission
             m_AwaitRunEnd = false;
             m_HeldRunEnd = null;
             m_RepSedateTimer = 0f;
+            // Powered down, as the host's is: nothing reads a hunt that is over.
+            m_RepState = EnemyState.Dormant;
+            m_RepTarget = PlayerId.None;
+            m_RepFlags = 0;
+            m_RepBuffer.Clear();
             if (IsScaring || m_CatchPending)
             {
                 StopAllCoroutines();
