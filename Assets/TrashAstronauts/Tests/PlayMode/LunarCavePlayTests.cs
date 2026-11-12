@@ -106,7 +106,7 @@ namespace TrashAstronauts.Tests
             yield return Dock(m_Cave);
             var item = LooseItem();
             var body = item.GetComponent<Rigidbody>();
-            Vector3 drop = new Vector3(0f, 1.7f, 24f); // the middle of the main tunnel
+            Vector3 drop = MapPoints.Wreck(0f, 1.7f, 24f); // the middle of the main tunnel
             Assert.AreEqual(-1.62f, MapGravity.GravityAt(drop).y, 0.001f);
             Place(item, drop, Vector3.zero);
 
@@ -130,7 +130,7 @@ namespace TrashAstronauts.Tests
             Assert.AreEqual(Vector3.zero, MapGravity.GravityAt(drop), "No gravity once the lava tube is not docked.");
             item = LooseItem();
             body = item.GetComponent<Rigidbody>();
-            Vector3 start = new Vector3(0f, 1.6f, 19f);
+            Vector3 start = MapPoints.Wreck(0f, 1.6f, 19f);
             Place(item, start, new Vector3(0.2f, 0f, 0f));
             yield return Seconds(1.5f);
             Assert.AreEqual(start.y, body.position.y, 0.06f, "In zero g it does not fall.");
@@ -144,7 +144,7 @@ namespace TrashAstronauts.Tests
             ParkHands();
             m_Director.keepPlayersInHub = false;
             var zeroG = m_Player.locomotion.zeroG;
-            Assert.IsTrue(m_Player.locomotion.TeleportTo(new Vector3(0f, 0f, 24f), Quaternion.identity));
+            Assert.IsTrue(m_Player.locomotion.TeleportTo(MapPoints.Wreck(0f, 0f, 24f), Quaternion.identity));
             yield return Frames(3);
             zeroG.Stop();
             zeroG.AddImpulse(Vector3.up * 1.0f);

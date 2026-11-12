@@ -70,6 +70,9 @@ namespace TrashAstronauts.EditorTools
             if (!Mathf.Approximately(s_Config.playerMass, RealPhysics.PlayerBodyMass)) s_Config.playerMass = RealPhysics.PlayerBodyMass;
             if (s_Config.enemy.chaseSpeed < 3f) s_Config.enemy.chaseSpeed = 3f;
             if (s_Config.enemy.chaseLoseSightSeconds < 5f) s_Config.enemy.chaseLoseSightSeconds = 5f;
+            // The bigger-maps update (1.5x floor plans): the tank grows with a run's oxygen use (see MissionConfig).
+            if (Mathf.Approximately(s_Config.baseOxygenSeconds, 600f)) s_Config.baseOxygenSeconds = 800f;
+            if (Mathf.Approximately(s_Config.oxygenUpgradeBonusSeconds, 180f)) s_Config.oxygenUpgradeBonusSeconds = 240f;
             EditorUtility.SetDirty(s_Config);
             AssetDatabase.SaveAssets();
         }

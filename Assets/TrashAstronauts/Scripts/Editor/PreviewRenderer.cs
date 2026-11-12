@@ -42,8 +42,14 @@ namespace TrashAstronauts.EditorTools
             Shot("06_maintenance", Builder.FreighterPoint(2.2f, 1.6f, 10.2f), Builder.FreighterPoint(7.4f, 1.3f, 14.6f));
             Shot("07_reactor", Builder.FreighterPoint(0f, 1.6f, 22.2f), Builder.FreighterPoint(0f, 1.3f, 25.5f));
             Shot("09_board_closeup", new Vector3(-0.2f, 1.5f, -1.0f), new Vector3(-2f, 1.5f, -1.0f));
-            Shot("10_creature", Builder.FreighterPoint(2.1f, 1.35f, 26.9f), Builder.FreighterPoint(3.4f, 1.3f, 28.4f));
-            Shot("11_creature_side", Builder.FreighterPoint(1.9f, 1.5f, 28.9f), Builder.FreighterPoint(3.4f, 1.3f, 28.4f));
+            // The creature asleep at the freighter's dock (wherever the dock is).
+            var firstDirector = Object.FindFirstObjectByType<TrashAstronauts.Mission.MissionDirector>();
+            Vector3 lair = firstDirector != null && firstDirector.maps != null && firstDirector.maps.Length > 0 ? firstDirector.maps[0].dock.position : Builder.FreighterPoint(2.9f, 1.45f, 25.4f);
+            Shot("10_creature", lair + new Vector3(-1.9f, -0.1f, -2.2f), lair - new Vector3(0f, 0.15f, 0f));
+            Shot("11_creature_side", lair + new Vector3(-2.2f, 0.05f, 0.8f), lair - new Vector3(0f, 0.15f, 0f));
+            // The wrecks' biggest rooms from a corner, to see their size.
+            Shot("07a_reactor_from_corner", Builder.FreighterPoint(-4.1f, 2.2f, 22.0f), Builder.FreighterPoint(1.5f, 1.0f, 28.0f));
+            Shot("05a_cargo_from_far_corner", Builder.FreighterPoint(-9.9f, 2.0f, 18.2f), Builder.FreighterPoint(-2.5f, 1.0f, 10.5f));
             Shot("12_gloves_and_tools", new Vector3(-0.35f, 1.45f, -0.55f), new Vector3(0.4f, 1.1f, -0.9f));
             Shot("13_salvage_lineup", new Vector3(0f, 1.25f, -40.9f), new Vector3(0f, 1.2f, -40f));
             // The four spiders side by side on an empty stage, then close-ups.
@@ -189,7 +195,7 @@ namespace TrashAstronauts.EditorTools
             RemoteToolShots();
             HeadLampShots(); // PreviewRenderer.HeadLamp.cs
 
-            Shot("08_top_down", new Vector3(-1f, 46f, 22f), new Vector3(-1f, 0f, 22.01f), true);
+            Shot("08_top_down", new Vector3(-2f, 64f, 32f), new Vector3(-2f, 0f, 32.01f), true);
             Shot("18_flight_deck", new Vector3(-0.8f, 1.6f, -3.3f), new Vector3(0.3f, 1.3f, -6.2f));
             Shot("30_supply_bay_shop", new Vector3(-2.5f, 1.6f, -4.3f), new Vector3(-5.4f, 1.3f, -4.8f));
             Shot("31_supply_bay_from_flight_deck", new Vector3(0.8f, 1.6f, -4.4f), new Vector3(-5f, 1.2f, -4.9f));
@@ -205,29 +211,33 @@ namespace TrashAstronauts.EditorTools
                     foreach (var enemy in mapDirector.enemies) enemy.gameObject.SetActive(false);
                 }
                 Dock(1);
-                Shot("20_barge_hold", new Vector3(-0.4f, 1.7f, 12.4f), new Vector3(1.5f, 1.9f, 22f));
-                Shot("21_barge_hold_from_above", new Vector3(-7f, 3.6f, 12.6f), new Vector3(3f, 0.8f, 23f));
-                Shot("22_barge_quarters", new Vector3(-8.8f, 1.6f, 19f), new Vector3(-14f, 1.2f, 17f));
-                Shot("23_barge_drive_room", new Vector3(0f, 1.6f, 27.4f), new Vector3(0f, 1.3f, 33f));
-                Shot("24_barge_top_down", new Vector3(-1f, 46f, 22f), new Vector3(-1f, 0f, 22.01f), true);
+                Shot("20_barge_hold", Builder.WreckPoint(-0.4f, 1.7f, 12.4f), Builder.WreckPoint(1.5f, 1.9f, 22f));
+                Shot("21_barge_hold_from_above", Builder.WreckPoint(-7f, 3.6f, 12.6f), Builder.WreckPoint(3f, 0.8f, 23f));
+                Shot("22_barge_quarters", Builder.WreckPoint(-8.8f, 1.6f, 19f), Builder.WreckPoint(-14f, 1.2f, 17f));
+                Shot("23_barge_drive_room", Builder.WreckPoint(0f, 1.6f, 27.4f), Builder.WreckPoint(0f, 1.3f, 33f));
+                Shot("24_barge_top_down", new Vector3(-1.5f, 64f, 31f), new Vector3(-1.5f, 0f, 31.01f), true);
+                Shot("24a_barge_hold_far_corner", Builder.WreckPoint(7.4f, 2.6f, 26.2f), Builder.WreckPoint(-3f, 1.0f, 13f));
+                Shot("24b_barge_pump_room", Builder.WreckPoint(8.6f, 1.6f, 19.6f), Builder.WreckPoint(12.6f, 1.2f, 22.6f));
                 Dock(2);
-                Shot("25_survey_ring_south", new Vector3(-0.5f, 1.6f, 8.2f), new Vector3(-8f, 1.4f, 11f));
-                Shot("26_survey_ring_west", new Vector3(-7f, 1.6f, 11f), new Vector3(-7f, 1.4f, 28f));
-                Shot("27_survey_lab", new Vector3(0f, 1.6f, 12.2f), new Vector3(1.5f, 1.2f, 19f));
-                Shot("28_survey_observation_deck", new Vector3(0f, 1.6f, 32f), new Vector3(-1f, 1.5f, 36.4f));
-                Shot("29_survey_top_down", new Vector3(-1f, 46f, 22f), new Vector3(-1f, 0f, 22.01f), true);
+                Shot("25_survey_ring_south", Builder.WreckPoint(-0.5f, 1.6f, 8.2f), Builder.WreckPoint(-8f, 1.4f, 11f));
+                Shot("26_survey_ring_west", Builder.WreckPoint(-7f, 1.6f, 11f), Builder.WreckPoint(-7f, 1.4f, 28f));
+                Shot("27_survey_lab", Builder.WreckPoint(0f, 1.6f, 12.2f), Builder.WreckPoint(1.5f, 1.2f, 19f));
+                Shot("28_survey_observation_deck", Builder.WreckPoint(0f, 1.6f, 32f), Builder.WreckPoint(-1f, 1.5f, 36.4f));
+                Shot("29_survey_top_down", new Vector3(-1.5f, 64f, 29.5f), new Vector3(-1.5f, 0f, 29.51f), true);
+                Shot("29a_survey_reactor", Builder.WreckPoint(-4.2f, 1.8f, 20.0f), Builder.WreckPoint(1.5f, 1.0f, 25.5f));
+                Shot("29b_survey_store", Builder.WreckPoint(-9.6f, 1.6f, 19.6f), Builder.WreckPoint(-14.5f, 1.2f, 22.8f));
                 int cave = System.Array.FindIndex(mapDirector.maps, m => m.mapId == "lava_tube");
                 if (cave >= 0)
                 {
                     Dock(cave);
-                    Shot("37_cave_mouth", new Vector3(-4.6f, 1.7f, 8.3f), new Vector3(6f, 1.2f, 13.2f));
-                    Shot("38_cave_main_tunnel", new Vector3(0f, 1.6f, 14.2f), new Vector3(0f, 1.3f, 33f));
-                    Shot("39_cave_skylight", new Vector3(-2.2f, 1.5f, 19.2f), new Vector3(-7f, 3.6f, 23.5f));
-                    Shot("40_cave_habitat", new Vector3(2.3f, 1.6f, 14.3f), new Vector3(8.5f, 1.2f, 18f));
-                    Shot("41_cave_drill_chamber", new Vector3(-0.4f, 1.7f, 34.0f), new Vector3(2f, 1.4f, 41f));
-                    Shot("42_cave_back_passage", new Vector3(-8.1f, 1.6f, 28.4f), new Vector3(-8.1f, 1.2f, 38f));
-                    Shot("43_cave_top_down", new Vector3(-1f, 46f, 24f), new Vector3(-1f, 0f, 24.01f), true);
-                    PickupReachShot("44_pickup_reach_cave", new Vector3(0f, 0f, 24f), "Salvage_NavBoard");
+                    Shot("37_cave_mouth", Builder.WreckPoint(-4.6f, 1.7f, 8.3f), Builder.WreckPoint(6f, 1.2f, 13.2f));
+                    Shot("38_cave_main_tunnel", Builder.WreckPoint(0f, 1.6f, 14.2f), Builder.WreckPoint(0f, 1.3f, 33f));
+                    Shot("39_cave_skylight", Builder.WreckPoint(-2.2f, 1.5f, 19.2f), Builder.WreckPoint(-7f, 3.6f, 23.5f));
+                    Shot("40_cave_habitat", Builder.WreckPoint(2.3f, 1.6f, 14.3f), Builder.WreckPoint(8.5f, 1.2f, 18f));
+                    Shot("41_cave_drill_chamber", Builder.WreckPoint(-0.4f, 1.7f, 34.0f), Builder.WreckPoint(2f, 1.4f, 41f));
+                    Shot("42_cave_back_passage", Builder.WreckPoint(-8.1f, 1.6f, 28.4f), Builder.WreckPoint(-8.1f, 1.2f, 38f));
+                    Shot("43_cave_top_down", new Vector3(-2f, 64f, 33f), new Vector3(-2f, 0f, 33.01f), true);
+                    PickupReachShot("44_pickup_reach_cave", Builder.WreckPoint(0f, 0f, 24f), "Salvage_NavBoard");
                 }
                 Dock(0);
                 PickupReachShot("45_pickup_reach_ship", new Vector3(0f, 0f, 9.2f), "Salvage_NavBoard");
@@ -543,7 +553,7 @@ namespace TrashAstronauts.EditorTools
             cam.transform.LookAt(lookAt, topDown ? Vector3.forward : Vector3.up);
             cam.fieldOfView = topDown ? 60f : fieldOfView;
             cam.nearClipPlane = 0.05f;
-            cam.farClipPlane = 80f;
+            cam.farClipPlane = topDown ? Mathf.Max(80f, from.y + 20f) : 80f;
             cam.clearFlags = CameraClearFlags.SolidColor;
             cam.backgroundColor = Color.black;
 
