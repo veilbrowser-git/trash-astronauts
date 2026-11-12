@@ -5,7 +5,8 @@ namespace TrashAstronauts.Core.Net
     /// <summary>Numbers every peer must agree on. Changing any wire format means bumping <see cref="Version"/>.</summary>
     public static class NetProtocol
     {
-        public const byte Version = 1;
+        /// <summary>2: proximity voice chat (the Voice stream message). A version-1 build and this one refuse each other.</summary>
+        public const byte Version = 2;
         /// <summary>The host's UDP port. Clients bind an ephemeral port.</summary>
         public const ushort HostPort = 47800;
         public const int MaxDatagram = 1200;
@@ -80,6 +81,7 @@ namespace TrashAstronauts.Core.Net
         public const byte ItemPoses = 19;     // owner -> host -> others, up to 12 entries
         public const byte Clock = 20;         // host -> clients
         public const byte Noise = 21;         // client -> host
+        public const byte Voice = 22;         // client -> host -> the other clients, host -> clients: 1-2 encoded 20 ms voice frames
 
         public const byte FirstReliable = 64;
 
@@ -138,7 +140,7 @@ namespace TrashAstronauts.Core.Net
         public static readonly byte[] All =
         {
             Probe, HostInfo, Hello, Accept, Refuse, Gone, Quit,
-            AvatarState, RemoteAvatar, CreatureState, ItemPoses, Clock, Noise,
+            AvatarState, RemoteAvatar, CreatureState, ItemPoses, Clock, Noise, Voice,
             Welcome, RosterChanged, WorldState, SettingsChanged, PauseNotice, HostPause, Bye, SessionClosed,
             StartRequest, ExtractRequest, RunStart, ExtractRefused, RunEnded, ReturnedToHub,
             GrabRequest, ItemOwner, ItemCollected, ItemReleased, ItemThrown, ItemHandoff, ItemRest, ItemDamageReport, ItemValue, ItemDeposited, ItemRecovered,
@@ -167,6 +169,7 @@ namespace TrashAstronauts.Core.Net
                 case ItemPoses: return ItemPoseBatch.MaxSize;
                 case Clock: return ClockMsg.MaxSize;
                 case Noise: return NoiseMsg.MaxSize;
+                case Voice: return VoiceMsg.MaxSize;
                 case Welcome: return WelcomeMsg.MaxSize;
                 case RosterChanged: return RosterChangedMsg.MaxSize;
                 case WorldState: return WorldStateMsg.MaxSize;
@@ -227,6 +230,7 @@ namespace TrashAstronauts.Core.Net
                 case ItemPoses: return "ItemPoses";
                 case Clock: return "Clock";
                 case Noise: return "Noise";
+                case Voice: return "Voice";
                 case Welcome: return "Welcome";
                 case RosterChanged: return "RosterChanged";
                 case WorldState: return "WorldState";

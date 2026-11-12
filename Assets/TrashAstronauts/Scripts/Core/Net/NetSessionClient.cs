@@ -52,6 +52,8 @@ namespace TrashAstronauts.Core.Net
         ItemPoseBatch m_PoseRead;
         WelcomeMsg m_Welcome;
         WorldStateMsg m_WorldState;
+        VoiceMsg m_VoiceRead;
+        VoiceMsg m_VoiceWrite;
 
         NetEndpoint m_Host;
         uint m_Nonce;
@@ -73,6 +75,12 @@ namespace TrashAstronauts.Core.Net
 
         /// <summary>Optional recorder; see <see cref="NetMessageTap"/>.</summary>
         public NetMessageTap Tap;
+
+        /// <summary>
+        /// Proximity voice chat: raised (inside <see cref="Poll"/>) for every voice frame of another crew member
+        /// (the host's own, or another client's relayed by the host). Never for this client's own voice.
+        /// </summary>
+        public event NetVoiceHandler VoiceReceived;
 
         public NetClientConfig Config => m_Config;
         public NetStats Stats => m_Stats;
@@ -104,6 +112,8 @@ namespace TrashAstronauts.Core.Net
             m_Nonce = nonce ^ ((uint)m_Config.seed * 2654435761u) | 1u;
             m_PoseWrite.entries = new ItemPoseEntry[k_PoseCapacity];
             m_PoseRead.entries = new ItemPoseEntry[k_PoseCapacity];
+            m_VoiceRead.data = new byte[VoiceMsg.MaxFrames * VoiceMsg.MaxFrameBytes];
+            m_VoiceWrite.data = new byte[VoiceMsg.MaxFrames * VoiceMsg.MaxFrameBytes];
         }
 
         // ================================================================== lifecycle
@@ -431,6 +441,27 @@ namespace TrashAstronauts.Core.Net
             if (length > m_Stats.largestDatagram) m_Stats.largestDatagram = length;
         }
 
+        /// <summary>
+        /// Sends this player's voice to the host (who relays it to the rest of the crew): <paramref name="frameCount"/>
+        /// (1 or 2) consecutive encoded frames of <paramref name="frameBytes"/> each, in a datagram of its own, at once.
+        /// False before the Welcome or for frames that do not fit a <see cref="VoiceMsg"/>.
+        /// </summary>
+        public bool SendVoice(ushort sequence, byte[] frames, int offset, int frameBytes, int frameCount)
+        {
+            if (m_Disposed || State != ClientState.Connected || !Welcomed) return false;
+            if (!m_VoiceWrite.Set(LocalSlot, sequence, frames, offset, frameBytes, frameCount)) return false;
+            var w = new NetWriter(m_Send, 0, NetProtocol.MaxDatagram - 1);
+            WriteHeader(ref w);
+            w.U8(NetMsg.Voice);
+            int start = w.Position;
+            m_VoiceWrite.Write(ref w);
+            if (w.Overflow) return false;
+            Tap?.Invoke(true, 0, NetMsg.Voice, m_Send, start, w.Position - start, HostTime(m_Now));
+            m_Send[w.Position] = NetMsg.End;
+            SendRaw(w.Position + 1);
+            return true;
+        }
+
         void SendDatagrams(bool streams, bool force)
         {
             // the writer stops one byte short of the cap: that byte is the closing End marker
@@ -604,10 +635,15 @@ namespace TrashAstronauts.Core.Net
             // Pass 3: the streams. Not before the Welcome has been applied (the game has no proxies and no reset
             // mission to apply them to; this happens when the datagram carrying the Welcome is lost and the next
             // tick's arrives first), and not from a datagram that was overtaken by a newer one.
+            // Voice is the exception: its frames carry their own sequence numbers (the jitter buffer reorders them).
             if (!Welcomed) return;
-            if (m_HasStreamSeq && (short)(header.seq - m_StreamSeq) <= 0) { m_Stats.staleStreams++; return; }
-            m_StreamSeq = header.seq;
-            m_HasStreamSeq = true;
+            bool stale = m_HasStreamSeq && (short)(header.seq - m_StreamSeq) <= 0;
+            if (stale) m_Stats.staleStreams++;
+            else
+            {
+                m_StreamSeq = header.seq;
+                m_HasStreamSeq = true;
+            }
             r = new NetReader(m_Receive, bodyStart, length - bodyStart);
             while (!r.AtEnd)
             {
@@ -619,9 +655,15 @@ namespace TrashAstronauts.Core.Net
                     r.Skip(r.U16());
                     continue;
                 }
+                if (stale && type != NetMsg.Voice)
+                {
+                    if (!SkipStream(type, ref r)) break;
+                    continue;
+                }
                 int start = r.Position;
                 if (!Dispatch(type, ref r, hostTime)) break;
                 Tap?.Invoke(false, 0, type, m_Receive, start, r.Position - start, hostTime);
+                if (State != ClientState.Connected) return;
             }
         }
 
@@ -656,6 +698,7 @@ namespace TrashAstronauts.Core.Net
                 case NetMsg.CreatureState: return CreatureSnapshot.Read(ref r, out _);
                 case NetMsg.ItemPoses: return ItemPoseBatch.Read(ref r, ref m_PoseRead);
                 case NetMsg.Clock: return ClockMsg.Read(ref r, out _);
+                case NetMsg.Voice: return VoiceMsg.Read(ref r, ref m_VoiceRead);
                 default: return false;
             }
         }
@@ -705,6 +748,16 @@ namespace TrashAstronauts.Core.Net
                 {
                     if (!ClockMsg.Read(ref r, out ClockMsg m)) return false;
                     m_World.OnClock(m.elapsedSeconds, m.oxygenRemainingSeconds, m.flags);
+                    return true;
+                }
+                case NetMsg.Voice:
+                {
+                    if (!VoiceMsg.Read(ref r, ref m_VoiceRead)) return false;
+                    if (m_VoiceRead.slot == LocalSlot) { m_Stats.rejected++; return true; } // never our own voice back
+                    var handler = VoiceReceived;
+                    if (handler != null)
+                        for (int f = 0; f < m_VoiceRead.count; f++)
+                            handler(m_VoiceRead.slot, (ushort)(m_VoiceRead.sequence + f), m_VoiceRead.data, m_VoiceRead.Offset(f), m_VoiceRead.Length(f));
                     return true;
                 }
 
