@@ -86,6 +86,7 @@ namespace TrashAstronauts.Tests
             NetSession.TransportFactory = null;
             NetSession.ClockOverride = null;
             NetSession.LocalAddressOverride = null;
+            NetSession.OnlineLinkFactory = null;
             if (MissionDirector.Active != null)
             {
                 MissionDirector.Active.Net = null;

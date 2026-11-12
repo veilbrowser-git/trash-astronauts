@@ -37,6 +37,7 @@ namespace TrashAstronauts.EditorTools
             Physics.defaultMaxAngularSpeed = RealPhysics.MaxAngularVelocity;
 
             Try("player settings", ConfigurePlayerSettings);
+            Try("cloud project link", ConfigureCloudProject); // Builder.Online.cs
             Try("render pipeline", ConfigureRenderPipeline);
             Try("XR plug-in management", ConfigureXR);
             AssetDatabase.SaveAssets();

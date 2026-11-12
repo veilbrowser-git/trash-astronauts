@@ -1,0 +1,517 @@
+using System.Collections;
+using System.Linq;
+using NUnit.Framework;
+using TrashAstronauts.Core;
+using TrashAstronauts.Core.Net;
+using TrashAstronauts.Mission;
+using TrashAstronauts.Net;
+using TrashAstronauts.Player;
+using TrashAstronauts.UI;
+using TrashAstronauts.World;
+using UnityEngine;
+using UnityEngine.TestTools;
+
+namespace TrashAstronauts.Tests
+{
+    /// <summary>
+    /// Co-op stage 2 over a real session: the shared ride-along contract wired through NetSession. Host half: the
+    /// scene hosts and a scene-less bot (BotClientWorld) asks for things over the in-memory transport; the real
+    /// contract runs here. Client half: the scene joins a scripted host (ScriptedHostWorld) and follows what it
+    /// sends. The session clock is the fixture's fake one, so 60 s of host silence takes a moment.
+    /// </summary>
+    public class CoopSessionPlayTests : NetPlayFixture
+    {
+        static Vector3 InTheWreck => MapPoints.Freighter(0f, 0f, 12f);
+
+        Vector3 AboardHead(int slot) => m_Director.CrewSpot(slot) + Vector3.up * 1.6f;
+
+        static void SetHead(Bot bot, Vector3 head)
+        {
+            bot.Avatar.headPosition = new NetVec3(head.x, head.y, head.z);
+            bot.Avatar.leftHandPosition = new NetVec3(head.x - 0.2f, head.y - 0.4f, head.z + 0.2f);
+            bot.Avatar.rightHandPosition = new NetVec3(head.x + 0.2f, head.y - 0.4f, head.z + 0.2f);
+        }
+
+        IEnumerator HostWithBot(System.Action<Bot> got)
+        {
+            Assert.IsTrue(m_Net.Host());
+            var bot = AddBot(m_Net.Transport.Local);
+            SetHead(bot, AboardHead(1));
+            yield return Until(() => bot.Session.Welcomed && m_Net.Crew(1) != null && m_Net.Crew(1).HasPose);
+            Assert.IsTrue(bot.Session.Welcomed);
+            Assert.IsFalse(m_Director.ContractStartBlocked, "A contract can be started while hosting.");
+            got(bot);
+        }
+
+        IEnumerator StartFromBot(Bot bot)
+        {
+            int runStarts = bot.World.Calls[NetMsg.RunStart];
+            bot.Session.SendStartRequest();
+            yield return Until(() => m_Director.Phase == MissionPhase.Active && bot.World.Calls[NetMsg.RunStart] > runStarts);
+            Assert.AreEqual(MissionPhase.Active, m_Director.Phase, "The bot's START started the contract here.");
+            Assert.AreEqual(runStarts + 1, bot.World.Calls[NetMsg.RunStart]);
+        }
+
+        /// <summary>One tick of the fake clock per 20 ms of real time, so time-based smoothing sees the stream at its real pace.</summary>
+        IEnumerator Paced(double dt = 0.02)
+        {
+            float until = Time.unscaledTime + (float)dt;
+            Tick(dt);
+            do { yield return null; } while (Time.unscaledTime < until);
+        }
+
+        IEnumerator WaitOutButtonCooldown()
+        {
+            float until = Time.unscaledTime + 0.5f;
+            while (Time.unscaledTime < until) { Tick(); yield return null; }
+        }
+
+        SalvageItem[] LooseRunItems() => m_Director.RunItems.Where(i => i != null && !i.IsSecured && !i.IsMounted && i.definition != null).ToArray();
+
+        /// <summary>The run a host would send: built offline with the ride-along limits, under the host's own run number.</summary>
+        RunStartParams HostRun(int runIndex)
+        {
+            m_Director.CoopRideAlong = true;
+            var run = m_Director.BuildRunParams();
+            m_Director.CoopRideAlong = false;
+            run.runIndex = (ushort)runIndex;
+            run.planHash = run.ComputePlanHash();
+            return run;
+        }
+
+        // ================================================================== host half
+
+        [UnityTest]
+        public IEnumerator Host_TheBotsStartRequest_StartsTheRealContract_AndItHearsRunStartWorldStateClockAndItemPoses()
+        {
+            Bot bot = null;
+            yield return HostWithBot(b => bot = b);
+            Assert.IsTrue(m_Director.CoopRideAlong, "A hosting scene's contracts are ride-along contracts.");
+
+            yield return StartFromBot(bot);
+            var run = m_Director.CurrentRun;
+            Assert.IsTrue(bot.World.RunHashValid);
+            Assert.AreEqual(run.planHash, bot.World.Run.planHash, "The bot was told exactly the contract that started here.");
+            Assert.AreEqual(run.runIndex, bot.World.Run.runIndex);
+            Assert.AreEqual(run.items.Length, bot.World.Run.items.Length);
+            Assert.AreEqual(RunStartParams.NoCreature, run.creatureIndex, "No creature in a co-op contract yet.");
+            Assert.AreEqual(0, run.hazardFlags);
+            Assert.AreEqual(0u, run.wireArmedMask);
+            Assert.IsFalse(m_Director.CreatureAboard);
+
+            // World state right after the run start.
+            yield return Until(() => bot.World.Calls[NetMsg.WorldState] > 0);
+            int runAt = bot.World.Order.IndexOf(NetMsg.RunStart);
+            int worldAt = bot.World.Order.IndexOf(NetMsg.WorldState);
+            Assert.GreaterOrEqual(runAt, 0);
+            Assert.Greater(worldAt, runAt, "WorldState follows RunStart.");
+            int hatch = m_Director.NetIds.Doors.IndexOf(m_Director.tugHatch.doorId);
+            Assert.AreNotEqual(0, bot.World.DoorOpenMask & (1 << hatch), "The world state says the hatch is open.");
+
+            // The clock and the shared tank, twice a second.
+            int clocksBefore = bot.World.Calls[NetMsg.Clock];
+            yield return Frames(60); // 1.2 s of session time
+            int clocks = bot.World.Calls[NetMsg.Clock] - clocksBefore;
+            Assert.That(clocks, Is.InRange(2, 3), "Clock at 2 Hz.");
+            Assert.AreEqual(m_Director.Session.ElapsedSeconds, bot.World.ElapsedSeconds, 0.25f, "The mission time the host has (0.1 s steps).");
+            Assert.AreEqual(m_Director.Session.Oxygen.Remaining, bot.World.OxygenRemainingSeconds, 1.5f, "The tank level the host has.");
+
+            // Item poses: one resting item per tick even when nothing moves...
+            Assert.Greater(bot.World.PosesAccepted, 10, "A resting item is refreshed on every send tick.");
+            Assert.AreEqual(0, bot.World.PosesDropped);
+            // ...and an item the host's physics moves is streamed where it is.
+            var item = LooseRunItems().First(i => i.definition.category == SalvageCategory.SmallScrap);
+            byte id = (byte)item.NetIndex;
+            item.Body.linearVelocity = new Vector3(0.6f, 0f, 0f);
+            Vector3 startAt = item.transform.position;
+            float moveUntil = Time.unscaledTime + 3f;
+            while (Time.unscaledTime < moveUntil && Vector3.Distance(item.transform.position, startAt) < 0.1f) yield return Paced();
+            yield return Paced();
+            yield return Paced();
+            yield return Paced();
+            Assert.GreaterOrEqual(Vector3.Distance(item.transform.position, startAt), 0.1f, "Test set-up: the item moved.");
+            Assert.Less(Distance(bot.World.ItemPoses[id].position, item.transform.position), 0.1f, "The bot sees the moving item where the host has it.");
+
+            // A late joiner is turned away while the contract runs.
+            var late = AddBot(m_Net.Transport.Local);
+            yield return Until(() => late.Session.State == ClientState.Ended);
+            Assert.AreEqual(SessionEndReason.Refused, late.Session.EndReason);
+            Assert.AreEqual(RefuseReason.ContractInProgress, late.Session.LastRefusal);
+            Assert.IsNull(m_Net.Crew(2));
+            m_Net.Leave();
+        }
+
+        [UnityTest]
+        public IEnumerator Host_DoorRequestsAndPointCutReports_ChangeTheRealScene_AndAreBroadcastOnce()
+        {
+            Bot bot = null;
+            yield return HostWithBot(b => bot = b);
+            yield return StartFromBot(bot);
+            yield return Frames(3);
+
+            // A door the bot wants open opens here; asking twice is not a toggle.
+            var door = m_Director.wreckDoors.First(d => d != null && !d.locked && !d.IsOpen && d.buttons != null && d.buttons.Length > 0);
+            byte doorId = (byte)m_Director.NetIds.Doors.IndexOf(door.doorId);
+            int doorStates = bot.World.Calls[NetMsg.DoorState];
+            bot.Session.SendDoorRequest(doorId, true);
+            yield return Until(() => door.IsOpen && (bot.World.DoorOpenMask & (1 << doorId)) != 0);
+            Assert.IsTrue(door.IsOpen, "The real door opened.");
+            bot.Session.SendDoorRequest(doorId, true);
+            yield return Frames(30);
+            Assert.IsTrue(door.IsOpen);
+            Assert.AreEqual(doorStates + 1, bot.World.Calls[NetMsg.DoorState], "Broadcast once.");
+
+            // Every weld of a panel reported (each twice): it is cut here, each weld told once, the panel opened once.
+            var panel = m_Director.cuttables.First(c => c != null && !c.isTraining && !c.IsOpen && c.TotalCuts > 0);
+            byte pid = (byte)m_Director.NetIds.Panels.IndexOf(panel.panelId);
+            for (int k = 0; k < panel.TotalCuts; k++)
+            {
+                bot.Session.SendPointCutReport(pid, (byte)k);
+                bot.Session.SendPointCutReport(pid, (byte)k);
+            }
+            yield return Until(() => panel.IsOpen && bot.World.Calls[NetMsg.PanelOpened] > 0);
+            yield return Frames(10);
+            Assert.IsTrue(panel.IsOpen, "The real panel came off.");
+            Assert.IsTrue(m_Director.Session.IsPanelOpen(panel.panelId));
+            Assert.AreEqual(panel.TotalCuts, bot.World.Calls[NetMsg.PointCut], "Each weld broadcast once.");
+            Assert.AreEqual(1, bot.World.Calls[NetMsg.PanelOpened], "The panel's opening broadcast once.");
+            Assert.AreNotEqual(0, bot.World.PanelOpenMask & (1 << pid));
+            Assert.Greater(new Vector3(bot.World.LastPlateImpulse.x, bot.World.LastPlateImpulse.y, bot.World.LastPlateImpulse.z).magnitude, 0.3f,
+                "The plate's push travels with it.");
+            m_Net.Leave();
+        }
+
+        [UnityTest]
+        public IEnumerator Host_ExtractionIsRefusedWithTheMaskWhileTheBotIsOutside_AcceptedAboard_EveryonePaid_AndASecondContractStarts()
+        {
+            Bot bot = null;
+            yield return HostWithBot(b => bot = b);
+            var missionBoard = Object.FindAnyObjectByType<MissionBoard>();
+            missionBoard.Refresh();
+            Assert.AreEqual("CO-OP CONTRACT", missionBoard.title.text);
+            StringAssert.Contains("no creature", missionBoard.body.text);
+            Assert.IsTrue(missionBoard.primaryButton.Interactable, "START works on the host's board.");
+
+            yield return StartFromBot(bot);
+            int firstRun = m_Director.Session.RunIndex;
+
+            // The host puts something in its locker: the bot hears where it went.
+            var scrap = LooseRunItems().OrderByDescending(i => i.Value).First(i => !i.definition.bonusSpawn);
+            Assert.IsTrue(m_Director.locker.TryAccept(scrap));
+            yield return Until(() => bot.World.Calls[NetMsg.ItemDeposited] > 0);
+            Assert.AreEqual(scrap.Value, bot.World.ItemValues[scrap.NetIndex]);
+            Assert.AreNotEqual(255, bot.World.ItemLockerSlot[scrap.NetIndex]);
+
+            // The bot is out in the wreck: its request is refused, naming it (crew 2 = slot 1).
+            SetHead(bot, InTheWreck + Vector3.up * 1.6f);
+            yield return Until(() => Vector3.Distance(m_Net.Crew(1).context.HeadPosition, InTheWreck + Vector3.up * 1.6f) < 0.05f);
+            bot.Session.SendExtractRequest();
+            yield return Until(() => bot.World.Calls[NetMsg.ExtractRefused] > 0);
+            Assert.AreEqual(1 << 1, bot.World.ExtractMissingMask);
+            Assert.AreEqual(MissionPhase.Active, m_Director.Phase);
+
+            // The host's own EXTRACT says the same on its board.
+            Assert.IsNull(m_Director.Extract(m_Director.LocalPlayerId));
+            Assert.AreEqual(1 << 1, m_Director.LastExtractRefusedMask);
+            yield return null;
+            missionBoard.Refresh();
+            StringAssert.Contains("NOT ABOARD: CREW 2", missionBoard.body.text);
+
+            // Aboard: the bot's request ends the run, and everyone hears the payout.
+            SetHead(bot, AboardHead(1));
+            yield return Until(() => m_Net.Crew(1).context.InSafeZone && Vector3.Distance(m_Net.Crew(1).context.HeadPosition, AboardHead(1)) < 0.05f);
+            int credits = m_Director.Profile.Data.totalCredits;
+            bot.Session.SendExtractRequest();
+            yield return Until(() => bot.World.Calls[NetMsg.RunEnded] > 0);
+            Assert.AreEqual(MissionPhase.Results, m_Director.Phase);
+            var result = m_Director.Session.Result;
+            Assert.IsNotNull(result);
+            Assert.Greater(result.Payout, 0);
+            Assert.AreEqual(result.Payout, bot.World.Result.payout, "The crew is paid what the host was paid.");
+            Assert.AreEqual(result.Outcome, bot.World.Result.outcome);
+            Assert.AreEqual(credits + result.Payout, m_Director.Profile.Data.totalCredits, "The host's own save is paid once.");
+
+            // A second contract straight from the results screen.
+            yield return StartFromBot(bot);
+            Assert.AreEqual(firstRun + 1, m_Director.Session.RunIndex);
+            Assert.AreEqual(m_Director.Session.RunIndex, bot.World.Run.runIndex);
+
+            // The host leaving mid-contract abandons it: nothing banked, solo again, the crew told.
+            credits = m_Director.Profile.Data.totalCredits;
+            m_Net.Leave();
+            Assert.AreEqual(MissionPhase.Hub, m_Director.Phase);
+            Assert.AreEqual(credits, m_Director.Profile.Data.totalCredits);
+            Assert.IsFalse(m_Director.CoopRideAlong);
+            Assert.IsNull(m_Director.Net);
+            yield return Until(() => bot.World.Ended == SessionEndReason.HostClosed);
+            Assert.AreEqual(SessionEndReason.HostClosed, bot.World.Ended);
+        }
+
+        [UnityTest]
+        public IEnumerator Host_ItsHazardPause_IsSentToTheCrew()
+        {
+            Bot bot = null;
+            yield return HostWithBot(b => bot = b);
+            yield return StartFromBot(bot);
+            m_Director.SetHazardPause(HazardPauseReason.Scripted, true);
+            yield return Until(() => bot.World.HostPaused);
+            Assert.IsTrue(bot.World.HostPaused);
+            yield return Until(() => (bot.World.ClockFlagBits & ClockFlags.HazardsPaused) != 0);
+            Assert.AreNotEqual(0, bot.World.ClockFlagBits & ClockFlags.HazardsPaused, "The clock carries it too.");
+            m_Director.SetHazardPause(HazardPauseReason.Scripted, false);
+            yield return Until(() => !bot.World.HostPaused);
+            Assert.IsFalse(bot.World.HostPaused);
+            m_Net.Leave();
+        }
+
+        // ================================================================== client half
+
+        IEnumerator JoinScripted(ScriptedHost host)
+        {
+            Assert.IsTrue(m_Net.Join(host.Endpoint));
+            yield return Until(() => m_Net.Mode == LobbyMode.Joined && host.World.Joined[1]);
+            Assert.AreEqual(LobbyMode.Joined, m_Net.Mode);
+            Assert.IsFalse(m_Director.ContractStartBlocked, "Joined: the board's START asks the host.");
+        }
+
+        [UnityTest]
+        public IEnumerator Client_StartOnTheBoard_AsksTheHost_RunStartBuildsTheSameContract_ItemsFollowTheStream_AndADepositLandsInTheHostsSlot()
+        {
+            var run = HostRun(7);
+            var host = AddScriptedHost();
+            host.World.AutoStart = true;
+            host.World.NextRun = run;
+            yield return JoinScripted(host);
+
+            var missionBoard = Object.FindAnyObjectByType<MissionBoard>();
+            missionBoard.Refresh();
+            StringAssert.Contains("START asks the host", missionBoard.body.text);
+            Assert.IsTrue(missionBoard.primaryButton.Press(null));
+            yield return Until(() => m_Director.Phase == MissionPhase.Active);
+            Assert.AreEqual(1, host.World.Calls[NetMsg.StartRequest], "The press went to the host as a StartRequest.");
+            Assert.AreEqual(1, host.World.LastSlot);
+            Assert.AreEqual(MissionPhase.Active, m_Director.Phase);
+            Assert.AreEqual(7, m_Director.Session.RunIndex);
+            Assert.AreEqual(run.items.Length, m_Director.RunItems.Count);
+            for (int i = 0; i < run.items.Length; i++)
+            {
+                Assert.AreEqual(m_Director.NetIds.SalvageIdFor(7, run.items[i]), m_Director.RunItems[i].SalvageId);
+                Assert.IsTrue(m_Director.RunItems[i].HostOnly, "Only the host carries salvage in this version.");
+                Assert.IsFalse(m_Director.RunItems[i].SimulatedHere);
+            }
+            Assert.IsFalse(m_Director.CreatureAboard);
+
+            // The host moves an item and streams it; the copy here follows.
+            var item = m_Director.RunItems.First(i => i != null && !i.IsMounted && i.definition.category == SalvageCategory.SmallScrap);
+            byte id = (byte)item.NetIndex;
+            Vector3 start = item.transform.position;
+            Quaternion rotation = item.transform.rotation;
+            Vector3 at = start;
+            for (int i = 0; i < 40; i++)
+            {
+                at = start + Vector3.right * (i * 0.02f);
+                host.Session.QueueItemPose(id, CoopConvert.ToNet(at), CoopConvert.ToNet(rotation), false, false);
+                yield return Paced();
+            }
+            Assert.Greater(item.transform.position.x, start.x + 0.3f, "The copy moves with the stream.");
+            Assert.Less(Vector3.Distance(item.transform.position, at), 0.4f);
+            for (int i = 0; i < 10; i++)
+            {
+                host.Session.QueueItemPose(id, CoopConvert.ToNet(at), CoopConvert.ToNet(rotation), false, true);
+                yield return Paced();
+            }
+            float settle = Time.unscaledTime + 1f;
+            while (Time.unscaledTime < settle && Vector3.Distance(item.transform.position, at) > 0.01f) { Tick(); yield return null; }
+            Assert.Less(Vector3.Distance(item.transform.position, at), 0.01f, "It ends where the last pose said.");
+            Vector3 rest = at + new Vector3(0.2f, 0.1f, 0f);
+            host.Session.SendItemRest(id, CoopConvert.ToNet(rest), CoopConvert.ToNet(rotation));
+            settle = Time.unscaledTime + 1f;
+            while (Time.unscaledTime < settle && Vector3.Distance(item.transform.position, rest) > 0.01f) { Tick(); yield return null; }
+            Assert.Less(Vector3.Distance(item.transform.position, rest), 0.01f, "ItemRest puts it where it settled on the host.");
+            Assert.IsTrue(item.Body.isKinematic, "Moved, never simulated, here.");
+
+            // The host's locker took another item into its slot 3: it lands in slot 3 here too.
+            var deposit = m_Director.RunItems.First(i => i != null && !i.IsMounted && i != item);
+            host.Session.SendItemCollected((byte)deposit.NetIndex, 0);
+            host.Session.SendItemDeposited((byte)deposit.NetIndex, 0, deposit.Value, 0, 3);
+            yield return Until(() => deposit.IsSecured);
+            Assert.IsTrue(deposit.IsSecured);
+            Assert.AreSame(m_Director.locker.slots[3], deposit.transform.parent, "The host's slot, not this locker's next.");
+            Assert.AreEqual(deposit.Value, m_Director.Session.DepositedValue);
+
+            // EXTRACT on this board: the host refuses, naming crew 3; the board says so.
+            host.World.AutoExtract = true;
+            host.World.ExtractMissingMask = 1 << 2;
+            yield return WaitOutButtonCooldown();
+            Assert.IsTrue(missionBoard.primaryButton.Press(null));
+            yield return WaitOutButtonCooldown();
+            Assert.IsTrue(missionBoard.primaryButton.Press(null), "confirm");
+            yield return Until(() => host.World.Calls[NetMsg.ExtractRequest] > 0 && m_Director.LastExtractRefusedMask != 0);
+            Assert.AreEqual(1 << 2, m_Director.LastExtractRefusedMask);
+            missionBoard.Refresh();
+            StringAssert.Contains("NOT ABOARD: CREW 3", missionBoard.body.text);
+            Assert.AreEqual(MissionPhase.Active, m_Director.Phase, "Only the host ends the run.");
+            m_Net.Leave();
+            Assert.AreEqual(MissionPhase.Hub, m_Director.Phase, "Leaving mid-contract abandons it here.");
+        }
+
+        [UnityTest]
+        public IEnumerator Client_RunEndedPaysTheLocalSaveOnce_BringsTheRigHome_AndTheNextContractStarts()
+        {
+            var host = AddScriptedHost();
+            host.World.AutoStart = true;
+            host.World.NextRun = HostRun(3);
+            yield return JoinScripted(host);
+            Assert.IsFalse(m_Director.StartMission(m_Director.LocalPlayerId), "A client never starts a contract itself...");
+            yield return Until(() => m_Director.Phase == MissionPhase.Active);
+            Assert.AreEqual(MissionPhase.Active, m_Director.Phase, "...it asks, and the host's RunStart starts it.");
+            var item = m_Director.RunItems.First(i => i != null && !i.IsMounted);
+            host.Session.SendItemDeposited((byte)item.NetIndex, 0, item.Value, 0, 0);
+            yield return Until(() => item.IsSecured);
+
+            m_Player.locomotion.TeleportTo(InTheWreck);
+            yield return Frames(4);
+            Assert.IsFalse(m_Player.InSafeZone);
+            int credits = m_Director.Profile.Data.totalCredits;
+            var message = new RunEndedMsg
+            {
+                outcome = MissionOutcome.QuotaMissed, quota = m_Director.Session.Quota,
+                depositedValue = item.Value, depositedCount = 1, payout = item.Value,
+                oxygenRemainingSeconds = 100f, elapsedSeconds = 200f,
+            };
+            host.World.CurrentPhase = MissionPhase.Results;
+            host.Session.SendRunEnded(in message);
+            host.Session.SendRunEnded(in message); // a repeat changes nothing
+            yield return Until(() => m_Director.Phase == MissionPhase.Results);
+            yield return Frames(10);
+            Assert.AreEqual(MissionPhase.Results, m_Director.Phase);
+            Assert.AreEqual(credits + item.Value, m_Director.Profile.Data.totalCredits, "Paid once.");
+            float until = Time.unscaledTime + 5f;
+            while (Time.unscaledTime < until && !m_Player.InSafeZone) { Tick(); yield return null; }
+            Assert.IsTrue(m_Player.InSafeZone, "The rig left in the wreck is brought home.");
+
+            // The next contract from the results screen, asked for from here.
+            host.World.NextRun = HostRun(4);
+            Assert.IsFalse(m_Director.StartMission(m_Director.LocalPlayerId));
+            yield return Until(() => m_Director.Phase == MissionPhase.Active);
+            Assert.AreEqual(4, m_Director.Session.RunIndex);
+            Assert.AreEqual(credits + item.Value, m_Director.Profile.Data.totalCredits);
+            m_Net.Leave();
+        }
+
+        [UnityTest]
+        public IEnumerator Client_HostPauseAndSilence_AreShown_And60sOfSilenceAbortsWithNothingBanked()
+        {
+            var host = AddScriptedHost();
+            host.World.AutoStart = true;
+            host.World.NextRun = HostRun(5);
+            yield return JoinScripted(host);
+            m_Director.StartMission(m_Director.LocalPlayerId);
+            yield return Until(() => m_Director.Phase == MissionPhase.Active);
+            var item = m_Director.RunItems.First(i => i != null && !i.IsMounted);
+            host.Session.SendItemDeposited((byte)item.NetIndex, 0, item.Value, 0, 0);
+            yield return Until(() => item.IsSecured);
+            int credits = m_Director.Profile.Data.totalCredits;
+            var missionBoard = Object.FindAnyObjectByType<MissionBoard>();
+            var crewBoard = Object.FindAnyObjectByType<NetLobbyBoard>();
+
+            // HOST PAUSED: the host's hazard pause reaches here; it is not this headset going away.
+            host.Session.SendHostPause(true);
+            yield return Until(() => m_Director.HostPaused);
+            Assert.IsTrue(m_Director.HazardsPaused);
+            Assert.IsFalse(m_Net.LocalAway, "The host's pause does not make this player away.");
+            missionBoard.Refresh();
+            StringAssert.Contains("HOST PAUSED", missionBoard.body.text);
+            host.Session.SendHostPause(false);
+            yield return Until(() => !m_Director.HostPaused);
+            missionBoard.Refresh();
+            StringAssert.DoesNotContain("HOST PAUSED", missionBoard.body.text);
+
+            // The host goes silent: after 1.5 s the boards say so; the contract waits.
+            host.Frozen = true;
+            yield return Until(() => m_Director.HostSilent, dt: 0.1);
+            Assert.IsTrue(m_Director.HostSilent);
+            Assert.IsTrue(m_Net.HostSilent);
+            missionBoard.Refresh();
+            StringAssert.Contains("HOST NOT RESPONDING", missionBoard.body.text);
+            crewBoard.Refresh();
+            StringAssert.Contains("HOST NOT RESPONDING", crewBoard.status.text);
+            Assert.AreEqual(MissionPhase.Active, m_Director.Phase);
+            float oxygen = m_Director.Session.Oxygen.Remaining;
+            yield return Frames(30, 0.1);
+            Assert.AreEqual(oxygen, m_Director.Session.Oxygen.Remaining, "The local tank does not run on while the host is silent.");
+
+            // 60 s of silence (the fake clock, not real waiting): back to solo, nothing banked.
+            yield return Until(() => m_Net.Mode == LobbyMode.Offline, maxFrames: 400, dt: 0.5);
+            Assert.AreEqual(LobbyMode.Offline, m_Net.Mode);
+            Assert.AreEqual(LobbyNotice.LinkLost, m_Net.Notice);
+            Assert.AreEqual(MissionPhase.Hub, m_Director.Phase, "The contract was abandoned.");
+            Assert.IsNull(m_Director.Session.Result);
+            Assert.AreEqual(credits, m_Director.Profile.Data.totalCredits, "Nothing banked.");
+            Assert.IsNull(m_Director.Net);
+            Assert.IsFalse(m_Director.HostSilent);
+            Assert.IsFalse(m_Director.HazardsPaused);
+            Assert.IsFalse(m_Player.IsAway);
+            Assert.AreEqual(PlayerId.Local, m_Player.Id);
+            Assert.IsTrue(m_Net.IsOffline);
+            yield return Frames(3);
+            Assert.IsTrue(m_Director.StartMission(PlayerId.Local), "Solo contracts start as before.");
+            Assert.IsTrue(m_Director.CreatureAboard);
+        }
+    }
+
+    /// <summary>A whole shared contract once over real UDP sockets on 127.0.0.1 with the real clock.</summary>
+    public class CoopSessionUdpPlayTests : NetPlayFixture
+    {
+        protected override bool UseMemoryTransport => false;
+
+        [UnityTest]
+        public IEnumerator Udp_TheSceneHostsAWholeContract_ABotRidesAlong_SalvageGoesIntoTheLocker_Extract_BothPaid()
+        {
+            Assert.IsTrue(m_Net.Host());
+            var bot = AddBot(m_Net.Transport.Local);
+            Vector3 aboard = m_Director.CrewSpot(1) + Vector3.up * 1.6f;
+            bot.Avatar.headPosition = new NetVec3(aboard.x, aboard.y, aboard.z);
+            yield return Until(() => bot.Session.Welcomed && m_Net.Crew(1) != null && m_Net.Crew(1).HasPose, maxFrames: 100000, maxRealSeconds: 8f);
+            Assert.IsTrue(bot.Session.Welcomed);
+
+            bot.Session.SendStartRequest();
+            yield return Until(() => m_Director.Phase == MissionPhase.Active && bot.World.Calls[NetMsg.RunStart] > 0, maxFrames: 100000, maxRealSeconds: 8f);
+            Assert.AreEqual(MissionPhase.Active, m_Director.Phase);
+            Assert.IsTrue(bot.World.RunHashValid);
+
+            // Salvage dropped into the host's locker hopper until the quota is met.
+            var locker = m_Director.locker;
+            foreach (var item in m_Director.RunItems.Where(i => i != null && !i.IsMounted && !i.definition.bonusSpawn).OrderByDescending(i => i.Value).ToList())
+            {
+                if (m_Director.Session.QuotaMet) break;
+                item.Body.linearVelocity = Vector3.zero;
+                item.Body.angularVelocity = Vector3.zero;
+                item.transform.position = locker.zone.position;
+                item.Body.position = locker.zone.position;
+                yield return Until(() => item.IsSecured, maxFrames: 100000, maxRealSeconds: 3f);
+                Assert.IsTrue(item.IsSecured, item.SalvageId + " was taken by the locker.");
+            }
+            Assert.IsTrue(m_Director.Session.QuotaMet);
+            int deposits = m_Director.Session.DepositedCount;
+            yield return Until(() => bot.World.Calls[NetMsg.ItemDeposited] == deposits, maxFrames: 100000, maxRealSeconds: 5f);
+            Assert.AreEqual(deposits, bot.World.Calls[NetMsg.ItemDeposited], "The bot saw every deposit.");
+            Assert.Greater(bot.World.PosesAccepted, 0, "...and the items' poses while it rode along.");
+
+            int credits = m_Director.Profile.Data.totalCredits;
+            bot.Session.SendExtractRequest();
+            yield return Until(() => bot.World.Calls[NetMsg.RunEnded] > 0, maxFrames: 100000, maxRealSeconds: 8f);
+            Assert.AreEqual(MissionPhase.Results, m_Director.Phase);
+            var result = m_Director.Session.Result;
+            Assert.AreEqual(MissionOutcome.ContractComplete, result.Outcome);
+            Assert.AreEqual(credits + result.Payout, m_Director.Profile.Data.totalCredits, "The host is paid.");
+            Assert.AreEqual(result.Payout, bot.World.Result.payout, "The bot is paid the same.");
+            Assert.AreEqual(MissionOutcome.ContractComplete, bot.World.Result.outcome);
+
+            m_Net.Leave();
+            bot.Session.Dispose();
+            yield return Until(() => UdpTransport.LiveCount == 0, maxFrames: 100000, maxRealSeconds: (float)NetSession.HostLingerSeconds + 2f);
+            Assert.AreEqual(0, UdpTransport.LiveCount);
+        }
+    }
+}

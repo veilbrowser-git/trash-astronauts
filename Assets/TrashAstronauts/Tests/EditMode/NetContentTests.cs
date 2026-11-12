@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -154,7 +155,7 @@ namespace TrashAstronauts.Tests
             Assert.AreEqual(1, boards.Length);
             var board = boards[0];
             Assert.IsNotNull(board.session);
-            foreach (var b in new[] { board.hostButton, board.findButton, board.codeButton, board.leaveButton, board.fieldCButton, board.fieldDButton, board.backButton, board.joinCodeButton })
+            foreach (var b in new[] { board.hostButton, board.findButton, board.codeButton, board.hostOnlineButton, board.findOnlineButton, board.leaveButton, board.fieldCButton, board.fieldDButton, board.backButton, board.joinCodeButton })
             {
                 Assert.IsNotNull(b);
                 Assert.AreEqual(GameLayers.Button, b.gameObject.layer, b.name + " is pressable by hand and pointer");
@@ -162,11 +163,31 @@ namespace TrashAstronauts.Tests
             Assert.AreEqual("HOST\nCO-OP", board.hostButton.Text);
             Assert.AreEqual("FIND\nCREW", board.findButton.Text);
             Assert.AreEqual("ENTER\nCODE", board.codeButton.Text);
+            Assert.AreEqual("HOST\nONLINE", board.hostOnlineButton.Text);
+            Assert.AreEqual("FIND\nONLINE", board.findOnlineButton.Text);
             Assert.AreEqual("LEAVE", board.leaveButton.Text);
             Assert.AreEqual(10, board.digitButtons.Length);
             for (int d = 0; d < 10; d++) Assert.AreEqual(d.ToString(), board.digitButtons[d].Text);
-            Assert.AreEqual(3, board.joinButtons.Length);
-            Assert.AreEqual(3, board.resultRows.Length);
+            // Up to three Wi-Fi tugs or five online games, each with its own JOIN.
+            Assert.AreEqual(NetLobbyBoard.ResultRowCount, board.joinButtons.Length);
+            Assert.AreEqual(NetLobbyBoard.ResultRowCount, board.resultRows.Length);
+            Assert.AreEqual(5, NetLobbyBoard.ResultRowCount);
+            foreach (var b in board.joinButtons) Assert.That(b.transform.position.y, Is.InRange(1.1f, 1.8f), "JOIN at hand height.");
+
+            // Every button is a decent target and none overlaps another (the online row was added below the Wi-Fi row).
+            var buttons = new List<PushButton> { board.hostButton, board.findButton, board.codeButton, board.hostOnlineButton, board.findOnlineButton, board.leaveButton };
+            var faces = new List<Rect>();
+            foreach (var b in buttons)
+            {
+                var col = b.GetComponent<BoxCollider>();
+                Assert.GreaterOrEqual(col.size.x, 0.25f, b.name);
+                Assert.GreaterOrEqual(col.size.y, 0.1f, b.name);
+                Vector3 at = board.transform.InverseTransformPoint(b.transform.position);
+                faces.Add(new Rect(at.x - col.size.x * 0.5f, at.y - col.size.y * 0.5f, col.size.x, col.size.y));
+            }
+            for (int i = 0; i < buttons.Count; i++)
+                for (int k = i + 1; k < buttons.Count; k++)
+                    Assert.IsFalse(faces[i].Overlaps(faces[k]), buttons[i].name + " overlaps " + buttons[k].name);
             Assert.IsFalse(board.keypadPanel.activeSelf);
             Assert.IsFalse(board.resultsPanel.activeSelf);
             Assert.IsTrue(board.infoPanel.activeSelf);

@@ -1,6 +1,7 @@
 using TMPro;
 using TrashAstronauts.Core.Net;
 using TrashAstronauts.Net;
+using TrashAstronauts.Net.Online;
 using TrashAstronauts.Player;
 using TrashAstronauts.World;
 using UnityEngine;
@@ -13,9 +14,15 @@ namespace TrashAstronauts.UI
     ///   HOST CO-OP   open this tug to crew on the same Wi-Fi; shows the tug number and the crew code.
     ///   FIND CREW    look for hosting tugs on this Wi-Fi; each one found gets its own JOIN button.
     ///   ENTER CODE   a 10-key pad for the host's crew code (C and D), for networks FIND CREW cannot search.
-    ///   LEAVE        back to playing alone.
-    /// Nothing touches the network until HOST CO-OP, FIND CREW or ENTER CODE is pressed. The panel only drives
-    /// <see cref="NetSession"/> and shows its state; every refusal is spelled out in plain words.
+    ///   HOST ONLINE  open this tug to crew anywhere, through Unity Relay and Lobby; shows "TUG n  ONLINE" and a
+    ///                6-character code.
+    ///   FIND ONLINE  list up to 5 online games of this build; each gets its own JOIN button.
+    ///   LEAVE        back to playing alone, whichever kind of link it was.
+    /// There is no keypad for the 6-character online code: 36 letter-and-digit keys do not fit this panel at a
+    /// size a gloved hand can hit, so online games are joined from the FIND ONLINE list.
+    /// Nothing touches the network until one of the HOST / FIND / ENTER buttons is pressed, and nothing contacts
+    /// Unity's servers until HOST ONLINE or FIND ONLINE is. The panel only drives <see cref="NetSession"/> and
+    /// shows its state; every refusal and every online problem is spelled out in plain words.
     /// </summary>
     public sealed class NetLobbyBoard : MonoBehaviour
     {
@@ -32,8 +39,13 @@ namespace TrashAstronauts.UI
         public PushButton findButton;
         public PushButton codeButton;
         public PushButton leaveButton;
+        public PushButton hostOnlineButton;
+        public PushButton findOnlineButton;
 
-        [Header("FIND CREW results")]
+        /// <summary>Result rows on the panel: FIND CREW shows up to 3 tugs, FIND ONLINE up to 5 games.</summary>
+        public const int ResultRowCount = 5;
+
+        [Header("FIND CREW / FIND ONLINE results")]
         public GameObject resultsPanel;
         public GameObject[] resultRows;
         public TMP_Text[] resultLabels;
@@ -64,6 +76,8 @@ namespace TrashAstronauts.UI
             Hook(findButton, OnFind);
             Hook(codeButton, OnCode);
             Hook(leaveButton, OnLeave);
+            Hook(hostOnlineButton, OnHostOnline);
+            Hook(findOnlineButton, OnFindOnline);
             Hook(fieldCButton, OnFieldC);
             Hook(fieldDButton, OnFieldD);
             Hook(backButton, OnBack);
@@ -79,6 +93,8 @@ namespace TrashAstronauts.UI
             Unhook(findButton, OnFind);
             Unhook(codeButton, OnCode);
             Unhook(leaveButton, OnLeave);
+            Unhook(hostOnlineButton, OnHostOnline);
+            Unhook(findOnlineButton, OnFindOnline);
             Unhook(fieldCButton, OnFieldC);
             Unhook(fieldDButton, OnFieldD);
             Unhook(backButton, OnBack);
@@ -109,6 +125,8 @@ namespace TrashAstronauts.UI
         void OnFind(PushButton b, HandRig hand) { if (session != null) session.Find(); Refresh(); }
         void OnCode(PushButton b, HandRig hand) { if (session != null) session.EnterCode(); Refresh(); }
         void OnLeave(PushButton b, HandRig hand) { if (session != null) session.Leave(); Refresh(); }
+        void OnHostOnline(PushButton b, HandRig hand) { if (session != null) session.HostOnline(); Refresh(); }
+        void OnFindOnline(PushButton b, HandRig hand) { if (session != null) session.FindOnline(); Refresh(); }
         void OnFieldC(PushButton b, HandRig hand) { if (session != null) session.SelectCodeField(CodeField.C); Refresh(); }
         void OnFieldD(PushButton b, HandRig hand) { if (session != null) session.SelectCodeField(CodeField.D); Refresh(); }
         void OnBack(PushButton b, HandRig hand) { if (session != null) session.PressBack(); Refresh(); }
@@ -133,6 +151,14 @@ namespace TrashAstronauts.UI
         {
             if (session == null || joinButtons == null) return;
             int index = System.Array.IndexOf(joinButtons, b);
+            if (session.OnlineListShown)
+            {
+                var games = session.OnlineGames;
+                string online = index >= 0 && index < games.Count ? "TUG " + games[index].TugNumber : "";
+                if (session.JoinOnline(index)) m_JoiningLabel = online;
+                Refresh();
+                return;
+            }
             var hosts = session.FoundHosts;
             string label = hosts != null && index >= 0 && index < hosts.ShownCount ? "TUG " + hosts[index].info.tugNumber : "";
             if (session.JoinFound(index)) m_JoiningLabel = label;
@@ -163,6 +189,26 @@ namespace TrashAstronauts.UI
             }
         }
 
+        /// <summary>Plain wording for every online problem: the link's own headline, then what to do about it.</summary>
+        public static string OnlineNoticeText(OnlineProblem problem)
+        {
+            string head = OnlineErrors.Text(problem);
+            if (head.Length == 0) return "";
+            switch (problem)
+            {
+                case OnlineProblem.NoInternet: return head + "\nThis headset cannot reach the internet. Same Wi-Fi play still works.";
+                case OnlineProblem.SignInFailed: return head + "\nUnity's anonymous sign-in did not work. Try again later.";
+                case OnlineProblem.ServiceBusy: return head + "\nUnity's servers are busy. Wait a moment, then press again.";
+                case OnlineProblem.NotSetUp: return head + "\nOnline play is not available in this build. Same Wi-Fi still works.";
+                case OnlineProblem.GameGone: return head + "\nThat game has closed. Press FIND ONLINE again.";
+                case OnlineProblem.GameFull: return head + "\nThat crew already has 4 players.";
+                case OnlineProblem.NoAnswer: return head + "\nNo reply in time. Check the internet and try again.";
+                case OnlineProblem.BadCode: return head + "\nAn online code is 6 letters and digits.";
+                case OnlineProblem.Busy: return head + "\nStill working on the last press.";
+                default: return head + "\nSomething went wrong online. Try again.";
+            }
+        }
+
         /// <summary>"CREW 2/4:  ORANGE (HOST)  BLUE (YOU)".</summary>
         public string RosterLine()
         {
@@ -186,24 +232,31 @@ namespace TrashAstronauts.UI
             if (session == null) return;
             LobbyState lobby = session.Lobby;
             LobbyMode mode = lobby.Mode;
-            bool canStart = mode == LobbyMode.Offline || mode == LobbyMode.Searching || mode == LobbyMode.EnteringCode;
+            OnlineStep busy = session.OnlineBusy;
+            bool canStart = (mode == LobbyMode.Offline || mode == LobbyMode.Searching || mode == LobbyMode.EnteringCode) && busy == OnlineStep.None;
 
             Set(title, "CO-OP CREW");
-            Set(status, StatusText(lobby, mode));
-            Set(notice, NoticeText(session.Notice));
+            Set(status, StatusText(lobby, mode, busy));
+            string lobbyNotice = NoticeText(session.Notice);
+            Set(notice, lobbyNotice.Length > 0 ? lobbyNotice : OnlineNoticeText(session.OnlineProblem));
 
             SetButton(hostButton, canStart);
             SetButton(findButton, canStart);
             SetButton(codeButton, canStart);
-            SetButton(leaveButton, mode != LobbyMode.Offline);
+            SetButton(hostOnlineButton, canStart);
+            SetButton(findOnlineButton, canStart);
+            SetButton(leaveButton, mode != LobbyMode.Offline || busy != OnlineStep.None || session.OnlineListShown);
 
+            bool onlineList = mode == LobbyMode.Offline && session.OnlineListShown;
             bool searching = mode == LobbyMode.Searching;
+            bool showResults = searching || onlineList;
             bool keypad = mode == LobbyMode.EnteringCode;
-            if (resultsPanel != null && resultsPanel.activeSelf != searching) resultsPanel.SetActive(searching);
+            if (resultsPanel != null && resultsPanel.activeSelf != showResults) resultsPanel.SetActive(showResults);
             if (keypadPanel != null && keypadPanel.activeSelf != keypad) keypadPanel.SetActive(keypad);
-            if (infoPanel != null && infoPanel.activeSelf != (!searching && !keypad)) infoPanel.SetActive(!searching && !keypad);
+            if (infoPanel != null && infoPanel.activeSelf != (!showResults && !keypad)) infoPanel.SetActive(!showResults && !keypad);
 
             if (searching) RefreshResults();
+            else if (onlineList) RefreshOnlineResults(busy);
             if (keypad)
             {
                 Set(codeEntry, lobby.CodeEntryLine);
@@ -213,11 +266,21 @@ namespace TrashAstronauts.UI
             Set(info, InfoText(mode));
         }
 
-        string StatusText(LobbyState lobby, LobbyMode mode)
+        string StatusText(LobbyState lobby, LobbyMode mode, OnlineStep busy)
         {
+            string link = session.OnlineLinkStatus;
+            switch (busy)
+            {
+                case OnlineStep.Hosting: return "HOSTING ONLINE...\n" + link;
+                case OnlineStep.Finding: return "SEARCHING ONLINE...\n" + link;
+                case OnlineStep.Joining: return "JOINING " + m_JoiningLabel + "  ONLINE...\n" + link;
+            }
+            bool online = session.IsOnline;
             switch (mode)
             {
                 case LobbyMode.Hosting:
+                    if (online)
+                        return "HOSTING  " + lobby.TitleLine + "  ONLINE\nCODE  " + session.OnlineCode + (session.OnlineListed ? "" : "  (NOT LISTED: SHARE THE CODE)") + "\n" + RosterLine();
                     return "HOSTING  " + lobby.TitleLine + "\nCREW CODE  " + lobby.CodeLine + "\n" + RosterLine();
                 case LobbyMode.Searching:
                 {
@@ -229,20 +292,42 @@ namespace TrashAstronauts.UI
                 case LobbyMode.EnteringCode:
                     return "TYPE THE HOST'S CREW CODE\n(shown on the host's CO-OP CREW panel)\nTHIS HEADSET  " + lobby.CodeLine;
                 case LobbyMode.Connecting:
+                    if (online) return "JOINING " + m_JoiningLabel + "  ONLINE...\nTHROUGH UNITY RELAY";
                     return "JOINING " + m_JoiningLabel + "...\n" + lobby.Target.A + "." + lobby.Target.B + "." + lobby.Target.C + "." + lobby.Target.D;
                 case LobbyMode.Joined:
-                    return "JOINED " + m_JoiningLabel + "\nYOUR SUIT IS " + ColourNames[Mathf.Clamp(session.LocalSlot, 0, 3)] + "\n" + RosterLine()
+                    return "JOINED " + m_JoiningLabel + (online ? "  ONLINE" : "") + "\nYOUR SUIT IS " + ColourNames[Mathf.Clamp(session.LocalSlot, 0, 3)] + "\n" + RosterLine()
                         + (session.HostSilent ? "\nHOST NOT RESPONDING..." : "");
                 default:
-                    return "Play together on the same Wi-Fi, 2 to 4 headsets.\nOne presses HOST CO-OP. The others press\nFIND CREW, then JOIN.";
+                    if (session.OnlineListShown)
+                    {
+                        int games = session.OnlineGames.Count;
+                        return games > 0 ? "ONLINE: FOUND " + games + ": PRESS JOIN" : "ONLINE: NO GAMES FOUND\nPress FIND ONLINE to look again.";
+                    }
+                    return "SAME WI-FI: one presses HOST CO-OP, the others\nFIND CREW, then JOIN.  ANYWHERE: one presses\nHOST ONLINE, the others FIND ONLINE, then JOIN.";
             }
         }
 
         static string InfoText(LobbyMode mode)
         {
             if (mode == LobbyMode.Hosting || mode == LobbyMode.Connecting || mode == LobbyMode.Joined)
-                return "This first co-op version shows the crew to each other\nin the tug. Contracts are not shared yet: press LEAVE\nto start one. Nothing from your microphone is sent.";
-            return "Nothing is sent over the network until you press\nHOST CO-OP, FIND CREW or ENTER CODE, and then only to\naddresses on your local network. No voice is ever sent.";
+                return "Contracts are shared: the host launches one and the\nwhole crew rides along, with one oxygen tank and one\nlocker, and everyone is paid. In this version only the\nhost can carry salvage and there is no creature.\nNothing from your microphone is ever sent.";
+            return "Nothing is sent over the network until you press a\nbutton. Wi-Fi buttons reach only your local network.\nONLINE buttons use Unity's servers (Relay, Lobby and\nan anonymous sign-in), and only once pressed.\nNo voice is ever sent.";
+        }
+
+        void RefreshOnlineResults(OnlineStep busy)
+        {
+            var games = session.OnlineGames;
+            int rows = resultRows != null ? resultRows.Length : 0;
+            for (int i = 0; i < rows; i++)
+            {
+                bool on = i < games.Count;
+                if (resultRows[i] != null && resultRows[i].activeSelf != on) resultRows[i].SetActive(on);
+                if (!on) continue;
+                OnlineGame game = games[i];
+                string why = game.Players >= game.MaxPlayers ? "  FULL" : "";
+                if (resultLabels != null && i < resultLabels.Length) Set(resultLabels[i], game.Line + why);
+                if (joinButtons != null && i < joinButtons.Length) SetButton(joinButtons[i], game.Joinable && busy == OnlineStep.None);
+            }
         }
 
         void RefreshResults()
@@ -261,6 +346,7 @@ namespace TrashAstronauts.UI
                     : predicted == RefuseReason.VersionMismatch || predicted == RefuseReason.ContentMismatch ? "  DIFFERENT VERSION"
                     : "";
                 if (resultLabels != null && i < resultLabels.Length) Set(resultLabels[i], entry.Label() + why);
+                if (joinButtons != null && i < joinButtons.Length) SetButton(joinButtons[i], true);
             }
         }
 

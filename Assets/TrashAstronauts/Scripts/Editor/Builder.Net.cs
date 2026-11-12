@@ -103,6 +103,9 @@ namespace TrashAstronauts.EditorTools
         /// The CO-OP CREW panel. On the tug's east wall, facing into the cabin, between the collection locker
         /// (south of it) and the practice plate (north of it), above the hand rail: clear of the mission board and
         /// the tutorial board (west wall), the locker, the store (supply bay) and the hatch to the airlock (north wall).
+        /// Top to bottom: title, status, notice; two rows of buttons (same Wi-Fi above, online below, with a tall
+        /// LEAVE beside both); then one lower area that shows the help text, the FIND results (up to 5 rows, each
+        /// with its own JOIN) or the crew-code keypad. Every button is at least 0.26 x 0.10 m.
         /// </summary>
         static NetLobbyBoard BuildLobbyBoard(NetSession session)
         {
@@ -113,34 +116,38 @@ namespace TrashAstronauts.EditorTools
 
             var board = root.AddComponent<NetLobbyBoard>();
             board.session = session;
-            board.title = Text(t, "Title", "CO-OP CREW", new Vector3(0, 0.6f, -0.002f), Quaternion.identity, 0.8f, new Vector2(1.3f, 0.1f), new Color(0.6f, 1f, 0.9f));
+            board.title = Text(t, "Title", "CO-OP CREW", new Vector3(0, 0.615f, -0.002f), Quaternion.identity, 0.7f, new Vector2(1.3f, 0.08f), new Color(0.6f, 1f, 0.9f));
             board.title.fontStyle = FontStyles.Bold;
-            board.status = Text(t, "Status", "", new Vector3(0, 0.43f, -0.002f), Quaternion.identity, 0.4f, new Vector2(1.28f, 0.2f), new Color(0.85f, 0.95f, 1f), TextAlignmentOptions.TopLeft);
-            board.notice = Text(t, "Notice", "", new Vector3(0, 0.26f, -0.002f), Quaternion.identity, 0.34f, new Vector2(1.28f, 0.12f), new Color(1f, 0.8f, 0.35f), TextAlignmentOptions.TopLeft);
+            board.status = Text(t, "Status", "", new Vector3(0, 0.47f, -0.002f), Quaternion.identity, 0.36f, new Vector2(1.28f, 0.2f), new Color(0.85f, 0.95f, 1f), TextAlignmentOptions.TopLeft);
+            board.notice = Text(t, "Notice", "", new Vector3(0, 0.3f, -0.002f), Quaternion.identity, 0.3f, new Vector2(1.28f, 0.1f), new Color(1f, 0.8f, 0.35f), TextAlignmentOptions.TopLeft);
 
-            var size = new Vector2(0.3f, 0.13f);
-            board.hostButton = Button(t, "Host Co-op", new Vector3(-0.495f, 0.11f, 0), Quaternion.identity, size, "HOST\nCO-OP", M("ButtonGreen"), 0.3f);
-            board.findButton = Button(t, "Find Crew", new Vector3(-0.165f, 0.11f, 0), Quaternion.identity, size, "FIND\nCREW", M("ButtonBlue"), 0.3f);
-            board.codeButton = Button(t, "Enter Code", new Vector3(0.165f, 0.11f, 0), Quaternion.identity, size, "ENTER\nCODE", M("ButtonBlue"), 0.3f);
-            board.leaveButton = Button(t, "Leave", new Vector3(0.495f, 0.11f, 0), Quaternion.identity, size, "LEAVE", M("ButtonAmber"), 0.3f);
+            // Same Wi-Fi on the upper row, online on the lower row, LEAVE (for both) beside them.
+            var size = new Vector2(0.3f, 0.12f);
+            board.hostButton = Button(t, "Host Co-op", new Vector3(-0.495f, 0.17f, 0), Quaternion.identity, size, "HOST\nCO-OP", M("ButtonGreen"), 0.3f);
+            board.findButton = Button(t, "Find Crew", new Vector3(-0.165f, 0.17f, 0), Quaternion.identity, size, "FIND\nCREW", M("ButtonBlue"), 0.3f);
+            board.codeButton = Button(t, "Enter Code", new Vector3(0.165f, 0.17f, 0), Quaternion.identity, size, "ENTER\nCODE", M("ButtonBlue"), 0.3f);
+            board.hostOnlineButton = Button(t, "Host Online", new Vector3(-0.495f, 0.02f, 0), Quaternion.identity, size, "HOST\nONLINE", M("ButtonGreen"), 0.3f);
+            board.findOnlineButton = Button(t, "Find Online", new Vector3(-0.165f, 0.02f, 0), Quaternion.identity, size, "FIND\nONLINE", M("ButtonBlue"), 0.3f);
+            Text(t, "Online Caption", "ONLINE: through\nUnity's servers", new Vector3(0.165f, 0.02f, -0.002f), Quaternion.identity, 0.24f, new Vector2(0.3f, 0.12f), new Color(0.6f, 0.75f, 0.85f));
+            board.leaveButton = Button(t, "Leave", new Vector3(0.495f, 0.095f, 0), Quaternion.identity, new Vector2(0.3f, 0.27f), "LEAVE", M("ButtonAmber"), 0.34f);
 
-            // What the lower half shows when neither the results nor the keypad are up.
+            // What the lower area shows when neither the results nor the keypad are up.
             var infoPanel = Empty(t, "Info", Vector3.zero, null, GameLayers.Default);
             board.infoPanel = infoPanel;
-            board.info = Text(infoPanel.transform, "Text", "", new Vector3(0, -0.2f, -0.002f), Quaternion.identity, 0.32f, new Vector2(1.28f, 0.3f), new Color(0.75f, 0.85f, 0.95f), TextAlignmentOptions.TopLeft);
+            board.info = Text(infoPanel.transform, "Text", "", new Vector3(0, -0.33f, -0.002f), Quaternion.identity, 0.3f, new Vector2(1.28f, 0.42f), new Color(0.75f, 0.85f, 0.95f), TextAlignmentOptions.TopLeft);
 
-            // FIND CREW results: up to three tugs, each with its own JOIN.
+            // FIND CREW (up to three tugs) or FIND ONLINE (up to five games) results, each row with its own JOIN.
             var results = Empty(t, "Results", Vector3.zero, null, GameLayers.Default);
             board.resultsPanel = results;
             var rows = new List<GameObject>();
             var labels = new List<TMP_Text>();
             var joins = new List<PushButton>();
-            for (int i = 0; i < 3; i++)
+            for (int i = 0; i < NetLobbyBoard.ResultRowCount; i++)
             {
-                float y = -0.08f - i * 0.17f;
+                float y = -0.14f - i * 0.115f;
                 var row = Empty(results.transform, "Result " + (i + 1), new Vector3(0, y, 0), null, GameLayers.Default);
-                labels.Add(Text(row.transform, "Label", "", new Vector3(-0.17f, 0, -0.002f), Quaternion.identity, 0.36f, new Vector2(0.92f, 0.1f), Color.white, TextAlignmentOptions.Left));
-                joins.Add(Button(row.transform, "Join", new Vector3(0.5f, 0, 0), Quaternion.identity, new Vector2(0.26f, 0.13f), "JOIN", M("ButtonGreen"), 0.36f));
+                labels.Add(Text(row.transform, "Label", "", new Vector3(-0.17f, 0, -0.002f), Quaternion.identity, 0.32f, new Vector2(0.92f, 0.1f), Color.white, TextAlignmentOptions.Left));
+                joins.Add(Button(row.transform, "Join", new Vector3(0.5f, 0, 0), Quaternion.identity, new Vector2(0.26f, 0.1f), "JOIN", M("ButtonGreen"), 0.34f));
                 rows.Add(row);
             }
             board.resultRows = rows.ToArray();
@@ -151,20 +158,20 @@ namespace TrashAstronauts.EditorTools
             // ENTER CODE keypad: C and D fields, digits 0-9, back, join.
             var keypad = Empty(t, "Keypad", Vector3.zero, null, GameLayers.Default);
             board.keypadPanel = keypad;
-            board.codeEntry = Text(keypad.transform, "Code", "C ___  D ___", new Vector3(0.15f, -0.03f, -0.002f), Quaternion.identity, 0.55f, new Vector2(0.62f, 0.08f), new Color(1f, 0.95f, 0.6f));
-            var side = new Vector2(0.28f, 0.12f);
-            board.fieldCButton = Button(keypad.transform, "Field C", new Vector3(-0.5f, -0.16f, 0), Quaternion.identity, side, "EDIT C", M("ButtonBlue"), 0.32f);
-            board.fieldDButton = Button(keypad.transform, "Field D", new Vector3(-0.5f, -0.30f, 0), Quaternion.identity, side, "EDIT D", M("ButtonBlue"), 0.32f);
-            board.backButton = Button(keypad.transform, "Back", new Vector3(-0.5f, -0.44f, 0), Quaternion.identity, side, "BACK", M("ButtonAmber"), 0.32f);
-            board.joinCodeButton = Button(keypad.transform, "Join Code", new Vector3(-0.5f, -0.59f, 0), Quaternion.identity, side, "JOIN", M("ButtonGreen"), 0.36f);
+            board.codeEntry = Text(keypad.transform, "Code", "C ___  D ___", new Vector3(0.15f, -0.12f, -0.002f), Quaternion.identity, 0.5f, new Vector2(0.62f, 0.07f), new Color(1f, 0.95f, 0.6f));
+            var side = new Vector2(0.28f, 0.1f);
+            board.fieldCButton = Button(keypad.transform, "Field C", new Vector3(-0.5f, -0.22f, 0), Quaternion.identity, side, "EDIT C", M("ButtonBlue"), 0.3f);
+            board.fieldDButton = Button(keypad.transform, "Field D", new Vector3(-0.5f, -0.335f, 0), Quaternion.identity, side, "EDIT D", M("ButtonBlue"), 0.3f);
+            board.backButton = Button(keypad.transform, "Back", new Vector3(-0.5f, -0.45f, 0), Quaternion.identity, side, "BACK", M("ButtonAmber"), 0.3f);
+            board.joinCodeButton = Button(keypad.transform, "Join Code", new Vector3(-0.5f, -0.565f, 0), Quaternion.identity, side, "JOIN", M("ButtonGreen"), 0.34f);
             var digits = new PushButton[10];
-            var key = new Vector2(0.17f, 0.12f);
+            var key = new Vector2(0.17f, 0.1f);
             for (int d = 1; d <= 9; d++)
             {
                 int col = (d - 1) % 3, row = (d - 1) / 3;
-                digits[d] = Button(keypad.transform, "Digit " + d, new Vector3(-0.05f + col * 0.2f, -0.16f - row * 0.14f, 0), Quaternion.identity, key, d.ToString(), M("Screen"), 0.5f);
+                digits[d] = Button(keypad.transform, "Digit " + d, new Vector3(-0.05f + col * 0.2f, -0.22f - row * 0.115f, 0), Quaternion.identity, key, d.ToString(), M("Screen"), 0.46f);
             }
-            digits[0] = Button(keypad.transform, "Digit 0", new Vector3(0.15f, -0.58f, 0), Quaternion.identity, key, "0", M("Screen"), 0.5f);
+            digits[0] = Button(keypad.transform, "Digit 0", new Vector3(0.15f, -0.565f, 0), Quaternion.identity, key, "0", M("Screen"), 0.46f);
             board.digitButtons = digits;
             keypad.SetActive(false);
             return board;

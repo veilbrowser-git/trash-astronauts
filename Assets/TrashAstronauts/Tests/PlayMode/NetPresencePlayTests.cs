@@ -48,7 +48,7 @@ namespace TrashAstronauts.Tests
             Assert.IsFalse(m_Net.IsClient);
             Assert.AreEqual(LobbyMode.Hosting, m_Net.Mode);
             Assert.AreEqual(new PlayerId(0), m_Player.Id);
-            Assert.IsTrue(m_Director.ContractStartBlocked);
+            Assert.IsFalse(m_Director.ContractStartBlocked, "Hosting: contracts are shared, so START is not blocked.");
             Assert.AreEqual(PlayerAvatar.CrewColors[0], m_Player.avatar.Tint, "The host wears slot 0's colour.");
 
             var bot = AddBot(m_Net.Transport.Local, handedness: 0);
@@ -330,8 +330,10 @@ namespace TrashAstronauts.Tests
             Assert.Less(Vector3.Distance(otherCrew.head.position, new Vector3(0.9f, 1.6f, -1.6f)), 0.02f);
             Assert.AreEqual(3, m_Net.PlayerCount);
             Assert.AreEqual(3, m_Director.Players.Count);
-            Assert.IsFalse(m_Director.StartMission(m_Director.LocalPlayerId), "No contract can start in a stage 1 session.");
-            Assert.AreEqual(MissionPhase.Hub, m_Director.Phase);
+            Assert.IsFalse(m_Director.StartMission(m_Director.LocalPlayerId), "A client never starts a contract itself: it asks the host.");
+            yield return Until(() => host.World.Calls[NetMsg.StartRequest] > 0);
+            Assert.AreEqual(1, host.World.Calls[NetMsg.StartRequest], "START went to the host as a request.");
+            Assert.AreEqual(MissionPhase.Hub, m_Director.Phase, "This scripted host does not start one.");
 
             // The other joiner leaves: its suit goes here too.
             other.Session.Leave(Now);

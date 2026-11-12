@@ -60,6 +60,7 @@ namespace TrashAstronauts.UI
                 director.MissionEnded += OnMissionEnded;
                 director.SalvageDeposited += OnDeposited;
                 director.ProfileChanged += RefreshNow;
+                director.ExtractRefused += OnExtractRefused;
             }
         }
 
@@ -73,6 +74,7 @@ namespace TrashAstronauts.UI
                 director.MissionEnded -= OnMissionEnded;
                 director.SalvageDeposited -= OnDeposited;
                 director.ProfileChanged -= RefreshNow;
+                director.ExtractRefused -= OnExtractRefused;
             }
         }
 
@@ -89,6 +91,37 @@ namespace TrashAstronauts.UI
         void OnMissionEnded(MissionResult result) { m_ConfirmUntil = 0f; Refresh(); }
         void OnDeposited(SalvageItem item) => Refresh();
 
+        /// <summary>Co-op: the host turned the extraction down because these crew members are not inside the tug.</summary>
+        void OnExtractRefused(int missingSlotsMask)
+        {
+            Notice(NotAboardText(missingSlotsMask));
+            Refresh();
+        }
+
+        /// <summary>"NOT ABOARD: CREW 2, 3" (crew numbers are slot + 1, as on the CO-OP CREW panel).</summary>
+        public static string NotAboardText(int missingSlotsMask)
+        {
+            var text = new System.Text.StringBuilder("NOT ABOARD: CREW ");
+            bool first = true;
+            for (int slot = 0; slot < 8; slot++)
+            {
+                if ((missingSlotsMask & (1 << slot)) == 0) continue;
+                if (!first) text.Append(", ");
+                text.Append(slot + 1);
+                first = false;
+            }
+            return first ? "Everyone is aboard." : text.ToString();
+        }
+
+        /// <summary>The co-op client's line about the host's state, or "" when the host is there and playing.</summary>
+        string HostStateLine()
+        {
+            if (director.Net == null || !director.Net.IsClient) return "";
+            if (director.HostSilent) return "\n\nHOST NOT RESPONDING: waiting for the host's headset...";
+            if (director.HostPaused) return "\n\nHOST PAUSED: everything waits until the host is back.";
+            return "";
+        }
+
         void OnPrimary(PushButton button, HandRig hand)
         {
             if (director == null) return;
@@ -104,8 +137,8 @@ namespace TrashAstronauts.UI
                     if (Time.unscaledTime <= m_ConfirmUntil)
                     {
                         m_ConfirmUntil = 0f;
-                        // On a co-op client the press is only a request; the host answers.
-                        bool asked = director.Net != null && director.Net.IsClient;
+                        // In a co-op session the host's rules answer (NOT ABOARD: CREW 2, 3 when somebody is outside).
+                        bool asked = director.Net != null;
                         if (director.Extract(by) == null && !asked) Notice("Extraction needs you inside the tug.");
                     }
                     else
@@ -138,8 +171,27 @@ namespace TrashAstronauts.UI
             var profile = director.Profile.Data;
             string notice = Time.unscaledTime < m_NoticeUntil ? "\n\n> " + m_Notice : "";
 
+            bool coop = director.Net != null;
+            bool client = coop && director.Net.IsClient;
+            string hostLine = HostStateLine();
+
             switch (session.Phase)
             {
+                case MissionPhase.Hub when coop:
+                    Set(title, "CO-OP CONTRACT");
+                    Set(body,
+                        "Wreck: assigned when the host launches\n"
+                        + "Quota: " + config.quotaCredits + " cr     Bonus: +" + config.contractBonusCredits + " cr\n"
+                        + "One shared oxygen tank (the host's).\n\n"
+                        + "CO-OP, THIS VERSION: no creature aboard yet.\n"
+                        + "Only the host can carry salvage; the crew rides\n"
+                        + "along, opens doors and cuts panels. Everyone\n"
+                        + "must be inside the tug to extract. Everyone is paid.\n\n"
+                        + (client ? "START asks the host to launch.\n" : "")
+                        + "Banked credits: " + profile.totalCredits + " cr" + hostLine + notice);
+                    SetPrimary("START CONTRACT", true);
+                    break;
+
                 case MissionPhase.Hub:
                     Set(title, "SALVAGE CONTRACT");
                     Set(body,
@@ -165,7 +217,8 @@ namespace TrashAstronauts.UI
                             ? "QUOTA MET. Extract now for the bonus,\nor risk another trip for more."
                             : "Quota NOT met. Extracting now pays only\nfor what is already secured.")
                         + "\n\nRunning out of oxygen or getting caught\nforfeits everything from this run."
-                        + (confirming ? "\n\n> Press again to confirm extraction." : "") + notice);
+                        + (coop ? "\n\nCo-op: everyone must be inside the tug." : "")
+                        + (confirming ? "\n\n> Press again to confirm extraction." : "") + hostLine + notice);
                     SetPrimary(confirming ? "CONFIRM EXTRACT" : "EXTRACT", true);
                     break;
 
@@ -180,23 +233,24 @@ namespace TrashAstronauts.UI
                         + "Contract bonus: +" + result.Bonus + " cr\n"
                         + "PAYOUT: " + result.Payout + " cr\n"
                         + "Banked credits: " + profile.totalCredits + " cr\n\n"
-                        + Quip(result, session.RunIndex) + notice);
+                        + Quip(result, session.RunIndex)
+                        + (client ? "\n\nNEXT CONTRACT asks the host to launch." : "") + hostLine + notice);
                     SetPrimary("NEXT CONTRACT", true);
                     break;
             }
 
             if (director.ContractStartBlocked && session.Phase != MissionPhase.Active)
             {
-                // Co-op stage 1: the crew can see each other, but a contract is not shared yet.
-                Set(title, "CO-OP CREW LINKED");
+                // Co-op: between pressing JOIN (or HOST ONLINE) and being let in, no solo contract can start.
+                Set(title, "CO-OP CREW LINKING");
                 Set(body,
-                    "Your crew can see each other in the tug.\n\n"
-                    + "Contracts are not shared in co-op yet, so none\n"
-                    + "can start while the crew is linked.\n\n"
-                    + "To take a contract, press LEAVE on the\n"
-                    + "CO-OP CREW panel (east wall) and play solo.\n\n"
+                    "Connecting to a crew...\n\n"
+                    + "Contracts wait until the link is up. Then the\n"
+                    + "host launches one for everyone.\n\n"
+                    + "To play solo instead, press LEAVE on the\n"
+                    + "CO-OP CREW panel (east wall).\n\n"
                     + "Banked credits: " + profile.totalCredits + " cr" + notice);
-                SetPrimary("LEAVE CREW FIRST", false);
+                SetPrimary("LINKING...", false);
             }
 
             RefreshUpgradeButton(session.Phase, config, profile);

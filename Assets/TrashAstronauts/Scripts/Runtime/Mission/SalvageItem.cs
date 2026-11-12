@@ -98,6 +98,21 @@ namespace TrashAstronauts.Mission
             RefreshBodyMode();
         }
 
+        /// <summary>
+        /// True on a co-op client while only the host may pick salvage up (the ride-along stage): the item
+        /// cannot be grabbed here and the scanner says so. Always false offline and on a host.
+        /// </summary>
+        public bool HostOnly { get; private set; }
+
+        public void SetHostOnly(bool hostOnly)
+        {
+            HostOnly = hostOnly;
+            RefreshBodyMode();
+        }
+
+        /// <summary>Raised after <see cref="RecoverTo"/> brought the item back (a co-op host tells the crew where to).</summary>
+        public event Action<SalvageItem> Recovered;
+
         /// <summary>The host's word on what this item is worth now (after a knock on someone else's machine).</summary>
         public void SetRemoteValue(int value)
         {
@@ -115,7 +130,7 @@ namespace TrashAstronauts.Mission
             if (m_Body == null) m_Body = GetComponent<Rigidbody>();
             // Grab first: switching it off drops the item from a hand, and that drop restores the body's
             // own idea of kinematic. What is decided here has to be the last word.
-            if (grab != null) grab.enabled = !IsMounted && !IsSecured;
+            if (grab != null) grab.enabled = !IsMounted && !IsSecured && !HostOnly;
             m_Body.isKinematic = IsMounted || IsSecured || RemoteHolder.IsValid || !SimulatedHere;
         }
 
@@ -243,6 +258,7 @@ namespace TrashAstronauts.Mission
             NetIndex = -1;
             RemoteHolder = PlayerId.None;
             SimulatedHere = true;
+            HostOnly = false;
             NetSuppressRelease = false;
             SalvageId = salvageId;
             if (def != null) definition = def;
@@ -295,7 +311,8 @@ namespace TrashAstronauts.Mission
         public void ShowScan(float seconds)
         {
             if (highlight != null) highlight.Pulse(seconds);
-            if (scanTag != null && definition != null) scanTag.Show(definition.displayName, definition.creditValue, seconds);
+            if (scanTag != null && definition != null)
+                scanTag.Show(HostOnly ? definition.displayName + "  HOST ONLY" : definition.displayName, definition.creditValue, seconds);
         }
 
         /// <summary>Brings a lost item back into the playable area with no velocity.</summary>
@@ -306,6 +323,7 @@ namespace TrashAstronauts.Mission
             m_Body.angularVelocity = Vector3.zero;
             m_Body.position = position;
             transform.position = position;
+            Recovered?.Invoke(this);
         }
 
         /// <summary>Locks the item into a locker slot. It can no longer be grabbed or moved this run.</summary>
