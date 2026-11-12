@@ -650,8 +650,8 @@ namespace TrashAstronauts.EditorTools
                         {
                             var nrm = new Vector3(dx, dy, Mathf.Sqrt(1f - r2));
                             float lit = Mathf.Clamp01(Vector3.Dot(nrm, sun) * 1.2f + 0.05f);
-                            float lat = dy + 0.08f * Mathf.Sin(dx * 9f) + 0.05f * (Mathf.PerlinNoise(u * 14f, v * 3f) - 0.5f);
-                            float band = 0.5f + 0.5f * Mathf.Sin(lat * 23f + Mathf.PerlinNoise(u * 5f, v * 40f) * 2f);
+                            float lat = dy + 0.025f * Mathf.Sin(dx * 5f + dy * 3f) + 0.04f * (Mathf.PerlinNoise(u * 18f, v * 4f) - 0.5f);
+                            float band = Mathf.PerlinNoise(lat * 9f + 3.1f, cx * 7f) * 0.7f + 0.3f * (0.5f + 0.5f * Mathf.Sin(lat * 37f));
                             Color surf = Color.Lerp(surfaceA, surfaceB, band);
                             float limb = Mathf.Pow(1f - nrm.z, 3f);
                             c = surf * lit + atmosphere * limb * (0.3f + lit) ;
@@ -676,7 +676,13 @@ namespace TrashAstronauts.EditorTools
             var stars = M("Stars");
             var panes = root.GetComponentsInChildren<MeshRenderer>(true).Where(r => r.name == paneName && r.sharedMaterial == stars)
                 .OrderBy(r => Mathf.Abs(r.transform.position.x)).ToArray();
-            if (panes.Length > 0) panes[0].sharedMaterial = view;
+            if (panes.Length == 0) return;
+            panes[0].sharedMaterial = view;
+            // Wide windows: show a horizontal slice of the texture so the planet stays round.
+            Vector3 scale = panes[0].transform.lossyScale;
+            float aspect = Mathf.Max(1f, scale.x / Mathf.Max(0.01f, scale.y));
+            view.SetTextureScale("_BaseMap", new Vector2(1f, 1f / aspect));
+            EditorUtility.SetDirty(view);
         }
 
         /// <summary>The tug's windscreen: the middle pane looks out on a pale ringless giant (the pane shows the lower-left of the texture).</summary>

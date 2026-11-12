@@ -192,40 +192,10 @@ namespace TrashAstronauts.EditorTools
                 Shot("27_survey_lab", new Vector3(0f, 1.6f, 12.2f), new Vector3(1.5f, 1.2f, 19f));
                 Shot("28_survey_observation_deck", new Vector3(0f, 1.6f, 32f), new Vector3(-1f, 1.5f, 36.4f));
                 Shot("29_survey_top_down", new Vector3(-1f, 46f, 22f), new Vector3(-1f, 0f, 22.01f), true);
-                // The flashlight on the new surfaces (the torch is held at the eye for these shots).
-                var torchRig = AssetDatabase.LoadAssetAtPath<GameObject>(Builder.PrefabDir + "/PlayerRig.prefab");
-                var beam = torchRig != null ? torchRig.GetComponentInChildren<TrashAstronauts.Tools.FlashlightTool>(true)?.beam : null;
-                if (beam != null)
-                {
-                    Dock(1);
-                    TorchShot("37_torch_barge_quarters", new Vector3(-9.5f, 1.5f, 18.6f), new Vector3(-14f, 1.1f, 15.5f), beam);
-                    Dock(2);
-                    TorchShot("38_torch_survey_ring", new Vector3(-7f, 1.5f, 13f), new Vector3(-8.2f, 1.2f, 18f), beam);
-                    Dock(0);
-                    TorchShot("39_torch_hauler_corridor", Builder.FreighterPoint(0f, 1.5f, 14f), Builder.FreighterPoint(-1.25f, 1.0f, 16.5f), beam);
-                }
                 Dock(0);
                 mapDirector.enemies[0].gameObject.SetActive(true);
             }
             Object.DestroyImmediate(lineup);
-        }
-
-        static void TorchShot(string name, Vector3 from, Vector3 lookAt, Light beam)
-        {
-            var go = new GameObject("Preview Torch") { hideFlags = HideFlags.HideAndDontSave };
-            go.transform.position = from + Vector3.down * 0.15f + Vector3.right * 0.1f;
-            go.transform.LookAt(lookAt);
-            var l = go.AddComponent<Light>();
-            l.type = beam.type;
-            l.spotAngle = beam.spotAngle;
-            l.innerSpotAngle = beam.innerSpotAngle;
-            l.range = beam.range;
-            l.intensity = beam.intensity;
-            l.color = beam.color;
-            l.cookie = beam.cookie;
-            l.shadows = LightShadows.None;
-            Shot(name, from, lookAt);
-            Object.DestroyImmediate(go);
         }
 
         static void Shot(string name, Vector3 from, Vector3 lookAt, bool topDown = false, float fieldOfView = 80f)
