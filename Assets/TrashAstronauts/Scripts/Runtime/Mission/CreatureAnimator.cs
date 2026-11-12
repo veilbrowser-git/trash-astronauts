@@ -8,7 +8,8 @@ namespace TrashAstronauts.Mission
     /// when it hunts, a head that sweeps while it searches and locks on to the player when it sees them,
     /// and cables that trail behind. All of it is cheap transform rotation; there are no skinned meshes.
     /// </summary>
-    public sealed class CreatureAnimator : MonoBehaviour
+    [DefaultExecutionOrder(50)] // after SurfaceWalker has put the body on its surface this frame
+    public sealed partial class CreatureAnimator : MonoBehaviour
     {
         public EnemyDrone drone;
         public Transform body;
@@ -22,6 +23,8 @@ namespace TrashAstronauts.Mission
         public bool spider;
         public Transform abdomen;
         public Transform[] palps;
+        [Tooltip("The tip of each leg (a child of its lower segment). With these the feet are planted on the surface by IK.")]
+        public Transform[] feet;
 
         Vector3[] m_LegLiftAxis;
         float[] m_LegLiftSign;
@@ -53,6 +56,7 @@ namespace TrashAstronauts.Mission
             if (body != null) m_BodyRest = body.localPosition;
             m_LastPosition = transform.position;
             if (spider) CaptureSpider();
+            m_Captured = true;
         }
 
         void CaptureSpider()
@@ -75,6 +79,7 @@ namespace TrashAstronauts.Mission
             m_PalpRest = Capture(palps);
             if (abdomen != null) m_AbdomenRest = abdomen.localRotation;
             if (body != null) m_BodyRestRotation = body.localRotation;
+            CaptureFeet();
         }
 
         /// <summary>
@@ -89,7 +94,7 @@ namespace TrashAstronauts.Mission
             m_Gait += dt * rate * m_Awake;
             float swingAmp = Mathf.Lerp(7f, 24f, Mathf.Max(m_Aggression, moving * 0.5f));
             float liftAmp = Mathf.Lerp(5f, 20f, Mathf.Max(m_Aggression, moving * 0.4f));
-            float curl = 1f - m_Awake;
+            float curl = Mathf.Max(1f - m_Awake, OnThread ? 0.55f : 0f);
 
             int legs = shoulders != null ? shoulders.Length : 0;
             for (int i = 0; i < legs; i++)
@@ -199,7 +204,7 @@ namespace TrashAstronauts.Mission
 
             if (body != null)
             {
-                float bob = Mathf.Sin(t * (1.1f + m_Aggression * 3f)) * 0.03f * m_Awake;
+                float bob = Mathf.Sin(t * (1.1f + m_Aggression * 3f)) * Mathf.Lerp(0.03f, 0.007f, m_IkWeight) * m_Awake;
                 Vector3 jitter = m_Aggression > 0.6f ? Random.insideUnitSphere * 0.006f : Vector3.zero;
                 body.localPosition = m_BodyRest + new Vector3(0f, bob - (1f - m_Awake) * 0.12f, 0f) + jitter;
             }
@@ -207,6 +212,7 @@ namespace TrashAstronauts.Mission
             if (spider)
             {
                 AnimateSpider(t, dt, speed, state, scaring);
+                PlantFeet(dt, state, scaring);
                 return;
             }
 

@@ -55,6 +55,7 @@ namespace TrashAstronauts.EditorTools
                 var instance = Object.Instantiate(prefab, new Vector3(-3.9f + i * 2.6f, 1.4f, -60f), Quaternion.Euler(0f, 160f + i * 14f, 0f), roster.transform);
                 instance.hideFlags = HideFlags.HideAndDontSave;
                 foreach (var l in instance.GetComponentsInChildren<Light>(true)) l.enabled = false;
+                PlantPreviewSpider(instance);
             }
             foreach (float x in new[] { -3.5f, 0f, 3.5f })
             {
@@ -73,6 +74,7 @@ namespace TrashAstronauts.EditorTools
             Shot("14e_spider_widow", new Vector3(3.3f, 1.8f, -61.2f), new Vector3(3.9f, 1.4f, -60f));
             Shot("14f_spider_face", new Vector3(-4.15f, 1.38f, -60.75f), new Vector3(-3.9f, 1.36f, -60f));
             Object.DestroyImmediate(roster);
+            SpiderOnSurfaceShots();
 
             // Hands holding tools, posed exactly as the grab system will hold them.
             var rigPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(Builder.PrefabDir + "/PlayerRig.prefab");
@@ -272,6 +274,58 @@ namespace TrashAstronauts.EditorTools
             Object.DestroyImmediate(tex);
             Object.DestroyImmediate(rt);
             Object.DestroyImmediate(go);
+        }
+    
+        /// <summary>Stands a spider instance on whatever is under its feet (or on its own plane) with the planted-foot IK.</summary>
+        static void PlantPreviewSpider(GameObject instance)
+        {
+            var animator = instance.GetComponent<TrashAstronauts.Mission.CreatureAnimator>();
+            if (animator == null) return;
+            Physics.SyncTransforms();
+            animator.PoseFeetOnSurface();
+        }
+
+        /// <summary>A spider on the corridor wall and one on the ceiling, feet planted by the IK.</summary>
+        static void SpiderOnSurfaceShots()
+        {
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(Builder.PrefabDir + "/Drone_Janitor7.prefab");
+            if (prefab == null) return;
+            Physics.SyncTransforms();
+            Vector3 centre = Builder.FreighterPoint(0f, 1.3f, 15f);
+            int mask = TrashAstronauts.World.GameLayers.EnvironmentMask;
+            var holder = new GameObject("Preview Surface Spiders") { hideFlags = HideFlags.HideAndDontSave };
+            var light = new GameObject("Preview Light") { hideFlags = HideFlags.HideAndDontSave }.AddComponent<Light>();
+            light.transform.SetParent(holder.transform);
+            light.type = LightType.Point;
+            light.range = 7f;
+            light.intensity = 8f;
+
+            Vector3[] directions = { Vector3.right, Vector3.left, Vector3.up };
+            string[] names = { "14g_spider_wall", null, "14h_spider_ceiling" };
+            bool wallDone = false;
+            for (int d = 0; d < directions.Length; d++)
+            {
+                if (d == 1 && wallDone) continue;
+                if (!Physics.Raycast(centre, directions[d], out RaycastHit hit, 6f, mask, QueryTriggerInteraction.Ignore)) continue;
+                string name = names[d] ?? names[0];
+                var instance = Object.Instantiate(prefab, holder.transform);
+                instance.hideFlags = HideFlags.HideAndDontSave;
+                foreach (var l in instance.GetComponentsInChildren<Light>(true)) l.enabled = false;
+                var walker = instance.GetComponent<TrashAstronauts.Mission.SurfaceWalker>();
+                float height = walker != null ? walker.bodyHeight : 0.45f;
+                Vector3 normal = hit.normal;
+                Vector3 forward = Vector3.ProjectOnPlane(Vector3.forward, normal).normalized;
+                instance.transform.SetPositionAndRotation(hit.point + normal * height, Quaternion.LookRotation(forward, normal));
+                PlantPreviewSpider(instance);
+                Vector3 body = instance.transform.position;
+                Vector3 side = Vector3.Cross(normal, forward);
+                Vector3 eye = centre - directions[d] * 0.6f + Vector3.back * 1.6f + Vector3.up * (d == 2 ? -0.3f : 0.2f);
+                light.transform.position = Vector3.Lerp(eye, body, 0.4f) + side * 0.2f;
+                Shot(name, eye, body);
+                Object.DestroyImmediate(instance);
+                if (d < 2) wallDone = true;
+            }
+            Object.DestroyImmediate(holder);
         }
     }
 }
