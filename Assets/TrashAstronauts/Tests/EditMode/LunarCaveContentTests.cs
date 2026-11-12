@@ -75,7 +75,7 @@ namespace TrashAstronauts.Tests
             Assert.IsTrue(renderers.All(r => r.shadowCastingMode == UnityEngine.Rendering.ShadowCastingMode.Off || IsText(r)), "No realtime shadows on Quest.");
 
             // The rock is generated: warped, smooth-shaded, with a tiling rock texture and its normal map.
-            var basalt = renderers.FirstOrDefault(r => r.name == "Combined Basalt");
+            var basalt = renderers.FirstOrDefault(r => r.name.StartsWith("Combined Basalt"));
             Assert.IsNotNull(basalt, "The rock walls should be merged into one mesh.");
             var mat = basalt.sharedMaterial;
             Assert.IsNotNull(mat.GetTexture("_BaseMap"));
