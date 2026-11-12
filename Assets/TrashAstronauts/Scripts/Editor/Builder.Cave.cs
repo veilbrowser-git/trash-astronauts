@@ -241,7 +241,8 @@ namespace TrashAstronauts.EditorTools
             if (mat.name == "RockCeiling") return 14f;
             if (rock.Contains(mat)) return 10f;
             string n = mat.name;
-            if (n.StartsWith("Glow") || n == "Web" || n == "Stars" || n == "GuideLight") return 1000f;
+            if (n.StartsWith("Glow") || n == "Web" || n == "GuideLight") return 1000f;
+            if (n == "Stars") return 10f; // the sky over the skylight and the habitat window stay apart (previews hide the sky from above)
             return 24f;
         }
 
@@ -475,7 +476,7 @@ namespace TrashAstronauts.EditorTools
             // (built as a frame of ceiling around a hole, a shaft above it and a sky cap)
             {
                 var sky = Empty(s_Level, "D Skylight Shaft", Vector3.zero, null, GameLayers.Environment).transform;
-                const float top = 7.5f;
+                const float top = 6.2f; // close enough that the stars are not lost in the fog
                 Box(sky, "Shaft W", new Vector3(-9.1f, (SH + top) * 0.5f, 23f), new Vector3(0.2f, top - SH, 4.4f), M("Basalt"));
                 Box(sky, "Shaft E", new Vector3(-4.9f, (SH + top) * 0.5f, 23f), new Vector3(0.2f, top - SH, 4.4f), M("Basalt"));
                 Box(sky, "Shaft S", new Vector3(-7f, (SH + top) * 0.5f, 20.9f), new Vector3(4.4f, top - SH, 0.2f), M("Basalt"));
