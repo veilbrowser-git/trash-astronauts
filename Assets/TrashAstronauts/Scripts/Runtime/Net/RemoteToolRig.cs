@@ -259,7 +259,7 @@ namespace TrashAstronauts.Net
                 p.velocity = (normal * 0.9f + Random.insideUnitSphere * 0.75f).normalized * Random.Range(0.7f, 2.4f);
                 bool drop = i % 6 == 5;
                 p.startLifetime = drop ? Random.Range(0.6f, 1f) : Random.Range(0.18f, 0.42f);
-                p.startSize = drop ? Random.Range(0.012f, 0.02f) : Random.Range(0.006f, 0.014f);
+                p.startSize = drop ? Random.Range(0.008f, 0.014f) : Random.Range(0.004f, 0.01f);
                 p.startColor = drop ? new Color(1f, 0.45f, 0.08f) : Color.Lerp(new Color(1f, 0.95f, 0.7f), new Color(1f, 0.65f, 0.2f), Random.value);
                 if (drop) p.velocity *= 0.25f;
                 cutterSparks.Emit(p, 1);

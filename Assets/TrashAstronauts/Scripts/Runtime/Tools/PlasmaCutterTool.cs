@@ -48,6 +48,8 @@ namespace TrashAstronauts.Tools
         float m_HapticPhase;
         float m_LightBaseIntensity = -1f;
         Color m_LightBaseColor;
+        Vector3 m_LightHome;
+        Vector3 m_FlameNormal;
         float m_SparkDebt;
         float m_DropDebt;
         Cuttable m_SeamPanel;
@@ -100,6 +102,7 @@ namespace TrashAstronauts.Tools
             {
                 m_LightBaseIntensity = flameLight.intensity;
                 m_LightBaseColor = flameLight.color;
+                m_LightHome = flameLight.transform.localPosition;
             }
             if (sparks != null)
             {
@@ -270,7 +273,11 @@ namespace TrashAstronauts.Tools
             else if (m_Bite < 0.35f) Quality = CutQuality.Dwelling;
             else Quality = CutQuality.Clean;
 
-            if (IsCutting) EmitSparks(dt, m_Contacts[focus].point, CurrentPoint.Normal, speedEfficiency);
+            if (IsCutting)
+            {
+                m_FlameNormal = CurrentPoint.Normal;
+                EmitSparks(dt, m_Contacts[focus].point, CurrentPoint.Normal, speedEfficiency);
+            }
             if (IsCutting)
             {
                 m_SparkSoundTimer -= dt;
@@ -335,7 +342,7 @@ namespace TrashAstronauts.Tools
                 p.position = at + normal * 0.004f;
                 p.velocity = dir * Random.Range(0.8f, 2.6f) * (0.6f + 0.4f * speedEfficiency);
                 p.startLifetime = Random.Range(0.18f, 0.42f);
-                p.startSize = Random.Range(0.006f, 0.014f);
+                p.startSize = Random.Range(0.004f, 0.01f);
                 p.startColor = Color.Lerp(new Color(1f, 0.95f, 0.7f), new Color(1f, 0.65f, 0.2f), Random.value);
                 sparks.Emit(p, 1);
             }
@@ -346,7 +353,7 @@ namespace TrashAstronauts.Tools
                 p.position = at + normal * 0.003f;
                 p.velocity = dir * Random.Range(0.15f, 0.55f);
                 p.startLifetime = Random.Range(0.6f, 1.1f);
-                p.startSize = Random.Range(0.012f, 0.022f);
+                p.startSize = Random.Range(0.008f, 0.014f);
                 p.startColor = new Color(1f, Random.Range(0.35f, 0.55f), 0.08f);
                 sparks.Emit(p, 1);
             }
@@ -359,14 +366,18 @@ namespace TrashAstronauts.Tools
             {
                 if (firing && IsCutting)
                 {
-                    float flicker = 0.85f + 0.3f * Mathf.PerlinNoise(Time.time * 18f, 0.37f);
-                    flameLight.intensity = m_LightBaseIntensity * (0.95f + 0.35f * m_Bite) * flicker;
+                    float flicker = 0.75f + 0.25f * Mathf.PerlinNoise(Time.time * 18f, 0.37f);
+                                        flameLight.intensity = m_LightBaseIntensity * (0.26f + 0.06f * m_Bite) * flicker;
                     flameLight.color = Color.Lerp(m_LightBaseColor, new Color(1f, 0.62f, 0.3f), 0.35f + 0.3f * m_Bite);
+                    // Lit from a hand's breadth off the metal, as the spray of sparks lights it: a light a few
+                    // centimetres from the face would only burn a white hole into it.
+                    flameLight.transform.position = m_LastContact + m_FlameNormal * 0.3f;
                 }
                 else
                 {
                     flameLight.intensity = m_LightBaseIntensity;
                     flameLight.color = m_LightBaseColor;
+                    flameLight.transform.localPosition = m_LightHome;
                 }
             }
             if (loopSource != null)
@@ -438,8 +449,8 @@ namespace TrashAstronauts.Tools
                     switch (m_ShownQuality)
                     {
                         case CutQuality.Clean: hint = " GOOD"; break;
-                        case CutQuality.TooFast: hint = " SLOW"; break;
-                        case CutQuality.Dwelling: hint = " MOVE"; break;
+                        case CutQuality.TooFast: hint = " TOO FAST"; break;
+                        case CutQuality.Dwelling: hint = " MOVE ON"; break;
                         case CutQuality.Far: hint = " CLOSER"; break;
                         default: hint = ""; break;
                     }
