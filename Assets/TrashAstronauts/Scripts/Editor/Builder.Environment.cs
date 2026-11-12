@@ -18,6 +18,7 @@ namespace TrashAstronauts.EditorTools
     {
         public const string DressingName = "Env Dressing";
         public const string LabelsName = "Env Labels";
+        public const string LensesName = "Env Lenses";
 
         sealed class SurfaceStyle
         {
@@ -449,6 +450,7 @@ namespace TrashAstronauts.EditorTools
             bool OverFloor(Vector3 p) => floors.Any(f => p.x > f.min.x + 0.05f && p.x < f.max.x - 0.05f && p.z > f.min.z + 0.05f && p.z < f.max.z - 0.05f);
 
             // --- light fixtures: a housing and a glowing lens on the ceiling above each lamp
+            Transform lensRoot = null;
             float lensR = 0f, lensG = 0f, lensB = 0f;
             int lamps = 0;
             foreach (var light in root.GetComponentsInChildren<Light>(true))
@@ -476,7 +478,15 @@ namespace TrashAstronauts.EditorTools
                 Vector3 wid = alongX ? new Vector3(0f, 0f, 0.22f) : new Vector3(0.22f, 0f, 0f);
                 Vector3 top = new Vector3(p.x, best, p.z);
                 AddBox(top + Vector3.down * 0.04f, len + wid + new Vector3(0f, 0.08f, 0f), M("Trim"));
-                AddBox(top + Vector3.down * 0.084f, len * 0.86f + wid * 0.62f + new Vector3(0f, 0.012f, 0f), M("FixtureLens"));
+                // The lens is its own small renderer so it can go dark with its lamp (dead, failing, blackout).
+                if (lensRoot == null) lensRoot = Empty(level, LensesName, Vector3.zero, null, GameLayers.Default).transform;
+                var lensGo = Box(lensRoot, "Fixture Lens", top + Vector3.down * 0.084f, len * 0.86f + wid * 0.62f + new Vector3(0f, 0.012f, 0f), M("FixtureLens"), GameLayers.Default, false, false);
+                var follower = lensGo.AddComponent<LampLens>();
+                follower.lamp = light;
+                follower.lens = lensGo.GetComponent<MeshRenderer>();
+                follower.fullIntensity = light.intensity;
+                follower.litEmission = M("FixtureLens").GetColor("_EmissionColor");
+                follower.litBase = M("FixtureLens").GetColor("_BaseColor");
                 // a wire cage over the lens
                 for (int i = -2; i <= 2; i++)
                     AddBox(top + Vector3.down * 0.094f + len * (i * 0.2f), (alongX ? new Vector3(0.012f, 0.008f, 0.2f) : new Vector3(0.2f, 0.008f, 0.012f)), M("Steel"));

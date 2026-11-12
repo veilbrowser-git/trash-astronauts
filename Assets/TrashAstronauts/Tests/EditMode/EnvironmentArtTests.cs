@@ -75,6 +75,12 @@ namespace TrashAstronauts.Tests
                 var renderers = dressing.GetComponentsInChildren<MeshRenderer>(true);
                 var labels = map.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name == "Env Labels");
                 int labelRenderers = labels != null ? labels.GetComponentsInChildren<Renderer>(true).Length : 0;
+                var lenses = map.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name == "Env Lenses");
+                if (lenses != null)
+                {
+                    labelRenderers += lenses.GetComponentsInChildren<Renderer>(true).Length;
+                    Assert.IsEmpty(lenses.GetComponentsInChildren<Collider>(true), map.mapId + ": lenses must never block a route.");
+                }
                 if (labels != null) Assert.IsEmpty(labels.GetComponentsInChildren<Collider>(true), map.mapId + ": labels must never block a route.");
                 Assert.LessOrEqual(renderers.Length + labelRenderers, 60, map.mapId + ": too many extra draw calls.");
                 int triangles = renderers.Sum(r => r.GetComponent<MeshFilter>().sharedMesh.triangles.Length / 3);
