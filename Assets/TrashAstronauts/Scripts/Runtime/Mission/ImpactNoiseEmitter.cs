@@ -24,6 +24,10 @@ namespace TrashAstronauts.Mission
         public float audioCooldown = 0.2f;
 
         float m_LastAudio = -10f;
+        Rigidbody m_Body;
+
+        /// <summary>The last knock's strength as a speed-equivalent (m/s) after impulse and material are counted.</summary>
+        public float LastImpactStrength { get; private set; }
         float m_LastNoise = -10f;
         float m_SpawnTime;
         SalvageItem m_Item;
@@ -114,17 +118,27 @@ namespace TrashAstronauts.Mission
             // Delicate salvage is worth less every time it is banged into something.
             if (m_Item != null && simulatedHere) m_Item.ApplyImpact(speed);
 
+            // How hard it really was: the collision impulse (heavier things hit harder at the same speed,
+            // glancing blows softer) and what it is made of (rubber thuds, bare metal clangs).
+            if (m_Body == null) m_Body = GetComponent<Rigidbody>();
+            float impulse = collision.impulse.magnitude;
+            float strength = TrashAstronauts.World.RealPhysics.ImpactStrength(speed, impulse, m_Body.mass, surface);
+            LastImpactStrength = strength;
+
             if (Time.time - m_LastAudio >= audioCooldown && Sfx.Library != null)
             {
                 m_LastAudio = Time.time;
-                float volume = Mathf.Clamp01(speed / 6f);
-                Sfx.PlayAt(heavy ? Sfx.Library.impactHeavy : Sfx.Library.impactLight, point, volume, Random.Range(0.9f, 1.1f), 18f);
+                float volume = Mathf.Clamp01(strength / 6f);
+                bool deep = heavy || impulse > 40f;
+                // Lighter, springier things sound a little higher.
+                float pitch = Random.Range(0.9f, 1.1f) * (surface == TrashAstronauts.World.SurfaceKind.RubberPlastic ? 1.15f : deep ? 0.9f : 1f);
+                Sfx.PlayAt(deep ? Sfx.Library.impactHeavy : Sfx.Library.impactLight, point, volume, pitch, 18f);
             }
 
             var director = MissionDirector.Active;
             if (director == null || director.noise == null) return;
             if (!simulatedHere) return;
-            if (NoiseRules.TryEvaluateImpact(speed, Time.time - m_LastNoise, director.Config.noise, out float loudness))
+            if (NoiseRules.TryEvaluateImpact(strength, Time.time - m_LastNoise, director.Config.noise, out float loudness))
             {
                 m_LastNoise = Time.time;
                 director.noise.Emit(new NoiseEvent(point, loudness * loudnessScale, NoiseKind.Impact, NoiseSource));

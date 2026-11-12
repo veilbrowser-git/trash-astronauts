@@ -136,18 +136,12 @@ namespace TrashAstronauts.EditorTools
             grab.retainTransformParent = false;
             grab.selectMode = InteractableSelectMode.Single;
             // Throws follow the last fifth of a second of hand movement, so a flick of the wrist counts.
+            // The release keeps the hand's true velocity and spin (no boost); HeldWeight limits it to what
+            // an arm can give the object's mass, and makes heavy things lag and swing while held.
             grab.throwSmoothingDuration = 0.18f;
-            grab.throwVelocityScale = 1.25f;
-            grab.throwAngularVelocityScale = 0.9f;
-            if (heavy)
-            {
-                // Bulky items lag behind the hand a little, which reads as weight.
-                grab.smoothPosition = true;
-                grab.smoothPositionAmount = 6f;
-                grab.smoothRotation = true;
-                grab.smoothRotationAmount = 6f;
-                grab.throwVelocityScale = 0.7f;
-            }
+            grab.throwVelocityScale = 1f;
+            grab.throwAngularVelocityScale = 1f;
+            go.AddComponent<HeldWeight>();
 
             highlight = go.AddComponent<HoverHighlight>();
             highlight.renderers = go.GetComponentsInChildren<MeshRenderer>();

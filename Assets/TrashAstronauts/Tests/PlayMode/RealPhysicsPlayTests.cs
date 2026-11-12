@@ -342,5 +342,241 @@ namespace TrashAstronauts.Tests
             Assert.Greater(lost[1] - lost[0], 0.15f, "Shouldering the " + heavy.Body.mass + " kg " + heavy.name + " slows you right down.");
             Assert.Less(lost[1], 1.2f, "But you do not bounce back off it.");
         }
+        // ------------------------------------------------------------------ weight in the hand
+
+        void HandsUnderTestControl()
+        {
+            foreach (var driver in m_Player.GetComponentsInChildren<UnityEngine.InputSystem.XR.TrackedPoseDriver>()) driver.enabled = false;
+        }
+
+        IEnumerator LetGo(HandRig hand)
+        {
+            hand.interactor.selectInput.QueueManualState(false, 0f, false, true);
+            hand.GripOverride = 0f;
+            yield return null;
+            yield return null;
+            Assert.IsFalse(hand.IsHolding);
+        }
+
+        /// <summary>Moves the hand 0.3 m forward at about 1.5 m/s and returns how far the grip point trails it.</summary>
+        IEnumerator SwingAndMeasureLag(HandRig hand, SalvageItem item, float[] gap)
+        {
+            var weight = item.GetComponent<HeldWeight>();
+            Assert.IsNotNull(weight, item.name + " has weight in the hand.");
+            for (int i = 0; i < 14; i++)
+            {
+                hand.transform.position += Vector3.forward * 0.0214f;
+                yield return new WaitForFixedUpdate();
+            }
+            gap[0] = weight.GripGap;
+            for (int i = 0; i < 108; i++) yield return new WaitForFixedUpdate();
+            gap[1] = weight.GripGap;
+        }
+
+        [UnityTest]
+        public IEnumerator LightThingsFollowTheHandExactly_HeavyThingsLagAndCatchUp()
+        {
+            m_Director.StartMission(PlayerId.Local);
+            yield return FloatInCargoBay();
+            HandsUnderTestControl();
+            var hand = m_Player.rightHand;
+            var duck = m_Director.Items.First(i => i.definition != null && i.definition.id == "novelty_rubber_duck");
+            var core = m_Director.Items.Where(i => !i.IsMounted && i.definition != null).OrderByDescending(i => i.Body.mass).First();
+            HeldWeight.Follow(duck.Body.mass, out float duckScale, out float duckDamping);
+            Assert.AreEqual(1f, duckScale, "Light things follow the hand exactly.");
+            Assert.AreEqual(1f, duckDamping);
+            HeldWeight.Follow(core.Body.mass, out float coreScale, out _);
+            Assert.Less(coreScale, 0.5f);
+
+            Vector3 home = hand.transform.position;
+            yield return GrabWith(hand, duck);
+            var duckGap = new float[2];
+            yield return SwingAndMeasureLag(hand, duck, duckGap);
+            yield return LetGo(hand);
+            duck.Body.position = duck.transform.position = home + Vector3.up * 40f;
+            duck.Body.linearVelocity = Vector3.zero;
+
+            hand.transform.position = home;
+            m_Player.locomotion.zeroG.Stop();
+            yield return null;
+            yield return GrabWith(hand, core);
+            var coreGap = new float[2];
+            yield return SwingAndMeasureLag(hand, core, coreGap);
+            Assert.IsTrue(hand.IsHolding, "A brisk swing must not tear the core out of the hand.");
+            yield return LetGo(hand);
+
+            Assert.Less(duckGap[0], 0.06f, "The duck stays in the hand during the swing.");
+            Assert.Greater(coreGap[0], duckGap[0] + 0.04f, "The " + core.Body.mass + " kg core trails the hand: duck " + duckGap[0] + ", core " + coreGap[0]);
+            Assert.Less(coreGap[0], 0.4f, "But only a little.");
+            Assert.Less(coreGap[1], 0.06f, "And catches up once the hand stops.");
+        }
+
+        [UnityTest]
+        public IEnumerator AHeldObject_IsStoppedByWalls_AndTheGripSlipsWhenTheHandPullsTooFar()
+        {
+            m_Director.StartMission(PlayerId.Local);
+            yield return FloatInCargoBay();
+            HandsUnderTestControl();
+            var hand = m_Player.rightHand;
+            var item = Loose("elec_comms_relay");
+            yield return GrabWith(hand, item);
+            var weight = item.GetComponent<HeldWeight>();
+            int slips = 0;
+            weight.Slipped += _ => slips++;
+
+            // A plate on the Default layer: the item collides with it, the hand's solidity check does not see it.
+            var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            Object.Destroy(wall.GetComponent<MeshRenderer>());
+            wall.transform.localScale = new Vector3(0.8f, 0.8f, 0.04f);
+            float wallZ = hand.interactor.transform.position.z + 0.3f;
+            wall.transform.position = new Vector3(item.transform.position.x, item.transform.position.y, wallZ);
+            Physics.SyncTransforms();
+
+            float deepest = float.MinValue;
+            for (int i = 0; i < 72 && hand.IsHolding; i++)
+            {
+                hand.transform.position += Vector3.forward * 0.014f; // 1 m/s, straight through the plate
+                yield return new WaitForFixedUpdate();
+                foreach (var c in item.GetComponentsInChildren<Collider>())
+                    if (!c.isTrigger) deepest = Mathf.Max(deepest, c.bounds.max.z);
+            }
+            Object.Destroy(wall);
+            Assert.Less(deepest, wallZ + 0.02f + 0.04f, "The held item must stop at the plate, not pass through it.");
+            Assert.IsFalse(hand.IsHolding, "The grip should slip once the hand is pulled well past where the item is stuck.");
+            Assert.AreEqual(1, slips);
+            Assert.AreEqual(1, weight.SlipCount);
+        }
+
+        [UnityTest]
+        public IEnumerator Throws_KeepTheTrueReleaseVelocity_UpToWhatAnArmCanGiveThatMass()
+        {
+            Assert.Greater(RealPhysics.MaxThrowSpeed(0.1f), 13f);
+            Assert.Less(RealPhysics.MaxThrowSpeed(40f), 5f);
+            Assert.Greater(RealPhysics.MaxThrowSpeed(3f), RealPhysics.MaxThrowSpeed(6f));
+
+            m_Director.StartMission(PlayerId.Local);
+            yield return FloatInCargoBay();
+            HandsUnderTestControl();
+            var hand = m_Player.rightHand;
+            var duck = m_Director.Items.First(i => i.definition != null && i.definition.id == "novelty_rubber_duck");
+            var core = m_Director.Items.Where(i => !i.IsMounted && i.definition != null).OrderByDescending(i => i.Body.mass).First();
+            var results = new Vector3[2];
+            var spins = new float[2];
+            var throwDirs = new Vector3[2];
+            for (int pass = 0; pass < 2; pass++)
+            {
+                var item = pass == 0 ? duck : core;
+                yield return FloatInCargoBay();
+                yield return GrabWith(hand, item);
+                yield return LetGo(hand);
+                // A wild flick, as if the hand had been moving this fast as it let go.
+                Vector3 thrower = m_Player.locomotion.zeroG.Velocity;
+                Vector3 open = OpenDirection(item.transform.position, out _);
+                throwDirs[pass] = open;
+                item.Body.linearVelocity = thrower + open * 10f;
+                item.Body.angularVelocity = Vector3.up * 30f;
+                yield return new WaitForFixedUpdate();
+                results[pass] = item.Body.linearVelocity - thrower;
+                spins[pass] = item.Body.angularVelocity.magnitude;
+                item.Body.linearVelocity = Vector3.zero;
+                item.Body.angularVelocity = Vector3.zero;
+                item.Body.position = item.transform.position = hand.transform.position + Vector3.up * (40f + pass * 3f);
+                Physics.SyncTransforms();
+            }
+            Assert.AreEqual(10f, results[0].magnitude, 0.3f, "The duck leaves with the hand's true speed: " + results[0]);
+            Assert.AreEqual(RealPhysics.MaxThrowSpeed(core.Body.mass), results[1].magnitude, 0.3f, "Nobody can hurl a " + core.Body.mass + " kg core at 10 m/s: " + results[1]);
+            Assert.Greater(Vector3.Dot(results[1].normalized, throwDirs[1]), 0.95f, "The direction of the throw is kept.");
+            Assert.Greater(spins[0], 20f, "A light thing keeps a fast flick's spin.");
+            Assert.Less(spins[1], 10f, "A heavy one cannot be spun up like that by a wrist.");
+        }
+
+        // ------------------------------------------------------------------ contacts that read as real
+
+        /// <summary>Sends the item into the nearest-open wall at this speed and returns the loudest impact noise it made (0 = none).</summary>
+        IEnumerator KnockIntoAWall(SalvageItem item, float speed, float[] loudest)
+        {
+            var emitter = item.GetComponent<ImpactNoiseEmitter>();
+            // From the middle of the cargo bay (nobody is there) toward its nearest wall.
+            Vector3 from = new Vector3(0f, 0.9f, 9.2f);
+            Vector3 dir = Vector3.forward;
+            float clear = 100f;
+            foreach (var d in new[] { Vector3.forward, Vector3.back, Vector3.left, Vector3.right, Vector3.up, Vector3.down })
+            {
+                if (Physics.SphereCast(from, 0.3f, d, out RaycastHit hit, 30f, ~0, QueryTriggerInteraction.Ignore) && hit.distance > 1.1f && hit.distance < clear)
+                {
+                    clear = hit.distance;
+                    dir = d;
+                }
+            }
+            Assume.That(clear, Is.InRange(1.1f, 29f));
+            Vector3 near = from + dir * (clear - 0.8f);
+            item.Body.position = near;
+            item.transform.position = near;
+            item.Body.angularVelocity = Vector3.zero;
+            Physics.SyncTransforms();
+            float heard = 0f;
+            System.Action<NoiseEvent> listen = n => { if (n.Kind == NoiseKind.Impact) heard = Mathf.Max(heard, n.Loudness); };
+            m_Director.noise.NoiseEmitted += listen;
+            yield return new WaitForSeconds(1.1f); // past the emitter's settle-in time after spawning
+            item.Body.linearVelocity = dir * speed;
+            for (int i = 0; i < 60; i++) yield return new WaitForFixedUpdate();
+            m_Director.noise.NoiseEmitted -= listen;
+            loudest[0] = heard;
+            loudest[1] = emitter.LastImpactStrength;
+        }
+
+        [UnityTest]
+        public IEnumerator Knocks_AreAsLoudAsTheirImpulse_AndTheirMaterial()
+        {
+            Assert.Greater(RealPhysics.ImpactStrength(3f, 40f * 1.3f * 3f, 40f, SurfaceKind.PaintedMetal), RealPhysics.ImpactStrength(3f, 3.5f * 1.3f * 3f, 3.5f, SurfaceKind.PaintedMetal) * 1.5f);
+            Assert.Less(RealPhysics.ImpactStrength(3f, 0.1f * 1.6f * 3f, 0.1f, SurfaceKind.RubberPlastic), 1f);
+
+            m_Director.StartMission(PlayerId.Local);
+            yield return Steps(2);
+            var duck = m_Director.Items.First(i => i.definition != null && i.definition.id == "novelty_rubber_duck");
+            var core = m_Director.Items.Where(i => !i.IsMounted && i.definition != null).OrderByDescending(i => i.Body.mass).First();
+            var duckNoise = new float[2];
+            var coreNoise = new float[2];
+            // The same 3 m/s knock: past the old speed-only threshold for both.
+            yield return KnockIntoAWall(duck, 3f, duckNoise);
+            yield return KnockIntoAWall(core, 3f, coreNoise);
+            Assert.Greater(coreNoise[1], duckNoise[1] * 3f, "The core hits far harder than the duck: " + coreNoise[1] + " vs " + duckNoise[1]);
+            Assert.Greater(coreNoise[0], 0f, "The creature hears the reactor core bang into the wall.");
+            Assert.AreEqual(0f, duckNoise[0], "A rubber duck bumping a wall is not a gameplay noise.");
+        }
+
+        [UnityTest]
+        public IEnumerator AClosingDoor_EasesLooseThingsOutOfTheDoorway_InsteadOfTrappingThem()
+        {
+            m_Director.StartMission(PlayerId.Local);
+            yield return Steps(2);
+            var door = Object.FindObjectsByType<SlidingDoor>(FindObjectsSortMode.None)
+                .Where(d => !d.locked && d.leaf != null).OrderByDescending(d => Vector3.Distance(d.transform.position, m_Player.transform.position)).First();
+            door.SetOpen(true, true);
+            yield return Steps(2);
+            var item = Loose("elec_comms_relay");
+            Vector3 center = door.transform.position + Vector3.up * 0.6f + door.transform.forward * 0.03f;
+            item.Body.linearVelocity = Vector3.zero;
+            item.Body.angularVelocity = Vector3.zero;
+            item.Body.position = center;
+            item.transform.position = center;
+            Physics.SyncTransforms();
+            yield return Steps(2);
+
+            door.SetOpen(false);
+            Assert.IsTrue(door.IsOpen, "The door waits while something is floating in its way.");
+            for (float t = 0f; t < 4f && door.IsOpen; t += Time.deltaTime) yield return null;
+            Assert.Greater(door.ObjectsCleared, 0);
+            Assert.IsFalse(door.IsOpen, "Once the doorway is clear the door shuts.");
+            for (float t = 0f; t < door.duration + 0.5f; t += Time.deltaTime) yield return null;
+            float off = Mathf.Abs(Vector3.Dot(item.transform.position - door.transform.position, door.transform.forward));
+            Assert.Greater(off, door.doorwaySize.z * 0.5f, "The item was eased out of the doorway, to the side it was on.");
+            Assert.Greater(Vector3.Dot(item.transform.position - door.transform.position, door.transform.forward), 0f);
+            foreach (var c in item.GetComponentsInChildren<Collider>())
+                foreach (var leafCollider in door.leaf.GetComponentsInChildren<Collider>())
+                    if (!c.isTrigger && !leafCollider.isTrigger)
+                        Assert.IsFalse(Physics.ComputePenetration(c, c.transform.position, c.transform.rotation, leafCollider, leafCollider.transform.position, leafCollider.transform.rotation, out _, out _),
+                            "Nothing is left stuck inside the shut door.");
+        }
     }
 }

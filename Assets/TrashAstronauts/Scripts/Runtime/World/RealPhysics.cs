@@ -85,6 +85,23 @@ namespace TrashAstronauts.World
             }
         }
 
+        /// <summary>Impulse per (m/s) of a 2 kg painted-metal reference object hitting a wall head on (kg).</summary>
+        const float ReferenceImpulsePerSpeed = 2.6f;
+
+        /// <summary>
+        /// How hard a knock is, as the speed at which the 2 kg reference object would make the same noise.
+        /// Scales with the square root of the collision impulse per unit of closing speed (so the 40 kg core
+        /// is about twice as loud as a box of electronics, and the duck about a third), and with the
+        /// material. Falls back to the body's own mass when PhysX reports no impulse.
+        /// </summary>
+        public static float ImpactStrength(float relativeSpeed, float impulse, float mass, SurfaceKind surface)
+        {
+            if (relativeSpeed <= 0f) return 0f;
+            float effectiveMass = impulse > 1e-4f ? impulse / relativeSpeed : mass * 1.3f;
+            float massFactor = Mathf.Clamp(Mathf.Sqrt(effectiveMass / ReferenceImpulsePerSpeed), 0.35f, 2.2f);
+            return relativeSpeed * massFactor * Loudness(surface);
+        }
+
         /// <summary>How loud a knock on this surface is for the same impulse (rubber thuds, metal clangs).</summary>
         public static float Loudness(SurfaceKind kind)
         {

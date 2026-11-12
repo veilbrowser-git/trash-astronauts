@@ -35,6 +35,11 @@ namespace TrashAstronauts.World
         bool m_PendingClose;
         float m_Openness;
         readonly Collider[] m_Hits = new Collider[4];
+        readonly Collider[] m_Loose = new Collider[16];
+        [Tooltip("Speed (m/s) at which a closing door eases loose objects out of the doorway before it shuts.")]
+        public float clearSpeed = 0.6f;
+        /// <summary>How many times this door has eased a loose object out of its way.</summary>
+        public int ObjectsCleared { get; private set; }
 
         public bool IsOpen => m_TargetOpen;
         public bool IsFullyOpen => m_Openness >= 0.999f;
@@ -149,7 +154,38 @@ namespace TrashAstronauts.World
             Vector3 center = transform.position + Vector3.up * (doorwaySize.y * 0.5f);
             int count = Physics.OverlapBoxNonAlloc(center, doorwaySize * 0.5f, m_Hits, transform.rotation,
                 1 << GameLayers.Player, QueryTriggerInteraction.Ignore);
-            return count > 0;
+            return count > 0 | EaseLooseObjectsOut(center);
+        }
+
+        /// <summary>
+        /// Loose things floating in the doorway are eased out of it, to whichever side they are already
+        /// on, rather than the leaf slicing down through them or pinning them against the floor. Returns
+        /// true while any are still in the way (the door waits). Bodies another machine simulates or that
+        /// are held are left alone; they are kinematic or in a hand.
+        /// </summary>
+        bool EaseLooseObjectsOut(Vector3 center)
+        {
+            int count = Physics.OverlapBoxNonAlloc(center, doorwaySize * 0.5f, m_Loose, transform.rotation,
+                GameLayers.SalvageMask, QueryTriggerInteraction.Ignore);
+            bool blocked = false;
+            Vector3 normal = transform.forward;
+            for (int i = 0; i < count; i++)
+            {
+                var body = m_Loose[i] != null ? m_Loose[i].attachedRigidbody : null;
+                if (body == null || body.isKinematic) continue;
+                var item = body.GetComponent<SalvageItem>();
+                if (item != null && (item.IsHeld || item.IsSecured)) continue;
+                blocked = true;
+                float side = Vector3.Dot(body.worldCenterOfMass - center, normal) >= 0f ? 1f : -1f;
+                float outward = Vector3.Dot(body.linearVelocity, normal) * side;
+                if (outward < clearSpeed)
+                {
+                    body.WakeUp();
+                    body.AddForce(normal * (side * (clearSpeed - outward)), ForceMode.VelocityChange);
+                    ObjectsCleared++;
+                }
+            }
+            return blocked;
         }
 
         void Update()
