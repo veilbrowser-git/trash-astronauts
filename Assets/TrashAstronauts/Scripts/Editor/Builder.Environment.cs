@@ -17,6 +17,7 @@ namespace TrashAstronauts.EditorTools
     public static partial class Builder
     {
         public const string DressingName = "Env Dressing";
+        public const string LabelsName = "Env Labels";
 
         sealed class SurfaceStyle
         {
@@ -482,6 +483,21 @@ namespace TrashAstronauts.EditorTools
                 lensR += light.color.r; lensG += light.color.g; lensB += light.color.b; lamps++;
             }
 
+            // Things a wall box must keep clear of: signs, windows, racks, panels, doors, salvage spots.
+            var keepClear = renderers.Where(r => r.name != "Segment" && r.name != "Floor" && r.name != "Ceiling" && r.name != "Skirting" && r.name != "Cornice"
+                    && r.bounds.size.x < 6f && r.bounds.size.z < 6f).Select(r => r.bounds).ToList();
+            var keepClearPoints = new List<Vector3>();
+            if (map.spawnPoints != null) keepClearPoints.AddRange(map.spawnPoints.Where(p => p != null).Select(p => p.transform.position));
+            if (map.cuttables != null) keepClearPoints.AddRange(map.cuttables.Where(c => c != null).Select(c => c.transform.position));
+            if (map.doors != null) keepClearPoints.AddRange(map.doors.Where(d => d != null).Select(d => d.transform.position));
+            bool Clear(Bounds b)
+            {
+                var grown = b;
+                grown.Expand(0.1f);
+                return !keepClear.Any(k => k.Intersects(grown)) && !keepClearPoints.Any(p => (grown.ClosestPoint(p) - p).sqrMagnitude < 0.8f * 0.8f);
+            }
+            var labels = new List<(Vector3 at, Vector3 normal, string text)>();
+
             // --- pipe runs, cables and brackets high on full-height walls that face a floor
             var pipeMat = styleId == "Barge" ? M("Rust_Pipe") : styleId == "Survey" ? M("PaintWhite") : M("Pipe");
             int wallIndex = 0;
@@ -515,6 +531,22 @@ namespace TrashAstronauts.EditorTools
                     AddTube(b + Vector3.up * y1, b + Vector3.up * y1 + o1, 0.045f, pipeMat);
                     AddTube(a + Vector3.up * y2, a + Vector3.up * y2 + o2, 0.028f, M("Steel"));
                     AddTube(b + Vector3.up * y2, b + Vector3.up * y2 + o2, 0.028f, M("Steel"));
+                    // a junction box with a conduit up to the cable run, a hazard band and a stencilled number
+                    {
+                        float along = (((wallIndex * 5 + side) & 1) == 0 ? 0.3f : -0.3f) * half;
+                        Vector3 boxAt = face + axis * along + Vector3.up * 1.75f + normal * 0.06f;
+                        Vector3 boxSize = alongX ? new Vector3(0.36f, 0.42f, 0.12f) : new Vector3(0.12f, 0.42f, 0.36f);
+                        if (half > 0.5f && Clear(new Bounds(boxAt, boxSize)))
+                        {
+                            AddBox(boxAt, boxSize, styleId == "Survey" ? M("PaintWhite") : M("Trim"));
+                            Vector3 lid = alongX ? new Vector3(0.3f, 0.36f, 0.01f) : new Vector3(0.01f, 0.36f, 0.3f);
+                            AddBox(boxAt + normal * 0.064f, lid, M("Steel"));
+                            Vector3 band = alongX ? new Vector3(0.36f, 0.05f, 0.125f) : new Vector3(0.125f, 0.05f, 0.36f);
+                            AddBox(boxAt + Vector3.down * 0.235f + normal * 0.002f, band, M("Hazard"));
+                            AddTube(boxAt + Vector3.up * 0.21f + normal * -0.01f, new Vector3(boxAt.x, yc - 0.03f, boxAt.z) + normal * -0.01f, 0.016f, M("Cable"), 6);
+                            if (labels.Count < 12) labels.Add((boxAt + normal * 0.071f + Vector3.up * 0.1f, normal, (styleId == "Barge" ? "PWR " : styleId == "Survey" ? "DIST-" : "J-BOX ") + (10 + wallIndex * 3 + (side > 0 ? 1 : 0))));
+                        }
+                    }
                     int spans = Mathf.Max(1, Mathf.RoundToInt((2f * half) / 1.1f));
                     for (int i = 0; i <= spans; i++)
                     {
@@ -566,7 +598,11 @@ namespace TrashAstronauts.EditorTools
                 mr.sharedMaterial = kv.Key;
                 Cheap(mr);
             }
-            Debug.Log("[Builder] Dressed " + styleId + ": " + lamps + " fixtures, " + parts.Count + " renderers, "
+            var labelRoot = Empty(level, LabelsName, Vector3.zero, null, GameLayers.Default).transform;
+            foreach (var l in labels)
+                Text(labelRoot, "Stencil", l.text, l.at, Facing(l.normal), 0.5f, new Vector2(0.3f, 0.08f), new Color(0.85f, 0.83f, 0.75f, 0.8f));
+            int labelCount = labels.Count;
+            Debug.Log("[Builder] Dressed " + styleId + ": " + labelCount + " labels" + ": " + lamps + " fixtures, " + parts.Count + " renderers, "
                 + parts.Sum(kv => kv.Value.Sum(ci => ci.mesh.triangles.Length / 3)) + " triangles.");
         }
 

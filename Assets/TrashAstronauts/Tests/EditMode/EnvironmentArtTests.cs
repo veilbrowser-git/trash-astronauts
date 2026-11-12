@@ -73,7 +73,10 @@ namespace TrashAstronauts.Tests
                 dressed++;
                 Assert.IsEmpty(dressing.GetComponentsInChildren<Collider>(true), map.mapId + ": decoration must never block a route.");
                 var renderers = dressing.GetComponentsInChildren<MeshRenderer>(true);
-                Assert.LessOrEqual(renderers.Length, 60, map.mapId + ": too many extra draw calls.");
+                var labels = map.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name == "Env Labels");
+                int labelRenderers = labels != null ? labels.GetComponentsInChildren<Renderer>(true).Length : 0;
+                if (labels != null) Assert.IsEmpty(labels.GetComponentsInChildren<Collider>(true), map.mapId + ": labels must never block a route.");
+                Assert.LessOrEqual(renderers.Length + labelRenderers, 60, map.mapId + ": too many extra draw calls.");
                 int triangles = renderers.Sum(r => r.GetComponent<MeshFilter>().sharedMesh.triangles.Length / 3);
                 Assert.LessOrEqual(triangles, 60000, map.mapId + ": too many extra triangles.");
                 foreach (var r in renderers)
