@@ -87,14 +87,15 @@ namespace TrashAstronauts.Core
         [Min(1f)] public float quotaSafetyMargin = 1.3f;
 
         [Header("Oxygen")]
-        [Tooltip("Seconds of oxygen without upgrades. ~10 minutes by design.")]
-        [Min(5f)] public float baseOxygenSeconds = 600f;
+        [Tooltip("Seconds of oxygen without upgrades. About 13 minutes: it was 10 (600 s) until the bigger-maps update made every floor plan 1.5x, which made a competent run's oxygen use about a third longer.")]
+        [Min(5f)] public float baseOxygenSeconds = 800f;
         [Range(0f, 1f)] public float oxygenLowFraction = 0.30f;
         [Range(0f, 1f)] public float oxygenCriticalFraction = 0.12f;
 
         [Header("Progression")]
         [Min(0)] public int oxygenUpgradeCost = 600;
-        [Min(0f)] public float oxygenUpgradeBonusSeconds = 180f;
+        [Tooltip("Seconds the tank upgrade adds (180 before the bigger-maps update, scaled with the base by 4/3).")]
+        [Min(0f)] public float oxygenUpgradeBonusSeconds = 240f;
         [Min(0)] public int maxOxygenUpgradeLevel = 1;
 
         [Header("Loot counts per run")]

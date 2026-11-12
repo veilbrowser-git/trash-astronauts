@@ -279,7 +279,9 @@ namespace TrashAstronauts.Tests
             var rec = Host();
             Assert.IsTrue(m_Director.StartMission(m_Director.LocalPlayerId));
             yield return Frames(2);
-            var crew = AddRemotePlayer(1, MapPoints.Freighter(0f, 0f, 19.6f));
+            // In the spine corridor, with the creature set down 3 m beyond the crew member and about 1.6 m past its
+            // nearest waypoint, so its route starts back toward them (as it did before the bigger-maps update).
+            var crew = AddRemotePlayer(1, MapPoints.Freighter(0f, 0f, 17.7f));
             yield return Frames(3);
             Assert.IsTrue(m_Player.InSafeZone, "The host watches from the tug.");
             Assert.IsFalse(crew.InSafeZone);
@@ -306,7 +308,7 @@ namespace TrashAstronauts.Tests
                     Assert.AreEqual(1, s.targetSlot, "The stream names the quarry.");
                 }
             }
-            Assert.IsTrue(chasedTheCrew, "It should have chased the crew member.");
+            Assert.IsTrue(chasedTheCrew, "It should have chased the crew member (states: " + string.Join(", ", brainChanges) + "; it ended at " + creature.transform.position + ", the crew at " + crew.HeadPosition + ").");
             Assert.IsTrue(creature.IsScaring, "It should have caught the crew member's stand-in.");
             float caughtAt = Time.unscaledTime;
             Assert.AreEqual(new PlayerId(1), creature.CatchVictim);
