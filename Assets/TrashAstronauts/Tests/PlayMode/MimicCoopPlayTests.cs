@@ -457,6 +457,7 @@ namespace TrashAstronauts.Tests
         [UnityTest]
         public IEnumerator Client_VoiceChatOff_TellsTheHost_AndTheCreaturesVoiceIsNotPlayed()
         {
+            m_Player.voice.LevelOverride = 0.0005f; // a quiet room: the microphone is "on" (no real one in tests)
             var host = AddScriptedHost();
             yield return JoinMimicRun(host);
             var chat = VoiceChat.Active;
@@ -464,9 +465,16 @@ namespace TrashAstronauts.Tests
             host.Session.VoiceReceived += heard.On;
             yield return Frames(5);
             Assert.AreEqual(0, heard.Frames.Count);
+            Assert.IsTrue(chat.Mimic.HostMayKeepMyVoice, "with a Mimic aboard the host may keep this player's phrases");
+            var wrist = Object.FindAnyObjectByType<TrashAstronauts.UI.WristDisplay>();
+            yield return RealTimeUntil(() => wrist.voiceText.text.Contains("REC"), 1f);
+            StringAssert.Contains("REC", wrist.voiceText.text, "and the wrist says so");
 
             VoiceChat.EnabledOverride = false;
             yield return Frames(30);
+            Assert.IsFalse(chat.Mimic.HostMayKeepMyVoice);
+            yield return RealTimeUntil(() => !wrist.voiceText.text.Contains("REC"), 1f);
+            StringAssert.DoesNotContain("REC", wrist.voiceText.text);
             Assert.AreEqual(VoiceChat.OffNoticeRepeats, heard.Frames.Count, "a few 'voice off' notices and nothing else");
             Assert.IsTrue(heard.Frames.All(f => f.slot == 1 && VoiceMsg.IsOffNotice(f.bytes.Length)));
             yield return Frames(30);

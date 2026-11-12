@@ -90,6 +90,20 @@ namespace TrashAstronauts.Net.Voice
         public int LastSpeaker { get; private set; } = -1;
         public long CreatureFramesReceived { get; private set; }
         public long CreatureFramesIgnored { get; private set; }
+        /// <summary>
+        /// Client: a Mimic is aboard and this player's voice chat is on (MIC and VOICE CHAT), so the host may be keeping
+        /// short phrases of what they say. For the wrist's REC.
+        /// </summary>
+        public bool HostMayKeepMyVoice
+        {
+            get
+            {
+                if (m_Host != null || m_Disposed || m_Chat == null || !m_Chat.IsLive) return false;
+                var director = Director;
+                if (director == null || (director.Profile != null && !director.Profile.Data.voiceDetection)) return false;
+                return FindMimic(director) != null;
+            }
+        }
         /// <summary>"Voice off" notices heard (host).</summary>
         public int OffNoticesHeard { get; private set; }
 
