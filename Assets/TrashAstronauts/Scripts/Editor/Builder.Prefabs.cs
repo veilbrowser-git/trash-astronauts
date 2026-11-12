@@ -82,8 +82,9 @@ namespace TrashAstronauts.EditorTools
             var rb = go.AddComponent<Rigidbody>();
             rb.useGravity = false;
             rb.mass = mass;
-            rb.linearDamping = 0.35f;
-            rb.angularDamping = 0.4f;
+            rb.linearDamping = 0.18f;
+            rb.angularDamping = 0.2f;
+            rb.maxAngularVelocity = 14f;
             rb.interpolation = RigidbodyInterpolation.Interpolate;
             rb.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
             return go;
@@ -109,6 +110,7 @@ namespace TrashAstronauts.EditorTools
 
             highlight = go.AddComponent<HoverHighlight>();
             highlight.renderers = go.GetComponentsInChildren<MeshRenderer>();
+            foreach (var collider in go.GetComponentsInChildren<Collider>()) collider.sharedMaterial = ZeroGMaterial();
 
             impact = go.AddComponent<ImpactNoiseEmitter>();
             impact.heavy = heavy;
@@ -394,9 +396,9 @@ namespace TrashAstronauts.EditorTools
             light.color = new Color(0.75f, 0.12f, 0.05f);
 
             var hum = Empty(go.transform, "Hum", Vector3.zero).AddComponent<AudioSource>();
-            ConfigureSpatial(hum, s_Audio != null ? s_Audio.droneHum : null, true, 0.7f, 1.5f, 17f);
+            ConfigureSpatial(hum, s_Audio != null ? s_Audio.droneHum : null, true, 0.26f, 1.2f, 12f);
             var voice = Empty(go.transform, "Voice", Vector3.zero).AddComponent<AudioSource>();
-            ConfigureSpatial(voice, null, true, 0.8f, 2f, 26f);
+            ConfigureSpatial(voice, null, true, 0.32f, 1.5f, 16f);
 
             var drone = go.AddComponent<EnemyDrone>();
             drone.eye = eyePoint.transform;
@@ -449,7 +451,7 @@ namespace TrashAstronauts.EditorTools
         {
             var grip = Empty(go.transform, "Grip", Vector3.zero);
             var grab = go.AddComponent<XRGrabInteractable>();
-            grab.movementType = XRBaseInteractable.MovementType.Instantaneous;
+            grab.movementType = XRBaseInteractable.MovementType.VelocityTracking;
             grab.useDynamicAttach = false;
             grab.attachTransform = grip.transform;
             grab.throwOnDetach = false;
@@ -610,6 +612,44 @@ namespace TrashAstronauts.EditorTools
             return tool;
         }
 
+        static TranqTool BuildTranq(Transform parent)
+        {
+            var go = ToolRoot("Tool_TranqLauncher");
+            go.transform.SetParent(parent, false);
+            Transform t = go.transform;
+            var col = go.AddComponent<BoxCollider>();
+            col.size = new Vector3(0.05f, 0.12f, 0.2f);
+            col.center = new Vector3(0, -0.02f, 0.03f);
+            var x90 = new Vector3(90, 0, 0);
+            CBox(t, "Body", new Vector3(0, 0, 0.02f), new Vector3(0.04f, 0.05f, 0.13f), M("TranqBody"), 0.01f);
+            CBox(t, "Grip", new Vector3(0, -0.055f, -0.03f), new Vector3(0.032f, 0.085f, 0.04f), M("Rubber"), 0.01f, new Vector3(-12, 0, 0));
+            Part(t, "Barrel", Tube(0.011f, 0.11f, 10), new Vector3(0, 0.005f, 0.13f), M("Steel"), x90);
+            Part(t, "Muzzle Ring", Torus(0.013f, 0.003f, 12, 6), new Vector3(0, 0.005f, 0.185f), M("Chrome"), x90);
+            // Three spare darts in a clip along the side, with glowing tails.
+            for (int i = 0; i < 3; i++)
+            {
+                Part(t, "Dart", Cone(0.005f, 0.001f, 0.045f, 6), new Vector3(0.025f, 0.012f - i * 0.014f, 0.03f), M("Chrome"), x90);
+                Part(t, "Dart Tail", Tube(0.006f, 0.012f, 6), new Vector3(0.025f, 0.012f - i * 0.014f, 0.003f), M("DartGlow"), x90);
+            }
+            CBox(t, "Sight", new Vector3(0, 0.032f, 0.06f), new Vector3(0.008f, 0.012f, 0.03f), M("Steel"), 0.002f);
+            var grab = ToolGrab(go);
+
+            var muzzle = Empty(t, "Muzzle", new Vector3(0, 0.005f, 0.19f));
+            var readoutRoot = Empty(t, "Readout", new Vector3(0, 0.05f, -0.03f), Quaternion.Euler(40f, 0f, 0f));
+            CBox(readoutRoot.transform, "Housing", new Vector3(0, 0, 0.006f), new Vector3(0.1f, 0.055f, 0.012f), M("ToolBody"), 0.004f);
+            Prim(readoutRoot.transform, "Glass", PrimitiveType.Cube, new Vector3(0, 0, 0.0005f), new Vector3(0.092f, 0.047f, 0.002f), M("Screen"));
+            var readout = Text(readoutRoot.transform, "Text", "TRANQ\nDARTS: 0", new Vector3(0, 0, -0.001f), Quaternion.identity, 0.08f, new Vector2(0.09f, 0.045f), new Color(0.6f, 1f, 0.7f));
+
+            var tool = go.AddComponent<TranqTool>();
+            tool.toolName = "Tranquilizer";
+            tool.grab = grab;
+            tool.muzzle = muzzle.transform;
+            tool.readout = readout;
+            tool.tracer = MakeLine(t, "Tracer", 0.006f);
+            tool.tracer.startColor = tool.tracer.endColor = new Color(0.5f, 1f, 0.6f);
+            return tool;
+        }
+
         // ------------------------------------------------------------------ settings panel (shared by tug console and suit menu)
 
         static SettingsPanel BuildSettingsPanel(Transform parent, string name, Vector3 localPos, Quaternion localRot, float scale)
@@ -718,6 +758,8 @@ namespace TrashAstronauts.EditorTools
             body.chestSocket = chest.transform;
             body.dominantHipSocket = domHip.transform;
             body.offHipSocket = offHip.transform;
+            var sideChest = Empty(bodyGo.transform, "Side Chest Holster", new Vector3(-body.sideChestOffset.x, body.sideChestOffset.y, body.sideChestOffset.z), null, GameLayers.Tool);
+            body.sideChestSocket = sideChest.transform;
 
             var locomotion = rig.AddComponent<PlayerLocomotion>();
             locomotion.origin = origin;
@@ -740,6 +782,7 @@ namespace TrashAstronauts.EditorTools
             context.rightHand = BuildHand(cameraOffset.transform, false, locomotion, reticle.transform);
             zeroG.leftHand = context.leftHand;
             zeroG.rightHand = context.rightHand;
+            zeroG.head = camGo.transform;
 
             // --- tools in their holsters
             var flashlight = BuildFlashlight(null);
@@ -748,7 +791,9 @@ namespace TrashAstronauts.EditorTools
             MakeHolster(chest, flashlight, Quaternion.Euler(8f, 0f, 0f));
             MakeHolster(domHip, cutter, Quaternion.Euler(80f, 0f, 0f));
             MakeHolster(offHip, scanner, Quaternion.Euler(80f, 0f, 0f));
-            context.tools = new SuitTool[] { flashlight, scanner, cutter };
+            var tranq = BuildTranq(null);
+            MakeHolster(sideChest, tranq, Quaternion.Euler(70f, 0f, 0f));
+            context.tools = new SuitTool[] { flashlight, scanner, cutter, tranq };
 
             // --- wrist display
             var wrist = Empty(rig.transform, "Wrist Display", Vector3.zero, null, GameLayers.Default);
@@ -833,11 +878,13 @@ namespace TrashAstronauts.EditorTools
             haptics.hapticOutput.inputActionReference = Ref(side + "/Haptic");
 
             // Grab interactor: one sphere, no rigidbody, so XRI uses its accurate overlap mode.
-            var grabGo = Empty(go.transform, "Grab Interactor", new Vector3(0, -0.025f, -0.05f), null, GameLayers.Hand);
+            // Centred on the palm of the glove (the palm block sits at 0, -0.03, -0.075 and faces down),
+            // so things are held in the palm rather than out at the fingers.
+            var grabGo = Empty(go.transform, "Grab Interactor", new Vector3(0, -0.04f, -0.08f), null, GameLayers.Hand);
             var sphere = grabGo.AddComponent<SphereCollider>();
             sphere.isTrigger = true;
-            sphere.radius = 0.1f;
-            var attach = Empty(grabGo.transform, "Attach", Vector3.zero, null, GameLayers.Hand);
+            sphere.radius = 0.09f;
+            var attach = Empty(grabGo.transform, "Attach", new Vector3(0, -0.012f, 0), null, GameLayers.Hand);
             var interactor = grabGo.AddComponent<XRDirectInteractor>();
             ConfigureButtonReader(interactor.selectInput, side + "/Select", side + "/SelectValue");
             ConfigureButtonReader(interactor.activateInput, side + "/Activate", side + "/ActivateValue");
@@ -899,6 +946,16 @@ namespace TrashAstronauts.EditorTools
             gloveVisual.indexPivots = indexPivots.ToArray();
             gloveVisual.gripPivots = pivots.ToArray();
             gloveVisual.thumbPivot = thumbPivot.transform;
+
+            var clamp = glove.AddComponent<HandWallClamp>();
+            clamp.hand = hand;
+            clamp.head = cameraOffset.Find("Main Camera");
+
+            var tracking = go.AddComponent<HandTrackingDriver>();
+            tracking.hand = hand;
+            tracking.poseDriver = driver;
+            tracking.trackingSpace = cameraOffset;
+            tracking.head = cameraOffset.Find("Main Camera");
 
             var aimer = go.AddComponent<TeleportAimer>();
             aimer.hand = hand;

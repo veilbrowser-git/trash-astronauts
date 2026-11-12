@@ -25,6 +25,11 @@ namespace TrashAstronauts.EditorTools
             ConfigureLayers();
             GameLayers.ApplyCollisionMatrix();
             Time.fixedDeltaTime = 1f / 72f;
+            // Sturdier collisions for floating objects: more solver passes, and even slow taps bounce.
+            Physics.defaultSolverIterations = 10;
+            Physics.defaultSolverVelocityIterations = 4;
+            Physics.bounceThreshold = 0.25f;
+            Physics.defaultMaxDepenetrationVelocity = 3f;
 
             Try("player settings", ConfigurePlayerSettings);
             Try("render pipeline", ConfigureRenderPipeline);
@@ -57,8 +62,8 @@ namespace TrashAstronauts.EditorTools
         {
             PlayerSettings.companyName = "Trash Astronauts";
             PlayerSettings.productName = "Trash Astronauts";
-            PlayerSettings.bundleVersion = "0.2.0";
-            Try("Android version code", () => PlayerSettings.Android.bundleVersionCode = 2);
+            PlayerSettings.bundleVersion = "0.3.0";
+            Try("Android version code", () => PlayerSettings.Android.bundleVersionCode = 3);
             PlayerSettings.colorSpace = ColorSpace.Linear;
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.LandscapeLeft;
 
@@ -169,6 +174,9 @@ namespace TrashAstronauts.EditorTools
                 "com.unity.openxr.feature.input.metaquestplus",
                 "com.unity.openxr.feature.input.oculustouch",
                 "com.unity.openxr.feature.input.metaquestpro",
+                // Controller-free play (XR Hands package): hand joints, plus Meta's aim pose.
+                "com.unity.openxr.feature.input.handtrackingsubsystem",
+                "com.unity.openxr.feature.input.metahandtrackingaim",
             };
             foreach (string id in featureIds)
             {

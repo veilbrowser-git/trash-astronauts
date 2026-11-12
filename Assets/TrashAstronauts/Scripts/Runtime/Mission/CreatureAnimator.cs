@@ -56,9 +56,10 @@ namespace TrashAstronauts.Mission
             float t = Time.time + m_Seed;
             EnemyState state = drone.State;
 
-            float targetAggression = state == EnemyState.Chase ? 1f : state == EnemyState.Investigate || state == EnemyState.Search ? 0.45f : 0f;
-            m_Aggression = Mathf.MoveTowards(m_Aggression, targetAggression, dt * 2.5f);
-            m_Awake = Mathf.MoveTowards(m_Awake, state == EnemyState.Dormant ? 0f : 1f, dt * 0.8f);
+            bool scaring = drone.IsScaring;
+            float targetAggression = scaring ? 1f : state == EnemyState.Chase ? 1f : state == EnemyState.Investigate || state == EnemyState.Search ? 0.45f : 0f;
+            m_Aggression = Mathf.MoveTowards(m_Aggression, targetAggression, dt * (scaring ? 20f : 2.5f));
+            m_Awake = Mathf.MoveTowards(m_Awake, state == EnemyState.Dormant && !scaring ? 0f : 1f, dt * (scaring ? 20f : 0.8f));
 
             // Occasional sharp twitch, more often when agitated.
             if (t >= m_NextTwitch && m_Awake > 0.5f)
@@ -123,7 +124,7 @@ namespace TrashAstronauts.Mission
 
             if (jaw != null)
             {
-                float open = m_Aggression * 26f + m_Twitch * 10f + Mathf.Sin(t * 9f) * 4f * m_Aggression;
+                float open = m_Aggression * 26f + m_Twitch * 10f + Mathf.Sin(t * 9f) * 4f * m_Aggression + (scaring ? 34f : 0f);
                 jaw.localRotation = Quaternion.Euler(open, 0f, 0f);
             }
         }

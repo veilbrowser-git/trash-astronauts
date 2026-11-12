@@ -10,12 +10,14 @@ namespace TrashAstronauts.Player
     /// <summary>
     /// Weightless movement. The player floats and keeps drifting until something stops them.
     ///
-    /// Two ways to move, both using GRIP on an empty hand:
-    ///  - Near a wall, floor, ceiling, prop or handrail: the hand grabs the surface. Moving the hand
-    ///    moves the body the opposite way (pull yourself along), and letting go keeps the speed you had,
-    ///    so a shove sends you gliding (push off).
-    ///  - In open space: the hand acts as a paddle. Sweeping it pushes you the other way, like swimming.
-    ///    Open the hand on the way back.
+    /// Ways to move:
+    ///  - GRIP near a wall, floor, ceiling, prop or handrail grabs it. Moving the hand moves the body
+    ///    the opposite way (pull yourself along); letting go keeps the speed you had (push off).
+    ///  - Swim with open hands: sweep an arm quickly and you are pushed the other way, but never
+    ///    backward relative to where you are looking, so reaching for things does not shove you away.
+    ///  - Hold GRIP in open space to paddle in any direction, including backward.
+    ///  - Hands are solid: push or slap a wall with an open hand and it shoves you away. The body
+    ///    bounces off the hull instead of stopping dead.
     ///
     /// Grabbing any surface stops a drift. All motion is queued through XRI's locomotion mediator and
     /// the character controller, so the player cannot pass through walls and the headset camera is
@@ -34,9 +36,22 @@ namespace TrashAstronauts.Player
 
         [Header("Swimming")]
         [Tooltip("How much of a stroke's hand speed becomes body speed.")]
-        public float swimStrength = 0.85f;
+        public float swimStrength = 1.05f;
         [Tooltip("Strokes slower than this (m/s) do nothing, so small hand movements do not push you around.")]
-        public float swimMinHandSpeed = 0.5f;
+        public float swimMinHandSpeed = 0.35f;
+
+        [Header("Open-hand swimming (no button)")]
+        public bool openHandSwim = true;
+        [Tooltip("Open-hand strokes must be at least this fast (m/s) to count, so normal hand movement is ignored.")]
+        public float openSwimMinHandSpeed = 0.85f;
+        public float openSwimStrength = 0.6f;
+
+        [Header("Solid hands")]
+        [Tooltip("Head transform. The arm is checked from the chest to the palm so a hand cannot pass through a wall.")]
+        public Transform head;
+        public float handRadius = 0.05f;
+        [Tooltip("Largest correction applied in one frame (m). Guards against tracking jumps.")]
+        public float maxPushPerFrame = 0.2f;
 
         [Header("Drift")]
         public float maxSpeed = 3.2f;
@@ -44,7 +59,7 @@ namespace TrashAstronauts.Player
         public float drag = 0.22f;
         [Tooltip("Drag used when the comfort option 'drift' is off: you stop almost as soon as you let go.")]
         public float comfortDrag = 7f;
-        public float bounce = 0.15f;
+        [Range(0f, 1f)] public float bounce = 0.55f;
         [Tooltip("Comfort option. When off, there is no momentum: movement stops when you let go.")]
         public bool momentumEnabled = true;
 
@@ -62,6 +77,7 @@ namespace TrashAstronauts.Player
             public Vector3 lastLocal;
             public Vector3 smoothedVelocity;   // hand velocity relative to the body, world axes
             public float anchorTime;
+            public bool touchingWall;
             public HoverHighlight hoveredRail;
         }
 
@@ -70,6 +86,8 @@ namespace TrashAstronauts.Player
         readonly Collider[] m_Overlap = new Collider[8];
         HandState m_Driver;
         Vector3 m_Velocity;
+        float m_LastBump = -10f;
+        bool m_ThrustThisFrame;
 
         public Vector3 Velocity => m_Velocity;
         public float Speed => m_Velocity.magnitude;
@@ -82,6 +100,8 @@ namespace TrashAstronauts.Player
         /// <summary>The last hand let go. Argument: resulting drift speed.</summary>
         public event Action<float> PushedOff;
         public event Action Stroked;
+        /// <summary>An open hand pushed or slapped a surface. Argument: speed of the shove.</summary>
+        public event Action<float> WallPushed;
 
         protected override void Awake()
         {
@@ -118,6 +138,7 @@ namespace TrashAstronauts.Player
             if (dt <= 0f) return;
 
             Vector3 anchoredMotion = Vector3.zero;
+            m_ThrustThisFrame = false;
 
             foreach (var state in m_Hands)
             {
@@ -139,17 +160,26 @@ namespace TrashAstronauts.Player
 
                 if (state.swimming && !state.hand.IsHolding)
                 {
-                    float speed = handVelocity.magnitude;
-                    if (speed >= swimMinHandSpeed)
-                    {
-                        Vector3 gain = -handVelocity * (swimStrength * dt);
-                        Vector3 before = m_Velocity;
-                        m_Velocity = Vector3.ClampMagnitude(m_Velocity + gain, maxSpeed);
-                        SwimSpeedGained += (m_Velocity - before).magnitude;
-                        Stroked?.Invoke();
-                    }
+                    // Grip paddling: any direction.
+                    if (handVelocity.magnitude >= swimMinHandSpeed) ApplyStroke(-handVelocity * (swimStrength * dt));
                 }
+                else if (openHandSwim && !state.gripHeld && !state.anchored && !state.touchingWall && !state.hand.IsHolding
+                    && handVelocity.magnitude >= openSwimMinHandSpeed)
+                {
+                    // Open-hand stroke: drop any part that would push the player backward relative to
+                    // their view, so the recovery stroke and reaching forward do not cancel the swim.
+                    Vector3 gain = -handVelocity * (openSwimStrength * dt);
+                    if (head != null)
+                    {
+                        float backward = Vector3.Dot(gain, head.forward);
+                        if (backward < 0f) gain -= head.forward * backward;
+                    }
+                    if (gain.sqrMagnitude > 1e-8f) ApplyStroke(gain);
+                }
+
+                if (m_Driver == null) anchoredMotion += SolidHand(state, palm, handVelocity);
             }
+            anchoredMotion = Vector3.ClampMagnitude(anchoredMotion, maxPushPerFrame);
 
             if (m_Driver != null)
             {
@@ -159,7 +189,10 @@ namespace TrashAstronauts.Player
             {
                 float k = momentumEnabled ? drag : comfortDrag;
                 m_Velocity *= Mathf.Exp(-k * dt);
-                if (m_Velocity.sqrMagnitude < 0.02f * 0.02f) m_Velocity = Vector3.zero;
+                // Come to rest once nearly stopped, but never while a stroke or shove is adding speed:
+                // each frame of a stroke adds only a little, and zeroing it here would stop swimming
+                // from ever building up (this was why swimming did nothing on the headset).
+                if (!m_ThrustThisFrame && m_Velocity.sqrMagnitude < 0.015f * 0.015f) m_Velocity = Vector3.zero;
             }
 
             Vector3 motion = anchoredMotion + m_Velocity * dt;
@@ -174,6 +207,75 @@ namespace TrashAstronauts.Player
             {
                 TryEndLocomotion();
             }
+        }
+
+        void ApplyStroke(Vector3 gain)
+        {
+            Vector3 before = m_Velocity;
+            m_Velocity = Vector3.ClampMagnitude(m_Velocity + gain, maxSpeed);
+            SwimSpeedGained += (m_Velocity - before).magnitude;
+            m_ThrustThisFrame = true;
+            Stroked?.Invoke();
+        }
+
+        /// <summary>
+        /// Keeps a hand from passing through the ship. If the palm is beyond a surface, the body is moved
+        /// back by that much (so the hand stays on the surface) and picks up the speed of the shove.
+        /// Returns the body motion needed this frame.
+        /// </summary>
+        Vector3 SolidHand(HandState state, Vector3 palm, Vector3 handVelocity)
+        {
+            if (head == null || state.anchored) { state.touchingWall = false; return Vector3.zero; }
+            if (!TryGetPenetration(head, palm, handRadius, out Vector3 correction, out Vector3 normal))
+            {
+                state.touchingWall = false;
+                return Vector3.zero;
+            }
+
+            // How fast the hand was driving into the surface (relative to the body).
+            float approach = Mathf.Max(0f, Vector3.Dot(handVelocity, -normal));
+            float current = Vector3.Dot(m_Velocity, normal);
+            if (current < approach)
+            {
+                m_Velocity = Vector3.ClampMagnitude(m_Velocity + normal * ((approach - current) * pushOffScale), maxSpeed);
+                m_ThrustThisFrame = true;
+            }
+
+            if (!state.touchingWall)
+            {
+                state.touchingWall = true;
+                state.hand.Pulse(Mathf.Clamp01(0.15f + approach * 0.25f), 0.04f);
+                if (approach > 0.4f && Sfx.Library != null)
+                    Sfx.PlayAt(Sfx.Library.impactLight, palm, Mathf.Clamp01(approach * 0.25f), 0.8f, 8f);
+                WallPushed?.Invoke(approach);
+            }
+            return correction;
+        }
+
+        /// <summary>
+        /// Checks the arm from the chest to the palm. If a surface is in the way, returns how far the
+        /// palm must move back along the surface normal to sit on it. Shared with the glove visuals.
+        /// </summary>
+        public static bool TryGetPenetration(Transform head, Vector3 palm, float radius, out Vector3 correction, out Vector3 normal)
+        {
+            correction = Vector3.zero;
+            normal = Vector3.up;
+            Vector3 chest = head.position + Vector3.down * 0.2f;
+            Vector3 to = palm - chest;
+            float distance = to.magnitude;
+            // Only within arm's reach: a tracking glitch that throws a hand across the room must not move the body.
+            if (distance < 0.08f || distance > 1.4f) return false;
+            Vector3 dir = to / distance;
+            if (!Physics.SphereCast(chest, radius, dir, out RaycastHit hit, distance, GameLayers.EnvironmentMask, QueryTriggerInteraction.Ignore))
+                return false;
+            if (hit.distance <= 0.001f) return false; // started inside something: nothing sensible to do
+
+            Vector3 allowed = chest + dir * hit.distance;
+            float depth = Vector3.Dot(allowed - palm, hit.normal);
+            if (depth <= 0.0005f) return false;
+            normal = hit.normal;
+            correction = hit.normal * depth;
+            return true;
         }
 
         static Vector3 PalmPosition(HandRig hand)
@@ -311,7 +413,18 @@ namespace TrashAstronauts.Player
         void OnControllerColliderHit(ControllerColliderHit hit)
         {
             float into = Vector3.Dot(m_Velocity, hit.normal);
-            if (into < 0f) m_Velocity -= hit.normal * (into * (1f + bounce));
+            if (into >= 0f) return;
+            m_Velocity -= hit.normal * (into * (1f + bounce));
+
+            // A solid bump: a thud and a tap on both hands, scaled by how hard the hull was hit.
+            float impact = -into;
+            if (impact > 0.6f && Time.time - m_LastBump > 0.25f)
+            {
+                m_LastBump = Time.time;
+                if (Sfx.Library != null) Sfx.PlayAt(Sfx.Library.impactHeavy, hit.point, Mathf.Clamp01(impact * 0.2f), 0.9f, 10f);
+                if (leftHand != null) leftHand.Pulse(Mathf.Clamp01(impact * 0.2f), 0.06f);
+                if (rightHand != null) rightHand.Pulse(Mathf.Clamp01(impact * 0.2f), 0.06f);
+            }
         }
 
         protected override void OnDisable()

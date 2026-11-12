@@ -3,6 +3,17 @@ using UnityEngine;
 
 namespace TrashAstronauts.Core
 {
+    /// <summary>Things sold in the tug's shop.</summary>
+    public enum ShopItem
+    {
+        /// <summary>Consumable. One dart puts the creature to sleep for a few seconds.</summary>
+        TranqDart = 0,
+        /// <summary>One-time upgrade: the scanner reaches further.</summary>
+        ScannerRange = 1,
+        /// <summary>One-time upgrade: the cutter takes longer to overheat.</summary>
+        CutterCoolant = 2,
+    }
+
     [Serializable]
     public sealed class EnemyTuning
     {
@@ -96,6 +107,25 @@ namespace TrashAstronauts.Core
         public float scannerCooldownSeconds = 2.5f;
         public CutterTuning cutter = new CutterTuning();
 
+        [Header("Shop")]
+        [Min(0)] public int tranqDartCost = 120;
+        [Min(0)] public int maxTranqDarts = 6;
+        [Tooltip("Seconds the creature stays asleep after a tranquilizer dart.")]
+        [Min(0.5f)] public float tranqSleepSeconds = 8f;
+        [Min(0)] public int scannerUpgradeCost = 300;
+        [Min(1f)] public float scannerUpgradeRangeMultiplier = 1.6f;
+        [Min(0)] public int cutterUpgradeCost = 350;
+        [Tooltip("With the coolant upgrade the cutter takes this many times longer to overheat.")]
+        [Min(1f)] public float cutterUpgradeHeatMultiplier = 1.6f;
+
+        [Header("Blackouts")]
+        public bool blackoutsEnabled = true;
+        [Tooltip("Seconds of contract time before the first blackout, and between blackouts (random in range).")]
+        public float blackoutMinDelay = 70f;
+        public float blackoutMaxDelay = 170f;
+        public float blackoutMinDuration = 12f;
+        public float blackoutMaxDuration = 20f;
+
         [Header("Threat")]
         public EnemyTuning enemy = new EnemyTuning();
         public NoiseTuning noise = new NoiseTuning();
@@ -104,6 +134,17 @@ namespace TrashAstronauts.Core
         {
             int level = Mathf.Clamp(upgradeLevel, 0, maxOxygenUpgradeLevel);
             return baseOxygenSeconds + oxygenUpgradeBonusSeconds * level;
+        }
+
+        public int GetShopCost(ShopItem item)
+        {
+            switch (item)
+            {
+                case ShopItem.TranqDart: return tranqDartCost;
+                case ShopItem.ScannerRange: return scannerUpgradeCost;
+                case ShopItem.CutterCoolant: return cutterUpgradeCost;
+                default: return 0;
+            }
         }
 
         public int GetCount(SalvageCategory category)

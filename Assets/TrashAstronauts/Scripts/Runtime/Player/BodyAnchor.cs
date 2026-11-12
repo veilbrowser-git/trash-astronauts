@@ -21,6 +21,9 @@ namespace TrashAstronauts.Player
         public Transform chestSocket;
         public Transform dominantHipSocket;
         public Transform offHipSocket;
+        [Tooltip("Second chest socket, on the off-hand side (tranquilizer launcher).")]
+        public Transform sideChestSocket;
+        public Vector3 sideChestOffset = new Vector3(0.17f, 0.03f, 0.13f);
         public Vector3 chestOffset = new Vector3(0f, 0.02f, 0.17f);
         public Vector3 hipOffset = new Vector3(0.23f, -0.24f, 0.08f);
 
@@ -33,6 +36,7 @@ namespace TrashAstronauts.Player
             if (chestSocket != null) chestSocket.localPosition = chestOffset;
             if (dominantHipSocket != null) dominantHipSocket.localPosition = new Vector3(hipOffset.x * sign, hipOffset.y, hipOffset.z);
             if (offHipSocket != null) offHipSocket.localPosition = new Vector3(-hipOffset.x * sign, hipOffset.y, hipOffset.z);
+            if (sideChestSocket != null) sideChestSocket.localPosition = new Vector3(-sideChestOffset.x * sign, sideChestOffset.y, sideChestOffset.z);
         }
 
         void LateUpdate()

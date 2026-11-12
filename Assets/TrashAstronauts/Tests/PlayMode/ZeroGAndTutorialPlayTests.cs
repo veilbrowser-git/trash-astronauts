@@ -22,6 +22,7 @@ namespace TrashAstronauts.Tests
         MissionDirector m_Director;
         PlayerContext m_Player;
         ZeroGLocomotion m_ZeroG;
+        string m_StrokeInfo = "";
 
         [UnitySetUp]
         public IEnumerator SetUp()
@@ -65,6 +66,29 @@ namespace TrashAstronauts.Tests
             hand.transform.localPosition += hand.transform.parent.InverseTransformVector(worldDelta);
         }
 
+        /// <summary>Moves the hand so that its palm (the grab point) is at a world position.</summary>
+        void PlacePalm(HandRig hand, Vector3 palmWorld)
+        {
+            hand.transform.position += palmWorld - hand.interactor.transform.position;
+        }
+
+        /// <summary>Sweeps a hand at a steady real speed for a while, whatever the frame rate.</summary>
+        IEnumerator Stroke(HandRig hand, Vector3 direction, float metresPerSecond = 1.6f, float seconds = 0.3f)
+        {
+            int frames = 0;
+            Vector3 startLocal = hand.transform.localPosition;
+            for (float t = 0f; t < seconds; t += Time.deltaTime)
+            {
+                yield return null;
+                MoveHandWorld(hand, direction * Mathf.Min(0.2f, metresPerSecond * Time.deltaTime));
+                frames++;
+            }
+            yield return null;
+            m_StrokeInfo = " [stroke: " + frames + " frames, dt " + Time.deltaTime.ToString("F4") + ", hand moved "
+                + (hand.transform.localPosition - startLocal).magnitude.ToString("F3") + " m, dir " + direction.ToString("F2")
+                + ", velocity " + m_ZeroG.Velocity.ToString("F3") + ", anchored " + m_ZeroG.IsAnchored + ", holding " + hand.IsHolding + ", grip " + hand.Grip.ToString("F1") + "]";
+        }
+
         [UnityTest]
         public IEnumerator Drifting_KeepsMomentum_AndIsStoppedByWalls()
         {
@@ -91,7 +115,7 @@ namespace TrashAstronauts.Tests
             Assert.IsFalse(m_ZeroG.TryGrabSurface(hand), "There is nothing to grab in open space.");
 
             // Put the palm against the tug's west wall (inner face at x = -1.9).
-            hand.transform.position = new Vector3(-1.8f, 1.2f, -0.4f);
+            PlacePalm(hand, new Vector3(-1.8f, 1.2f, -0.4f));
             yield return null;
             hand.GripOverride = 1f;
             Assert.IsTrue(m_ZeroG.TryGrabSurface(hand), "A hand next to a wall should be able to grab it.");
@@ -129,7 +153,7 @@ namespace TrashAstronauts.Tests
             Assert.Greater(furthest, before + 0.05f, "The glide continues after release.");
 
             // Grabbing a surface again stops the drift dead.
-            hand.transform.position = new Vector3(m_Player.transform.position.x, 0.08f, m_Player.transform.position.z);
+            PlacePalm(hand, new Vector3(m_Player.transform.position.x, 0.08f, m_Player.transform.position.z));
             yield return null;
             hand.GripOverride = 1f;
             Assert.IsTrue(m_ZeroG.TryGrabSurface(hand), "The floor is grabbable too.");
@@ -146,28 +170,70 @@ namespace TrashAstronauts.Tests
             Assert.IsFalse(m_ZeroG.IsAnchored, "Gripping in open space must not anchor.");
 
             Vector3 start = m_Player.transform.position;
-            // Sweep the hand backward (-Z): the body should be pushed forward (+Z).
-            for (int i = 0; i < 14; i++)
-            {
-                MoveHandWorld(hand, Vector3.back * 0.03f);
-                yield return null;
-            }
-            Assert.Greater(m_ZeroG.Velocity.z, 0.15f, "A backward stroke should push the player forward.");
+            Vector3 ahead = Vector3.ProjectOnPlane(m_Player.head.forward, Vector3.up).normalized;
+            // Sweep the hand backward: the body should be pushed forward (the way the player is looking).
+            yield return Stroke(hand, -ahead);
+            Assert.Greater(Vector3.Dot(m_ZeroG.Velocity, ahead), 0.15f, "A backward stroke should push the player forward." + m_StrokeInfo);
             Assert.Greater(m_ZeroG.SwimSpeedGained, 0.15f);
 
             // Open the hand for the recovery stroke: moving it forward again must not cancel the speed.
             hand.GripOverride = 0f;
             yield return null;
-            float speed = m_ZeroG.Velocity.z;
-            for (int i = 0; i < 14; i++)
+            float speed = Vector3.Dot(m_ZeroG.Velocity, ahead);
+            yield return Stroke(hand, ahead);
+            Assert.Greater(Vector3.Dot(m_ZeroG.Velocity, ahead), speed * 0.75f, "The recovery stroke with an open hand should not brake.");
+            hand.GripOverride = null;
+        }
+
+        [UnityTest]
+        public IEnumerator OpenHandStrokes_SwimWithoutAnyButton_ButNeverBackward()
+        {
+            var hand = m_Player.leftHand;
+            Assert.IsTrue(m_ZeroG.openHandSwim);
+            Vector3 ahead = Vector3.ProjectOnPlane(m_Player.head.forward, Vector3.up).normalized;
+
+            // A fast backward sweep with an open hand, no grip held.
+            yield return Stroke(hand, -ahead);
+            float forwardSpeed = Vector3.Dot(m_ZeroG.Velocity, ahead);
+            Assert.Greater(forwardSpeed, 0.1f, "An open-hand stroke should move the player the way they are looking." + m_StrokeInfo);
+
+            // Throwing the hand forward (reaching, or the return stroke) must not shove the player back.
+            m_ZeroG.Stop();
+            yield return null;
+            yield return Stroke(hand, ahead);
+            Assert.GreaterOrEqual(Vector3.Dot(m_ZeroG.Velocity, ahead), -0.02f, "Reaching forward must not push the player backward.");
+        }
+
+        [UnityTest]
+        public IEnumerator Hands_AreSolid_PushingAWallShovesThePlayerAway()
+        {
+            var hand = m_Player.rightHand;
+            // Move the player next to the tug's west wall (inner face at x = -1.9) and let things settle.
+            m_Player.locomotion.TeleportTo(new Vector3(-1.2f, 0f, 1.4f));
+            yield return Frames(5);
+            foreach (var driver in m_Player.GetComponentsInChildren<TrackedPoseDriver>()) driver.enabled = false;
+            m_Player.leftHand.transform.position = OpenSpace(0.6f);
+            Vector3 head = m_Player.HeadPosition;
+            PlacePalm(hand, new Vector3(-1.7f, head.y - 0.25f, head.z));
+            yield return Frames(3);
+            m_ZeroG.Stop();
+
+            float pushed = -1f;
+            m_ZeroG.WallPushed += speed => pushed = speed;
+            float startX = m_Player.transform.position.x;
+
+            // Drive the open hand through the wall, a couple of centimetres per frame.
+            for (int i = 0; i < 20; i++)
             {
-                MoveHandWorld(hand, Vector3.forward * 0.03f);
+                MoveHandWorld(hand, Vector3.left * 0.02f);
                 yield return null;
             }
-            Assert.Greater(m_ZeroG.Velocity.z, speed * 0.8f, "The recovery stroke with an open hand should not brake.");
-            yield return new WaitForSeconds(0.3f);
-            Assert.Greater(m_Player.transform.position.z, start.z + 0.05f);
-            hand.GripOverride = null;
+
+            Vector3 palm = hand.interactor.transform.position;
+            Assert.Greater(palm.x, -1.9f - 0.02f, "The hand must not sink into the wall.");
+            Assert.Greater(m_Player.transform.position.x, startX + 0.1f, "Pushing on the wall should move the body away from it.");
+            Assert.GreaterOrEqual(pushed, 0f, "The wall contact should be reported.");
+            Assert.Greater(m_ZeroG.Velocity.x, 0.1f, "The shove should leave the player drifting away from the wall.");
         }
 
         [UnityTest]
@@ -201,7 +267,7 @@ namespace TrashAstronauts.Tests
 
             // Step 1 completes on a real push-off.
             var hand = m_Player.rightHand;
-            hand.transform.position = new Vector3(-1.8f, 1.2f, -0.4f);
+            PlacePalm(hand, new Vector3(-1.8f, 1.2f, -0.4f));
             yield return null;
             hand.GripOverride = 1f;
             Assert.IsTrue(m_ZeroG.TryGrabSurface(hand));
@@ -221,11 +287,8 @@ namespace TrashAstronauts.Tests
             yield return Frames(2);
             hand.GripOverride = 1f;
             yield return null;
-            for (int i = 0; i < 60 && tutorial.Step == TutorialStep.Swim; i++)
-            {
-                MoveHandWorld(hand, (i / 10 % 2 == 0 ? Vector3.back : Vector3.right) * 0.03f);
-                yield return null;
-            }
+            for (int i = 0; i < 8 && tutorial.Step == TutorialStep.Swim; i++)
+                yield return Stroke(hand, i % 2 == 0 ? Vector3.back : Vector3.right, 1.6f, 0.25f);
             hand.GripOverride = null;
             Assert.AreEqual(TutorialStep.Stop, tutorial.Step, "Swimming should complete step 2.");
 

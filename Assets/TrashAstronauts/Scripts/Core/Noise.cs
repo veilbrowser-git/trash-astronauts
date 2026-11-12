@@ -60,6 +60,8 @@ namespace TrashAstronauts.Core
         readonly CutterTuning m_Tuning;
 
         public float Heat { get; private set; }
+        /// <summary>Greater than 1 makes the cutter take proportionally longer to overheat (coolant upgrade).</summary>
+        public float HeatCapacityMultiplier { get; set; } = 1f;
         public bool Overheated { get; private set; }
         public bool Firing { get; private set; }
 
@@ -87,7 +89,7 @@ namespace TrashAstronauts.Core
 
             if (Firing)
             {
-                Heat = Mathf.Min(1f, Heat + dt / Mathf.Max(0.1f, m_Tuning.secondsToOverheat));
+                Heat = Mathf.Min(1f, Heat + dt / Mathf.Max(0.1f, m_Tuning.secondsToOverheat * Mathf.Max(1f, HeatCapacityMultiplier)));
                 if (Heat >= 1f)
                 {
                     Overheated = true;

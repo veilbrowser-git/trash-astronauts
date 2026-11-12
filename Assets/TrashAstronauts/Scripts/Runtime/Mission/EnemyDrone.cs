@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using TrashAstronauts.Audio;
@@ -56,11 +57,25 @@ namespace TrashAstronauts.Mission
         float m_WakeTimer;
         float m_DoorTimer;
         float m_LingerSpin;
+        float m_SedateTimer;
         PlayerContext m_Target;
 
         public EnemyBrain Brain { get; private set; }
         public EnemyState State => Brain != null ? Brain.State : EnemyState.Dormant;
         public bool IsRunning => m_Running;
+        /// <summary>True while a tranquilizer dart has it asleep.</summary>
+        public bool IsSedated => m_SedateTimer > 0f;
+        public float SedatedSecondsLeft => Mathf.Max(0f, m_SedateTimer);
+        /// <summary>True during the catch jumpscare.</summary>
+        public bool IsScaring { get; private set; }
+        /// <summary>Set by the blackout: the creature makes no sound at all.</summary>
+        public bool Silenced { get; set; }
+        [Header("Volume (kept low on purpose)")]
+        [Range(0f, 1f)] public float voiceVolume = 0.35f;
+        [Header("Catch jumpscare")]
+        public float scareDistance = 0.78f;
+        public float scareLungeSeconds = 0.12f;
+        public float scareHoldSeconds = 0.75f;
         /// <summary>Distance to the nearest player, for wrist warnings.</summary>
         public float NearestPlayerDistance { get; private set; } = float.MaxValue;
 
@@ -97,6 +112,9 @@ namespace TrashAstronauts.Mission
             m_HasPath = false;
             m_Target = null;
             m_DoorTimer = 0f;
+            m_SedateTimer = 0f;
+            IsScaring = false;
+            StopAllCoroutines();
             if (dock != null) transform.SetPositionAndRotation(dock.position, dock.rotation);
             RefreshPresentation(true);
         }
@@ -106,6 +124,7 @@ namespace TrashAstronauts.Mission
         {
             EnsureBrain();
             m_Running = false;
+            m_SedateTimer = 0f;
             Brain.Sleep();
             m_HasPath = false;
             if (voice != null) voice.Stop();
@@ -121,9 +140,24 @@ namespace TrashAstronauts.Mission
             Brain.WakeUp();
         }
 
+        /// <summary>
+        /// Puts the creature to sleep for a few seconds (tranquilizer dart). It drops whatever it was
+        /// doing, cannot see, hear or catch anyone, and then wakes up and goes back on patrol.
+        /// </summary>
+        public bool Tranquilize(float seconds)
+        {
+            if (!m_Running || IsScaring || seconds <= 0f) return false;
+            m_SedateTimer = Mathf.Max(m_SedateTimer, seconds);
+            Brain.Sleep();
+            m_HasPath = false;
+            if (voice != null) voice.Stop();
+            RefreshPresentation(true);
+            return true;
+        }
+
         void OnNoise(NoiseEvent noise)
         {
-            if (!m_Running || Brain == null) return;
+            if (!m_Running || Brain == null || IsSedated) return;
             if (IsForbidden(noise.Position) && !IsNearGraph(noise.Position)) return;
             if (Brain.HearNoise(noise, transform.position)) m_HasPath = false;
         }
@@ -138,7 +172,19 @@ namespace TrashAstronauts.Mission
         /// <summary>One simulation step. Public so play-mode tests can advance the drone deterministically.</summary>
         public void Step(float dt)
         {
-            if (!m_Running) return;
+            if (!m_Running || IsScaring) return;
+
+            if (m_SedateTimer > 0f)
+            {
+                m_SedateTimer -= dt;
+                if (m_SedateTimer <= 0f)
+                {
+                    m_SedateTimer = 0f;
+                    Brain.WakeUp();
+                }
+                RefreshPresentation(false);
+                return;
+            }
 
             if (Brain.State == EnemyState.Dormant)
             {
@@ -355,9 +401,46 @@ namespace TrashAstronauts.Mission
 
         void Catch(PlayerContext player)
         {
-            if (Sfx.Library != null) Sfx.PlayAt(Sfx.Library.droneCatch, transform.position, 1f);
-            if (player != null) player.PulseBoth(0.8f, 0.3f);
+            if (IsScaring) return;
+            if (isActiveAndEnabled && player != null && player.head != null) StartCoroutine(Jumpscare(player));
+            else FinishCatch(player);
+        }
+
+        void FinishCatch(PlayerContext player)
+        {
+            IsScaring = false;
             if (director != null) director.FailMission(FailureReason.Caught, player != null ? player.Id : PlayerId.Local);
+        }
+
+        /// <summary>
+        /// The catch: the creature lunges into the player's face, jaws open and eyes blazing, with one
+        /// short sting, then the view fades. The camera itself is never moved or shaken.
+        /// </summary>
+        IEnumerator Jumpscare(PlayerContext player)
+        {
+            IsScaring = true;
+            Transform head = player.head;
+            Vector3 start = transform.position;
+            Quaternion startRotation = transform.rotation;
+            if (voice != null) voice.Stop();
+            if (Sfx.Library != null) Sfx.PlayUi(Sfx.Library.droneScare != null ? Sfx.Library.droneScare : Sfx.Library.droneCatch, 0.55f);
+            player.PulseBoth(1f, 0.35f);
+
+            float t = 0f;
+            while (t < scareLungeSeconds + scareHoldSeconds)
+            {
+                t += Time.unscaledDeltaTime;
+                Vector3 flat = Vector3.ProjectOnPlane(head.forward, Vector3.up);
+                if (flat.sqrMagnitude < 0.001f) flat = Vector3.forward;
+                // Its face (about 0.4 m ahead of its centre) ends up a forearm's length from the eyes.
+                Vector3 target = head.position + flat.normalized * scareDistance + Vector3.down * 0.02f;
+                Quaternion face = Quaternion.LookRotation((head.position - target).normalized, Vector3.up);
+                float k = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t / scareLungeSeconds));
+                transform.SetPositionAndRotation(Vector3.Lerp(start, target, k), Quaternion.Slerp(startRotation, face, k));
+                RefreshPresentation(true);
+                yield return null;
+            }
+            FinishCatch(player);
         }
 
         // ------------------------------------------------------------------ presentation
@@ -371,19 +454,21 @@ namespace TrashAstronauts.Mission
             if (voice != null)
             {
                 voice.Stop();
-                if (next == EnemyState.Chase && lib != null && lib.droneChase != null && Application.isPlaying)
+                if (next == EnemyState.Chase && lib != null && lib.droneChase != null && Application.isPlaying && !Silenced)
                 {
                     voice.clip = lib.droneChase;
                     voice.loop = true;
+                    voice.volume = voiceVolume;
                     voice.Play();
                 }
             }
 
-            if (lib != null && Application.isPlaying)
+            // State changes are announced, but quietly: these are cues, not alarms.
+            if (lib != null && Application.isPlaying && !Silenced && !IsSedated)
             {
-                if (next == EnemyState.Investigate) Sfx.PlayAt(lib.droneAlert, transform.position, 0.9f, 1f, 26f);
-                else if (next == EnemyState.Search) Sfx.PlayAt(lib.droneLost, transform.position, 0.9f, 1f, 26f);
-                else if (next == EnemyState.Patrol && previous != EnemyState.Dormant) Sfx.PlayAt(lib.droneLost, transform.position, 0.5f, 0.8f, 20f);
+                if (next == EnemyState.Investigate) Sfx.PlayAt(lib.droneAlert, transform.position, voiceVolume, 1f, 20f);
+                else if (next == EnemyState.Search) Sfx.PlayAt(lib.droneLost, transform.position, voiceVolume, 1f, 20f);
+                else if (next == EnemyState.Patrol && previous != EnemyState.Dormant) Sfx.PlayAt(lib.droneLost, transform.position, voiceVolume * 0.6f, 0.8f, 16f);
             }
 
             RefreshPresentation(true);
@@ -413,10 +498,15 @@ namespace TrashAstronauts.Mission
 
             float blink = blinkHz <= 0f ? 1f : (Mathf.Sin(Time.time * blinkHz * Mathf.PI * 2f) > 0f ? 1f : 0.15f);
             float brightness = state == EnemyState.Dormant ? 0f : blink * (1f + (state == EnemyState.Patrol ? Brain.Suspicion : 0f));
+            if (IsScaring)
+            {
+                color = new Color(1f, 0.05f, 0.03f);
+                brightness = 2.2f;
+            }
 
             if (eyeLight != null)
             {
-                eyeLight.enabled = state != EnemyState.Dormant;
+                eyeLight.enabled = state != EnemyState.Dormant || IsScaring;
                 eyeLight.color = color;
                 eyeLight.intensity = 3f * brightness;
             }
@@ -424,7 +514,7 @@ namespace TrashAstronauts.Mission
             {
                 if (m_Block == null) m_Block = new MaterialPropertyBlock();
                 eyeRenderer.GetPropertyBlock(m_Block);
-                m_Block.SetColor(k_BaseColor, state == EnemyState.Dormant ? new Color(0.05f, 0.05f, 0.05f) : color);
+                m_Block.SetColor(k_BaseColor, state == EnemyState.Dormant && !IsScaring ? new Color(0.05f, 0.05f, 0.05f) : color);
                 m_Block.SetColor(k_Emission, color * (2.5f * brightness));
                 eyeRenderer.SetPropertyBlock(m_Block);
                 if (extraEyes != null)
@@ -439,7 +529,7 @@ namespace TrashAstronauts.Mission
 
             if (hum != null && Application.isPlaying)
             {
-                bool shouldPlay = m_Running && state != EnemyState.Dormant;
+                bool shouldPlay = m_Running && state != EnemyState.Dormant && !Silenced && !IsScaring;
                 if (shouldPlay && !hum.isPlaying) hum.Play();
                 else if (!shouldPlay && hum.isPlaying) hum.Stop();
                 hum.pitch = Mathf.Lerp(hum.pitch, humPitch, 0.1f);

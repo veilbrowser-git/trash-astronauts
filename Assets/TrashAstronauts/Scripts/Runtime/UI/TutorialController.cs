@@ -67,12 +67,12 @@ namespace TrashAstronauts.UI
         {
             "You are weightless. Nothing here can hurt you:\nno oxygen drain, and nothing is awake.\nLook at your hands, then follow these steps.",
             "Reach out to a wall or a yellow rail.\nHOLD GRIP to grab it, pull yourself along,\nthen LET GO while moving to glide away.",
-            "Float clear of the walls. HOLD GRIP and sweep\nyour arm backward, like swimming.\nOpen your hand on the way back. Repeat.",
-            "Drifting? GRAB any surface to stop dead.\nPrefer not to float? Push a thumbstick FORWARD\nand release to teleport. Left / right turns you.",
-            "Grip at your CHEST for the flashlight.\nGrip at your HIPS for the scanner and cutter.\nTRIGGER uses a tool. Let go and it returns.",
+            "Float clear of the walls and LOOK where you want\nto go. Sweep your arms back quickly, like swimming.\nNo button needed. (Hold GRIP to paddle backward.)",
+            "Drifting? GRAB any surface to stop dead, or just\nput a hand on a wall: hands are solid here.\nThumbstick FORWARD teleports. Left / right turns.",
+            "Grip at your CHEST: flashlight, and the tranq\nlauncher beside it. HIPS: scanner and cutter.\nTRIGGER uses a tool. Let go and it returns.",
             "Grab the yellow PRACTICE SCRAP floating nearby.\nCarry it to the collection locker and\nLET GO of it inside the open hopper.",
             "Draw the PLASMA CUTTER from your hip.\nHold TRIGGER and keep the flame on each orange\nweld of the PRACTICE PLATE. Watch the heat gauge.",
-            "Orientation complete.\nPress START CONTRACT on the mission board.\nOxygen only drains once you leave this tug.",
+            "Orientation complete. The COMPANY STORE on the\nwall sells tranq darts and tool upgrades.\nPress START CONTRACT when you are ready.",
         };
 
         void OnEnable()
@@ -267,7 +267,7 @@ namespace TrashAstronauts.UI
                 for (int i = 1; i <= 6; i++) progress += i < index || Step == TutorialStep.Done ? "[X] " : i == index ? "[>] " : "[  ] ";
                 boardText.text = header + "\n" + progress + "\n\n" + title + "\n\n" + instruction
                     + (Step == TutorialStep.Done
-                        ? "\n\nIn the wreck: noise attracts the thing that lives there.\nBreak its line of sight to lose it. It cannot enter the\ntug, the airlock or the service duct. Suit menu: B or Y."
+                        ? "\n\nIn the wreck: noise attracts the thing that lives there.\nBreak its line of sight to lose it, or put it to sleep with\na tranq dart. It cannot enter the tug, airlock or duct.\nThe power fails sometimes. Follow the floor lights."
                         : "");
             }
             if (prompt != null) prompt.SetText(title, instruction);

@@ -44,6 +44,7 @@ namespace TrashAstronauts.Tools
             var config = director.Config;
             m_NextPing = Time.time + config.scannerCooldownSeconds;
             Vector3 origin = emitter != null ? emitter.position : transform.position;
+            float range = config.scannerRange * (director.Profile.Data.scannerUpgrade ? config.scannerUpgradeRangeMultiplier : 1f);
 
             int found = 0;
             int total = 0;
@@ -53,7 +54,7 @@ namespace TrashAstronauts.Tools
                 var item = items[i];
                 if (item == null || item.IsSecured) continue;
                 Vector3 target = item.transform.position;
-                if (Vector3.Distance(origin, target) > config.scannerRange) continue;
+                if (Vector3.Distance(origin, target) > range) continue;
                 if (Physics.Linecast(origin, target, GameLayers.EnvironmentMask, QueryTriggerInteraction.Ignore)) continue;
                 item.ShowScan(config.scannerHighlightSeconds);
                 found++;

@@ -107,6 +107,7 @@ namespace TrashAstronauts.UI
             }
             if (worst == null) return "";
 
+            if (worst.IsSedated) return "DRONE: SEDATED " + Mathf.CeilToInt(worst.SedatedSecondsLeft) + "s";
             string range = worst.NearestPlayerDistance < 7f ? " (CLOSE)" : "";
             switch (worst.State)
             {

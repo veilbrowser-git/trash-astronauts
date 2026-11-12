@@ -46,7 +46,8 @@ namespace TrashAstronauts.Tests
             var context = rig.GetComponent<PlayerContext>();
             Assert.IsNotNull(context.leftHand);
             Assert.IsNotNull(context.rightHand);
-            Assert.AreEqual(3, context.tools.Length);
+            Assert.AreEqual(4, context.tools.Length);
+            Assert.IsTrue(context.tools.Any(t => t is TranqTool));
             Assert.IsTrue(context.tools.Any(t => t is FlashlightTool));
             Assert.IsTrue(context.tools.Any(t => t is ScannerTool));
             Assert.IsTrue(context.tools.Any(t => t is PlasmaCutterTool));
@@ -67,6 +68,11 @@ namespace TrashAstronauts.Tests
             Assert.IsNotNull(zeroG.leftHand);
             Assert.IsNotNull(zeroG.rightHand);
             Assert.AreSame(zeroG, rig.GetComponent<PlayerLocomotion>().zeroG);
+            Assert.IsNotNull(zeroG.head, "Solid hands need the head reference.");
+            Assert.AreEqual(2, rig.GetComponentsInChildren<HandTrackingDriver>(true).Length, "Each hand should support hand tracking.");
+            Assert.AreEqual(2, rig.GetComponentsInChildren<HandWallClamp>(true).Length);
+            foreach (var interactor in rig.GetComponentsInChildren<UnityEngine.XR.Interaction.Toolkit.Interactors.XRDirectInteractor>(true))
+                Assert.IsTrue(interactor.improveAccuracyWithSphereCollider, "Grab detection must use overlap queries (trigger events never reach the hand layer).");
             Assert.IsNotNull(rig.GetComponentInChildren<TrashAstronauts.UI.TutorialPrompt>(true));
         }
 

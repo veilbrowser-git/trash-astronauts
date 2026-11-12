@@ -39,14 +39,24 @@ namespace TrashAstronauts.Player
         /// <summary>True while this hand is holding on to the ship (wall, rail, prop). Set by ZeroGLocomotion.</summary>
         public bool IsAnchored { get; set; }
 
-        /// <summary>Replaces the grip input when set (editor simulation and tests). Null = use the controller.</summary>
+        /// <summary>Replaces the grip input when set (hand tracking, editor simulation, tests). Null = use the controller.</summary>
         public float? GripOverride { get; set; }
+        /// <summary>Replaces the trigger input when set (hand tracking pinch).</summary>
+        public float? TriggerOverride { get; set; }
+        /// <summary>Frame on which a tracked hand pinched (acts as a trigger press).</summary>
+        public int TriggerPressedFrame { get; set; } = -1;
+        /// <summary>Frame on which a tracked hand made the menu gesture.</summary>
+        public int MenuPressedFrame { get; set; } = -1;
+        /// <summary>True while this hand is driven by hand tracking instead of a controller.</summary>
+        public bool IsTrackedHand { get; set; }
 
         public Vector2 Thumbstick => Read(thumbstick, Vector2.zero);
         public float Grip => GripOverride ?? Read(gripValue, 0f);
-        public float Trigger => Read(triggerValue, 0f);
-        public bool TriggerPressedThisFrame => triggerButton != null && triggerButton.action != null && triggerButton.action.WasPressedThisFrame();
-        public bool MenuPressedThisFrame => menuButton != null && menuButton.action != null && menuButton.action.WasPressedThisFrame();
+        public float Trigger => TriggerOverride ?? Read(triggerValue, 0f);
+        public bool TriggerPressedThisFrame => TriggerPressedFrame == Time.frameCount
+            || (triggerButton != null && triggerButton.action != null && triggerButton.action.WasPressedThisFrame());
+        public bool MenuPressedThisFrame => MenuPressedFrame == Time.frameCount
+            || (menuButton != null && menuButton.action != null && menuButton.action.WasPressedThisFrame());
 
         void Awake()
         {

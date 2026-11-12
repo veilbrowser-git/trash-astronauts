@@ -25,12 +25,16 @@ MonoBehaviour:
   cutterSparks: {fileID: 8300000, guid: 235ae9f967f774c6e9ed6242c5988bd0, type: 3}
   cutterOverheat: {fileID: 8300000, guid: 9a94f42e356444827bac60df4d9c2eb0, type: 3}
   panelBreak: {fileID: 8300000, guid: 077c29d45ebe741c6bab0899e7143a46, type: 3}
+  tranqFire: {fileID: 8300000, guid: d0e5578f785dd4581ba8da91c17af4b8, type: 3}
+  tranqHit: {fileID: 8300000, guid: d2f2c6746701c46028b97a7444fcb3c0, type: 3}
   impactLight: {fileID: 8300000, guid: 15da0061b2dfe4531be7495e23818914, type: 3}
   impactHeavy: {fileID: 8300000, guid: 9e922ba2abe8e4b49b298d63509a7273, type: 3}
   doorMove: {fileID: 8300000, guid: 1293c66d34ee14be2844d0bd47c81c15, type: 3}
   airlockHiss: {fileID: 8300000, guid: 82943cf69bbce4adf89787a2c15c413c, type: 3}
   shipAmbience: {fileID: 8300000, guid: 2bf363892e2154a9190647c30f4d1ec4, type: 3}
   tugAmbience: {fileID: 8300000, guid: 229ddbe9b55fe4b5595658b17eb3a072, type: 3}
+  powerDown: {fileID: 8300000, guid: cc6d2603059f344799ba38c56d5c1e38, type: 3}
+  powerUp: {fileID: 8300000, guid: 1a2301186b09543348a6f2cb60c506ba, type: 3}
   oxygenLow: {fileID: 8300000, guid: 1b87cc656b3094a728f5c4c34497160e, type: 3}
   oxygenCritical: {fileID: 8300000, guid: 4f239f8b7285344f8b5f2350091b82c1, type: 3}
   droneHum: {fileID: 8300000, guid: 47968b61f370f4a0c91d8eb079c3a170, type: 3}
@@ -38,6 +42,7 @@ MonoBehaviour:
   droneChase: {fileID: 8300000, guid: 0f15e7e82e4934855b9ec6ae6306e5fc, type: 3}
   droneLost: {fileID: 8300000, guid: 275b8470eb2d4466da564aef644f1ea7, type: 3}
   droneCatch: {fileID: 8300000, guid: 5d941c1362570403cae80bc086369b50, type: 3}
+  droneScare: {fileID: 8300000, guid: 485829826838b4a2aa37a3f0ec9809d1, type: 3}
   resultSuccess: {fileID: 8300000, guid: b20c969eb7fbb4e4cb33534d3e66a32b, type: 3}
   resultPartial: {fileID: 8300000, guid: 034d119f353fe49c0b91fa65ec7b57df, type: 3}
   resultFail: {fileID: 8300000, guid: 50c11e5c1d284466e903226840cdd633, type: 3}

@@ -11,7 +11,7 @@ namespace TrashAstronauts.Mission
     ///
     /// F1 start contract   F2 extract            F3 next recovery anchor   F4 deposit nearest salvage
     /// F5 drain 60s oxygen F6 loud noise at head F7 wake drone now         F8 +500 credits
-    /// F9 erase save       F10 toggle hazard pause
+    /// F9 erase save       F10 toggle hazard pause   F11 blackout on/off       F12 sedate the creature
     /// </summary>
     public sealed class DevHotkeys : MonoBehaviour
     {
@@ -50,6 +50,22 @@ namespace TrashAstronauts.Mission
             }
             if (keyboard.f10Key.wasPressedThisFrame)
                 director.SetHazardPause(HazardPauseReason.Scripted, !director.HazardsPaused);
+            if (keyboard.f11Key.wasPressedThisFrame)
+            {
+                var blackout = director.GetComponent<BlackoutController>();
+                if (blackout != null)
+                {
+                    if (blackout.IsBlackout) blackout.EndBlackout(false);
+                    else blackout.TriggerNow(15f);
+                }
+            }
+            if (keyboard.f12Key.wasPressedThisFrame && director.enemies != null)
+            {
+                foreach (var enemy in director.enemies)
+                {
+                    if (enemy != null) enemy.Tranquilize(director.Config.tranqSleepSeconds);
+                }
+            }
         }
 
         void NextAnchor()

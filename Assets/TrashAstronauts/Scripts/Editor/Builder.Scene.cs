@@ -44,6 +44,8 @@ namespace TrashAstronauts.EditorTools
         static readonly List<Cuttable> s_Cuttables = new List<Cuttable>();
         static readonly Dictionary<string, EnemyWaypoint> s_Waypoints = new Dictionary<string, EnemyWaypoint>();
         static Transform s_Level, s_Rails, s_Teleport, s_Spawns, s_Props, s_Lights, s_Signs;
+        static readonly List<Light> s_WreckLights = new List<Light>();
+        static readonly List<Renderer> s_WreckGlow = new List<Renderer>();
 
         static void BuildScene()
         {
@@ -52,6 +54,8 @@ namespace TrashAstronauts.EditorTools
             s_Cuttables.Clear();
             s_Waypoints.Clear();
             s_BoxMeshes.Clear();
+            s_WreckLights.Clear();
+            s_WreckGlow.Clear();
 
             // Lighting: dim flat ambient so routes stay readable with the flashlight off, dark fog for mood.
             RenderSettings.ambientMode = AmbientMode.Flat;
@@ -82,6 +86,7 @@ namespace TrashAstronauts.EditorTools
             var reactorPanel = BuildCompartments(out var cagePanel, out var ductPanel, out var rackMount, out var practicePanel);
             BuildSpawnPoints(reactorPanel, cagePanel, rackMount);
             BuildDecor();
+            BuildMapDetail();
             BuildWaypoints();
 
             // --- mission objects
@@ -111,6 +116,10 @@ namespace TrashAstronauts.EditorTools
             var tutorialText = BuildTutorialBoard(out var skipStep, out var skipAll);
             var settings = BuildSettingsPanel(s_Props, "Suit Settings Console", new Vector3(1.0f, 1.35f, -2.88f), Facing(Vector3.forward), 1.6f);
             settings.director = director;
+            var shop = BuildShop(director);
+
+            var blackout = missionGo.AddComponent<BlackoutController>();
+            blackout.director = director;
 
             // --- tutorial practice item
             var practiceSpawn = Empty(missionGo.transform, "Practice Scrap Spawn", new Vector3(0.9f, 1.15f, 0.4f));
@@ -182,6 +191,10 @@ namespace TrashAstronauts.EditorTools
             ConfigureSpatial(reactorHum, s_Audio != null ? s_Audio.droneHum : null, true, 0.3f, 1f, 12f);
             reactorHum.pitch = 0.5f;
             reactorHum.playOnAwake = true;
+
+            blackout.lights = s_WreckLights.ToArray();
+            blackout.glowStrips = s_WreckGlow.ToArray();
+            blackout.ambience = new[] { ambience, reactorHum };
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -302,15 +315,15 @@ namespace TrashAstronauts.EditorTools
             // Lights: a handful of unshadowed point lights plus emissive strips.
             PointLight(s_Lights, "Tug Light A", new Vector3(0, 2.4f, -1.5f), new Color(1f, 0.9f, 0.75f), 5f, 6f);
             PointLight(s_Lights, "Tug Light B", new Vector3(0, 2.4f, 1f), new Color(1f, 0.9f, 0.75f), 3.5f, 5f);
-            PointLight(s_Lights, "Airlock Light", new Vector3(0, 2.4f, 5.6f), new Color(1f, 0.25f, 0.2f), 3.5f, 6f).gameObject.AddComponent<ProximityFlicker>();
-            PointLight(s_Lights, "Corridor Light S", new Vector3(0, 2.4f, 10.5f), new Color(0.7f, 0.85f, 1f), 2.5f, 6.5f).gameObject.AddComponent<ProximityFlicker>();
-            PointLight(s_Lights, "Corridor Light N", new Vector3(0, 2.4f, 18f), new Color(0.7f, 0.85f, 1f), 2.2f, 6.5f).gameObject.AddComponent<ProximityFlicker>();
-            PointLight(s_Lights, "Cargo Light A", new Vector3(-4.2f, 2.4f, 12.5f), new Color(1f, 0.6f, 0.3f), 3f, 7f).gameObject.AddComponent<ProximityFlicker>();
-            PointLight(s_Lights, "Cargo Light B", new Vector3(-8f, 2.4f, 16f), new Color(1f, 0.3f, 0.2f), 2.5f, 7f).gameObject.AddComponent<ProximityFlicker>();
-            PointLight(s_Lights, "Maintenance Light", new Vector3(4.8f, 2.4f, 12f), new Color(1f, 0.85f, 0.6f), 3.5f, 7.5f).gameObject.AddComponent<ProximityFlicker>();
-            PointLight(s_Lights, "Reactor Light", new Vector3(0, 2.3f, 23.6f), new Color(0.3f, 1f, 0.85f), 3.5f, 8f).gameObject.AddComponent<ProximityFlicker>();
-            PointLight(s_Lights, "Reactor Light Back", new Vector3(0, 2.3f, 28.4f), new Color(0.3f, 0.9f, 1f), 2.5f, 7f).gameObject.AddComponent<ProximityFlicker>();
-            PointLight(s_Lights, "Duct Light", new Vector3(6.8f, 1.9f, 20f), new Color(1f, 0.5f, 0.2f), 1.8f, 5f).gameObject.AddComponent<ProximityFlicker>();
+            WreckLight(            PointLight(s_Lights, "Airlock Light", new Vector3(0, 2.4f, 5.6f), new Color(1f, 0.25f, 0.2f), 3.5f, 6f));
+            WreckLight(            PointLight(s_Lights, "Corridor Light S", new Vector3(0, 2.4f, 10.5f), new Color(0.7f, 0.85f, 1f), 2.5f, 6.5f));
+            WreckLight(            PointLight(s_Lights, "Corridor Light N", new Vector3(0, 2.4f, 18f), new Color(0.7f, 0.85f, 1f), 2.2f, 6.5f));
+            WreckLight(            PointLight(s_Lights, "Cargo Light A", new Vector3(-4.2f, 2.4f, 12.5f), new Color(1f, 0.6f, 0.3f), 3f, 7f));
+            WreckLight(            PointLight(s_Lights, "Cargo Light B", new Vector3(-8f, 2.4f, 16f), new Color(1f, 0.3f, 0.2f), 2.5f, 7f));
+            WreckLight(            PointLight(s_Lights, "Maintenance Light", new Vector3(4.8f, 2.4f, 12f), new Color(1f, 0.85f, 0.6f), 3.5f, 7.5f));
+            WreckLight(            PointLight(s_Lights, "Reactor Light", new Vector3(0, 2.3f, 23.6f), new Color(0.3f, 1f, 0.85f), 3.5f, 8f));
+            WreckLight(            PointLight(s_Lights, "Reactor Light Back", new Vector3(0, 2.3f, 28.4f), new Color(0.3f, 0.9f, 1f), 2.5f, 7f));
+            WreckLight(            PointLight(s_Lights, "Duct Light", new Vector3(6.8f, 1.9f, 20f), new Color(1f, 0.5f, 0.2f), 1.8f, 5f));
 
             Strip("Tug Strip", new Vector3(0, H - 0.03f, -0.5f), new Vector3(0.12f, 0.03f, 3.6f), "GlowWarm");
             Strip("Airlock Strip", new Vector3(0, H - 0.03f, 5.6f), new Vector3(2.4f, 0.03f, 0.1f), "GlowRed");
@@ -322,9 +335,22 @@ namespace TrashAstronauts.EditorTools
             Strip("Reactor Strip E", new Vector3(2.6f, H - 0.03f, 25.6f), new Vector3(0.1f, 0.03f, 4.5f), "GlowTeal");
         }
 
+        static void WreckLight(Light light)
+        {
+            light.gameObject.AddComponent<ProximityFlicker>();
+            s_WreckLights.Add(light);
+        }
+
         static void Strip(string name, Vector3 center, Vector3 size, string mat)
         {
-            Box(s_Lights, name, center, size, M(mat), GameLayers.Default, false);
+            var glow = Box(s_Lights, name, center, size, M(mat), GameLayers.Default, false);
+            // Strips in the wreck go dark in a blackout; the tug keeps its lights. Glow strips must not be
+            // static-batched, or their per-renderer colour could not be changed.
+            if (center.z > 2.5f)
+            {
+                glow.isStatic = false;
+                s_WreckGlow.Add(glow.GetComponent<MeshRenderer>());
+            }
             Box(s_Lights, name + " Housing", center + Vector3.up * 0.012f, new Vector3(size.x + 0.08f, size.y, size.z + 0.08f), M("Trim"), GameLayers.Default, false);
         }
 
@@ -392,6 +418,13 @@ namespace TrashAstronauts.EditorTools
             var col = go.AddComponent<BoxCollider>();
             col.size = new Vector3(0.11f, 0.11f, length);
 
+            // A dim guide light along the floor under each rail: it marks the route and survives a blackout.
+            if (a.y < 1.5f && Mathf.Abs(a.y - b.y) < 0.01f)
+            {
+                var guide = Box(s_Lights, "Guide Light", new Vector3((a.x + b.x) * 0.5f, 0.2f, (a.z + b.z) * 0.5f),
+                    Mathf.Abs(d.x) > Mathf.Abs(d.z) ? new Vector3(length - 0.1f, 0.025f, 0.03f) : new Vector3(0.03f, 0.025f, length - 0.1f), M("GuideLight"), GameLayers.Default, false);
+            }
+
             // The zero-g locomotion grabs anything on the Rail or Environment layers; the highlight
             // lights the rail up when a hand is close enough to take hold.
             var highlight = go.AddComponent<HoverHighlight>();
@@ -411,7 +444,7 @@ namespace TrashAstronauts.EditorTools
             Rail(new Vector3(-0.9f + o, RailY, 2.1f), new Vector3(-0.9f + o, RailY, 3.5f));
             Rail(new Vector3(0.9f - o, RailY, 2.1f), new Vector3(0.9f - o, RailY, 3.5f));
             // Airlock
-            Rail(new Vector3(-2 + o, RailY, 3.9f), new Vector3(-2 + o, RailY, 7.3f));
+            Rail(new Vector3(-2 + o, RailY, 5.9f), new Vector3(-2 + o, RailY, 7.3f));   // lockers fill the rest of this wall
             Rail(new Vector3(2 - o, RailY, 3.9f), new Vector3(2 - o, RailY, 7.3f));
             // Corridor west wall (gap at the cargo door z 11.1..12.9)
             Rail(new Vector3(-1.3f + o, RailY, 7.9f), new Vector3(-1.3f + o, RailY, 10.9f));
@@ -428,7 +461,8 @@ namespace TrashAstronauts.EditorTools
             Rail(new Vector3(-1.3f - o, RailY, 13.2f), new Vector3(-1.3f - o, RailY, 18.2f));
             Rail(new Vector3(-6.95f, RailY, 14f), new Vector3(-6.95f, RailY, 15.2f));  // on the side of a container
             // Maintenance
-            Rail(new Vector3(1.7f, RailY, 8.6f + o), new Vector3(7.9f, RailY, 8.6f + o));
+            Rail(new Vector3(1.7f, RailY, 8.6f + o), new Vector3(2.9f, RailY, 8.6f + o));
+            Rail(new Vector3(4.3f, RailY, 8.6f + o), new Vector3(5.8f, RailY, 8.6f + o));
             Rail(new Vector3(8.3f - o, RailY, 9f), new Vector3(8.3f - o, RailY, 11.3f));
             Rail(new Vector3(8.3f - o, RailY, 12.8f), new Vector3(8.3f - o, RailY, 15.2f));
             Rail(new Vector3(1.7f, RailY, 15.6f - o), new Vector3(6f, RailY, 15.6f - o));
@@ -866,6 +900,225 @@ namespace TrashAstronauts.EditorTools
             locker.slots = slots.ToArray();
             locker.display = display;
             return locker;
+        }
+
+        static ShopPanel BuildShop(MissionDirector director)
+        {
+            // On the tug's east wall between the locker and the hatch, facing west (-X), above the rail.
+            var root = Empty(s_Props, "Company Store", new Vector3(2f - T * 0.5f - 0.02f, 1.75f, 0.2f), Facing(Vector3.left), GameLayers.Default);
+            Prim(root.transform, "Back", PrimitiveType.Cube, new Vector3(0, 0, 0.012f), new Vector3(1.15f, 1.0f, 0.02f), M("Screen"));
+            CBox(root.transform, "Header Bar", new Vector3(0, 0.485f, 0.006f), new Vector3(1.15f, 0.03f, 0.03f), M("GlowTeal"), 0.006f);
+            var header = Text(root.transform, "Header", "COMPANY STORE", new Vector3(0, 0.33f, -0.002f), Quaternion.identity, 0.42f, new Vector2(1.08f, 0.24f), new Color(0.6f, 1f, 0.9f));
+
+            var size = new Vector2(1.0f, 0.17f);
+            var panel = root.AddComponent<ShopPanel>();
+            panel.director = director;
+            panel.header = header;
+            panel.tranqButton = Button(root.transform, "Buy Tranq Dart", new Vector3(0, 0.08f, 0), Quaternion.identity, size, "TRANQ DART", M("ButtonGreen"), 0.4f);
+            panel.scannerButton = Button(root.transform, "Buy Scanner Range", new Vector3(0, -0.13f, 0), Quaternion.identity, size, "SCANNER RANGE+", M("ButtonBlue"), 0.4f);
+            panel.cutterButton = Button(root.transform, "Buy Cutter Coolant", new Vector3(0, -0.34f, 0), Quaternion.identity, size, "CUTTER COOLANT", M("ButtonAmber"), 0.4f);
+            return panel;
+        }
+
+        // ------------------------------------------------------------------ map art pass
+
+        static void Beams(float x0, float x1, float z0, float z1, float height, bool alongX)
+        {
+            // Ceiling cross-beams roughly every 2.2 m, spanning the short side.
+            float length = alongX ? x1 - x0 : z1 - z0;
+            int count = Mathf.Max(1, Mathf.RoundToInt(length / 2.2f));
+            for (int i = 0; i <= count; i++)
+            {
+                float t = Mathf.Lerp(0.15f, length - 0.15f, i / (float)count);
+                Vector3 centre = alongX ? new Vector3(x0 + t, height - 0.07f, (z0 + z1) * 0.5f) : new Vector3((x0 + x1) * 0.5f, height - 0.07f, z0 + t);
+                Vector3 size = alongX ? new Vector3(0.16f, 0.14f, z1 - z0 - 0.24f) : new Vector3(x1 - x0 - 0.24f, 0.14f, 0.16f);
+                Box(s_Props, "Ceiling Beam", centre, size, M("Trim"), GameLayers.Default, false);
+            }
+        }
+
+        static void Vent(Vector3 position, Vector3 outward, float width = 0.7f, float height = 0.35f)
+        {
+            var root = Empty(s_Props, "Vent", position, Facing(outward), GameLayers.Default).transform;
+            CBox(root, "Frame", new Vector3(0, 0, 0.004f), new Vector3(width, height, 0.04f), M("Trim"), 0.01f);
+            Prim(root, "Dark", PrimitiveType.Cube, new Vector3(0, 0, -0.012f), new Vector3(width - 0.08f, height - 0.08f, 0.006f), M("Vent"));
+            int slats = Mathf.Max(3, Mathf.RoundToInt(height / 0.06f));
+            for (int i = 0; i < slats; i++)
+                CBox(root, "Slat", new Vector3(0, -height * 0.5f + 0.05f + i * (height - 0.1f) / (slats - 1), -0.02f), new Vector3(width - 0.08f, 0.012f, 0.03f), M("Steel"), 0.003f, new Vector3(35, 0, 0));
+        }
+
+        static void Window(Vector3 position, Vector3 outward, float width, float height)
+        {
+            var root = Empty(s_Props, "Window", position, Facing(outward), GameLayers.Default).transform;
+            Prim(root, "Stars", PrimitiveType.Cube, new Vector3(0, 0, 0.002f), new Vector3(width, height, 0.004f), M("Stars"));
+            CBox(root, "Frame Top", new Vector3(0, height * 0.5f + 0.04f, -0.01f), new Vector3(width + 0.16f, 0.08f, 0.06f), M("Trim"), 0.012f);
+            CBox(root, "Frame Bottom", new Vector3(0, -height * 0.5f - 0.04f, -0.01f), new Vector3(width + 0.16f, 0.08f, 0.06f), M("Trim"), 0.012f);
+            CBox(root, "Frame L", new Vector3(-width * 0.5f - 0.04f, 0, -0.01f), new Vector3(0.08f, height, 0.06f), M("Trim"), 0.012f);
+            CBox(root, "Frame R", new Vector3(width * 0.5f + 0.04f, 0, -0.01f), new Vector3(0.08f, height, 0.06f), M("Trim"), 0.012f);
+            int bars = Mathf.Max(1, Mathf.RoundToInt(width / 0.9f) - 1);
+            for (int i = 1; i <= bars; i++)
+                CBox(root, "Mullion", new Vector3(-width * 0.5f + i * width / (bars + 1), 0, -0.01f), new Vector3(0.05f, height, 0.05f), M("Trim"), 0.01f);
+        }
+
+        static void Barrel(Vector3 floorPosition, string mat = "Barrel")
+        {
+            var go = Empty(s_Props, "Barrel", floorPosition + Vector3.up * 0.45f, null, GameLayers.Environment);
+            Part(go.transform, "Drum", Lathe("Barrel", 14, new Vector2(0.24f, -0.45f), new Vector2(0.27f, -0.42f), new Vector2(0.27f, -0.16f), new Vector2(0.285f, -0.14f),
+                new Vector2(0.285f, -0.1f), new Vector2(0.27f, -0.08f), new Vector2(0.27f, 0.12f), new Vector2(0.285f, 0.14f), new Vector2(0.285f, 0.18f), new Vector2(0.27f, 0.2f),
+                new Vector2(0.27f, 0.42f), new Vector2(0.24f, 0.45f)), Vector3.zero, M(mat));
+            Part(go.transform, "Cap", Tube(0.05f, 0.03f, 8), new Vector3(0.12f, 0.46f, 0.05f), M("Steel"));
+            var col = go.AddComponent<CapsuleCollider>();
+            col.radius = 0.28f;
+            col.height = 0.92f;
+            go.isStatic = true;
+            foreach (Transform child in go.transform) child.gameObject.isStatic = true;
+        }
+
+        static void LockerRow(Vector3 floorCentre, Vector3 outward, int count)
+        {
+            var root = Empty(s_Props, "Lockers", floorCentre, Quaternion.LookRotation(outward, Vector3.up), GameLayers.Environment).transform;
+            float width = 0.5f;
+            var col = root.gameObject.AddComponent<BoxCollider>();
+            col.size = new Vector3(count * width, 1.9f, 0.45f);
+            col.center = new Vector3(0, 0.95f, 0);
+            for (int i = 0; i < count; i++)
+            {
+                float x = (i - (count - 1) * 0.5f) * width;
+                CBox(root, "Cabinet", new Vector3(x, 0.95f, 0), new Vector3(width - 0.02f, 1.9f, 0.44f), M("Trim"), 0.012f);
+                CBox(root, "Door", new Vector3(x, 0.98f, 0.225f), new Vector3(width - 0.07f, 1.72f, 0.02f), M("LockerDoor"), 0.008f);
+                for (int v = 0; v < 3; v++) CBox(root, "Door Vent", new Vector3(x, 1.62f - v * 0.05f, 0.237f), new Vector3(width - 0.2f, 0.012f, 0.006f), M("Vent"), 0.002f);
+                CBox(root, "Handle", new Vector3(x + width * 0.3f, 1.0f, 0.243f), new Vector3(0.02f, 0.12f, 0.02f), M("Steel"), 0.005f);
+                CBox(root, "Name Plate", new Vector3(x, 1.38f, 0.237f), new Vector3(0.16f, 0.05f, 0.004f), M("Poster"), 0.001f);
+            }
+        }
+
+        static void Poster(string text, Vector3 position, Vector3 outward, float width = 0.8f, float height = 0.5f, float fontSize = 0.5f)
+        {
+            var root = Empty(s_Props, "Poster", position, Facing(outward), GameLayers.Default).transform;
+            CBox(root, "Board", new Vector3(0, 0, 0.004f), new Vector3(width, height, 0.012f), M("Poster"), 0.004f);
+            CBox(root, "Hazard Edge", new Vector3(0, -height * 0.5f + 0.03f, -0.003f), new Vector3(width, 0.05f, 0.004f), M("Hazard"), 0.001f);
+            Text(root, "Text", text, new Vector3(0, 0.03f, -0.004f), Quaternion.identity, fontSize, new Vector2(width - 0.06f, height - 0.12f), new Color(0.12f, 0.1f, 0.08f)).fontStyle = FontStyles.Bold;
+        }
+
+        static void Dust(string name, Vector3 centre, Vector3 size, int count)
+        {
+            var go = Empty(s_Props, name, centre, null, GameLayers.Default);
+            var ps = go.AddComponent<ParticleSystem>();
+            var main = ps.main;
+            main.loop = true;
+            main.prewarm = true;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(10f, 18f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.01f, 0.05f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.004f, 0.012f);
+            main.startColor = new Color(0.75f, 0.8f, 0.85f, 1f);
+            main.maxParticles = count;
+            main.gravityModifier = 0f;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            var emission = ps.emission;
+            emission.rateOverTime = count / 14f;
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Box;
+            shape.scale = size;
+            var renderer = go.GetComponent<ParticleSystemRenderer>();
+            renderer.sharedMaterial = M("Spark");
+            Cheap(renderer);
+        }
+
+        static void BuildMapDetail()
+        {
+            // --- structure: ceiling beams in every room
+            Beams(-2, 2, -3, 2, H, false);
+            Beams(-2, 2, 3.6f, 7.6f, H, false);
+            Beams(-1.3f, 1.3f, 7.6f, 21.6f, H, false);
+            Beams(-10.3f, -1.3f, 9.6f, 18.6f, H, true);
+            Beams(1.3f, 8.3f, 8.6f, 15.6f, H, true);
+            Beams(-4.5f, 4.5f, 21.6f, 29.6f, H, false);
+
+            // --- walkways: dark anti-slip strips with hazard edges down the middle of the routes
+            void Walkway(float x0, float x1, float z0, float z1)
+            {
+                Box(s_Props, "Walkway", new Vector3((x0 + x1) * 0.5f, 0.007f, (z0 + z1) * 0.5f), new Vector3(x1 - x0, 0.012f, z1 - z0), M("Walkway"), GameLayers.Default, false);
+                bool alongZ = (z1 - z0) > (x1 - x0);
+                foreach (float side in new[] { -1f, 1f })
+                {
+                    Vector3 c = alongZ ? new Vector3((side < 0 ? x0 : x1), 0.009f, (z0 + z1) * 0.5f) : new Vector3((x0 + x1) * 0.5f, 0.009f, (side < 0 ? z0 : z1));
+                    Vector3 sz = alongZ ? new Vector3(0.07f, 0.012f, z1 - z0) : new Vector3(x1 - x0, 0.012f, 0.07f);
+                    Box(s_Props, "Walkway Edge", c, sz, M("Hazard"), GameLayers.Default, false);
+                }
+            }
+            Walkway(-0.55f, 0.55f, 7.9f, 21.3f);
+            Walkway(-0.55f, 0.55f, 3.9f, 7.3f);
+            Walkway(-9.6f, -1.6f, 12.3f, 13.9f);
+            Walkway(1.6f, 6.6f, 10.0f, 11.0f);
+            Walkway(-0.55f, 0.55f, 21.9f, 24.5f);
+            Walkway(-0.5f, 0.5f, -2.0f, 1.7f);
+
+            // --- vents
+            Vent(new Vector3(-1.3f + T * 0.5f + 0.01f, 2.25f, 15.2f), Vector3.right);
+            Vent(new Vector3(1.3f - T * 0.5f - 0.01f, 2.25f, 18.6f), Vector3.left);
+            Vent(new Vector3(-6f, 2.25f, 9.6f + T * 0.5f + 0.01f), Vector3.forward, 1.0f);
+            Vent(new Vector3(-10.3f + T * 0.5f + 0.01f, 0.5f, 16.0f), Vector3.right, 0.6f, 0.4f);
+            Vent(new Vector3(8.3f - T * 0.5f - 0.01f, 2.25f, 10.2f), Vector3.left);
+            Vent(new Vector3(-4.5f + T * 0.5f + 0.01f, 2.25f, 23.2f), Vector3.right);
+            Vent(new Vector3(4.5f - T * 0.5f - 0.01f, 2.25f, 28.0f), Vector3.left);
+            Vent(new Vector3(-2f + T * 0.5f + 0.01f, 2.3f, 5.6f), Vector3.right);
+            Vent(new Vector3(2f - T * 0.5f - 0.01f, 2.35f, -2.4f), Vector3.left, 0.6f, 0.3f);
+
+            // --- windows onto the stars
+            Window(new Vector3(-10.3f + T * 0.5f + 0.015f, 1.65f, 12.6f), Vector3.right, 2.6f, 1.0f);
+            Window(new Vector3(-1.6f, 1.7f, 29.6f - T * 0.5f - 0.015f), Vector3.back, 2.4f, 0.9f);
+            Window(new Vector3(8.3f - T * 0.5f - 0.015f, 1.7f, 13.9f), Vector3.left, 1.4f, 0.8f);
+            Window(new Vector3(2f - T * 0.5f - 0.015f, 1.7f, 5.6f), Vector3.left, 1.6f, 0.8f);
+
+            // --- lockers and stores
+            LockerRow(new Vector3(-2f + T * 0.5f + 0.24f, 0, 4.9f), Vector3.right, 3);
+            LockerRow(new Vector3(6.9f, 0, 8.6f + T * 0.5f + 0.24f), Vector3.forward, 4);
+            Barrel(new Vector3(-9.5f, 0, 15.6f));
+            Barrel(new Vector3(-8.9f, 0, 15.95f), "BarrelBlue");
+            Barrel(new Vector3(-2.6f, 0, 10.4f));
+            Barrel(new Vector3(7.7f, 0, 14.9f), "BarrelBlue");
+            Barrel(new Vector3(-3.9f, 0, 22.4f));
+            Barrel(new Vector3(-1.0f, 0, 29.1f), "BarrelBlue");
+            Container(new Vector3(-6.3f, 0, 18.0f), new Vector3(1.4f, 0.9f, 0.9f), "ContainerBlue");
+            Container(new Vector3(-9.75f, 0, 11.0f), new Vector3(0.9f, 0.9f, 0.9f));
+
+            // --- cables hanging from the ceiling
+            Pipe("Hanging Cable A", new Vector3(0.4f, H, 13.4f), new Vector3(0.75f, 2.15f, 13.7f), 0.012f, "Cable");
+            Pipe("Hanging Cable B", new Vector3(-0.3f, H, 17.2f), new Vector3(-0.9f, 2.0f, 17.0f), 0.012f, "Cable");
+            Pipe("Hanging Cable C", new Vector3(-7.2f, H, 16.6f), new Vector3(-7.5f, 1.9f, 16.2f), 0.014f, "Cable");
+            Pipe("Hanging Cable D", new Vector3(-3.0f, H, 11.2f), new Vector3(-2.7f, 2.05f, 11.6f), 0.012f, "Cable");
+            Pipe("Hanging Cable E", new Vector3(5.8f, H, 12.8f), new Vector3(6.2f, 2.1f, 13.1f), 0.012f, "Cable");
+            Pipe("Hanging Cable F", new Vector3(-2.9f, H, 27.0f), new Vector3(-2.5f, 2.0f, 26.6f), 0.014f, "Cable");
+            Pipe("Wall Conduit Cargo", new Vector3(-10.3f + T * 0.5f + 0.06f, 2.3f, 14.2f), new Vector3(-10.3f + T * 0.5f + 0.06f, 2.3f, 18.3f), 0.03f, "Steel");
+            Pipe("Wall Conduit Reactor", new Vector3(-4.1f, 2.4f, 29.6f - T * 0.5f - 0.07f), new Vector3(-2.9f, 2.4f, 29.6f - T * 0.5f - 0.07f), 0.035f, "Steel");
+
+            // --- reactor: a glowing column rising out of the housing
+            Part(s_Props, "Reactor Column", Tube(0.32f, H - 2.4f, 16), new Vector3(0, (H + 2.4f) * 0.5f, 25.9f), M("ReactorGlow")).isStatic = true;
+            for (int i = 0; i < 2; i++)
+                Part(s_Props, "Reactor Column Ring", Torus(0.36f, 0.04f, 18, 6), new Vector3(0, 2.48f + i * 0.2f, 25.9f), M("Steel")).isStatic = true;
+
+            // --- company notices
+            Poster("DAYS SINCE LAST\nINCIDENT:  0", new Vector3(1.3f - T * 0.5f - 0.012f, 1.55f, 13.6f), Vector3.left);
+            Poster("OXYGEN IS A\nPRIVILEGE", new Vector3(-1.3f + T * 0.5f + 0.012f, 1.55f, 19.4f), Vector3.right);
+            Poster("LOST? FOLLOW THE\nYELLOW RAILS", new Vector3(-5.8f, 1.6f, 18.6f - T * 0.5f - 0.012f), Vector3.back, 1.0f);
+            Poster("REPORT STRANGE\nNOISES. QUIETLY.", new Vector3(4.1f, 1.6f, 15.6f - T * 0.5f - 0.012f), Vector3.back, 0.9f);
+            Poster("SALVAGE IS\nCOMPANY PROPERTY.\nSO ARE YOU.", new Vector3(-2f + T * 0.5f + 0.012f, 1.55f, -2.45f), Vector3.right, 0.8f, 0.55f, 0.4f);
+
+            // --- floor stencils
+            void Stencil(string text, Vector3 position, float yaw)
+            {
+                var t = Text(s_Signs, "Floor Stencil " + text, text, position, Quaternion.Euler(90f, yaw, 0f), 2.2f, new Vector2(3f, 0.5f), new Color(0.85f, 0.7f, 0.15f));
+                t.fontStyle = FontStyles.Bold;
+            }
+            Stencil("AIRLOCK", new Vector3(0, 0.016f, 4.6f), 0f);
+            Stencil("CARGO", new Vector3(-3.0f, 0.016f, 13.1f), 90f);
+            Stencil("MAINT", new Vector3(3.0f, 0.016f, 10.5f), -90f);
+            Stencil("REACTOR", new Vector3(0, 0.016f, 22.8f), 0f);
+
+            // --- drifting dust in the big spaces
+            Dust("Dust Corridor", new Vector3(0, 1.4f, 14.6f), new Vector3(2.2f, 2.2f, 13f), 50);
+            Dust("Dust Cargo", new Vector3(-5.8f, 1.4f, 14.1f), new Vector3(8f, 2.2f, 8f), 70);
+            Dust("Dust Reactor", new Vector3(0, 1.4f, 25.6f), new Vector3(8f, 2.2f, 7f), 60);
+            Dust("Dust Maintenance", new Vector3(4.8f, 1.4f, 12.1f), new Vector3(6f, 2.2f, 6f), 40);
         }
 
         static MissionBoard BuildMissionBoard(MissionDirector director)

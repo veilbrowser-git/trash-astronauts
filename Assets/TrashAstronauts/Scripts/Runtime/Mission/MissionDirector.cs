@@ -399,6 +399,13 @@ namespace TrashAstronauts.Mission
             return Profile.TryPurchaseOxygenUpgrade(m_Config);
         }
 
+        /// <summary>Buys something from the tug's shop. The shop is closed during a contract.</summary>
+        public bool PurchaseShopItem(ShopItem item)
+        {
+            if (Session.Phase == MissionPhase.Active) return false;
+            return Profile.TryPurchase(item, m_Config);
+        }
+
         // ------------------------------------------------------------------ tick
 
         void Update()

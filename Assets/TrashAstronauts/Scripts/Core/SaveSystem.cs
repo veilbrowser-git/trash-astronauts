@@ -25,6 +25,9 @@ namespace TrashAstronauts.Core
         /// <summary>Comfort option: keep drifting after letting go in zero-g (true) or stop at once (false).</summary>
         public bool zeroGDrift = true;
         public bool tutorialCompleted;
+        public int tranqDarts;
+        public bool scannerUpgrade;
+        public bool cutterUpgrade;
         public int runsStarted;
         public int contractsCompleted;
 
@@ -49,6 +52,7 @@ namespace TrashAstronauts.Core
             snapTurnDegrees = NearestSnapOption(snapTurnDegrees);
             if (float.IsNaN(seatedHeightOffset) || float.IsInfinity(seatedHeightOffset)) seatedHeightOffset = 0f;
             seatedHeightOffset = Mathf.Clamp(seatedHeightOffset, MinHeightOffset, MaxHeightOffset);
+            tranqDarts = Mathf.Clamp(tranqDarts, 0, 99);
             runsStarted = Mathf.Max(0, runsStarted);
             contractsCompleted = Mathf.Max(0, contractsCompleted);
         }
@@ -267,6 +271,47 @@ namespace TrashAstronauts.Core
             if (!CanPurchaseOxygenUpgrade(config)) return false;
             Data.totalCredits -= config.oxygenUpgradeCost;
             Data.oxygenUpgradeLevel++;
+            NotifyChangedAndSave();
+            return true;
+        }
+
+        public bool IsOwned(ShopItem item)
+        {
+            switch (item)
+            {
+                case ShopItem.ScannerRange: return Data.scannerUpgrade;
+                case ShopItem.CutterCoolant: return Data.cutterUpgrade;
+                default: return false; // consumables are never "owned"
+            }
+        }
+
+        public bool CanPurchase(ShopItem item, MissionConfig config)
+        {
+            if (config == null || IsOwned(item)) return false;
+            if (item == ShopItem.TranqDart && Data.tranqDarts >= config.maxTranqDarts) return false;
+            return Data.totalCredits >= config.GetShopCost(item);
+        }
+
+        /// <summary>Buys a shop item with banked credits. Upgrades can be bought once; darts up to the carry limit.</summary>
+        public bool TryPurchase(ShopItem item, MissionConfig config)
+        {
+            if (!CanPurchase(item, config)) return false;
+            Data.totalCredits -= config.GetShopCost(item);
+            switch (item)
+            {
+                case ShopItem.TranqDart: Data.tranqDarts++; break;
+                case ShopItem.ScannerRange: Data.scannerUpgrade = true; break;
+                case ShopItem.CutterCoolant: Data.cutterUpgrade = true; break;
+            }
+            NotifyChangedAndSave();
+            return true;
+        }
+
+        /// <summary>Uses up one tranquilizer dart. Returns false if there are none.</summary>
+        public bool TryConsumeTranqDart()
+        {
+            if (Data.tranqDarts <= 0) return false;
+            Data.tranqDarts--;
             NotifyChangedAndSave();
             return true;
         }

@@ -76,6 +76,9 @@ namespace TrashAstronauts.Tools
         protected override void Tick(float dt)
         {
             EnsureModel();
+            var shopDirector = MissionDirector.Active;
+            m_Heat.HeatCapacityMultiplier = shopDirector != null && shopDirector.Profile != null && shopDirector.Profile.Data.cutterUpgrade
+                ? shopDirector.Config.cutterUpgradeHeatMultiplier : 1f;
             bool firing = m_Heat.Tick(dt, IsHeld && TriggerHeld);
             if (firing != m_WasFiring)
             {

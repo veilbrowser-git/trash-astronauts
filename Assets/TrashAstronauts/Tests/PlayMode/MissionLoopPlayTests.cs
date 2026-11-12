@@ -76,7 +76,7 @@ namespace TrashAstronauts.Tests
             Assert.IsTrue(m_Player.InSafeZone, "The player should start inside the tug.");
             Assert.IsFalse(m_Director.tugHatch.IsOpen, "The hatch is sealed until a contract starts.");
             Assert.AreEqual(EnemyState.Dormant, m_Director.enemies[0].State);
-            Assert.AreEqual(3, m_Player.tools.Length);
+            Assert.AreEqual(4, m_Player.tools.Length);
             yield return Frames(3);
             foreach (var tool in m_Player.tools) Assert.IsTrue(tool.IsDocked, tool.toolName + " should start holstered");
 
@@ -397,7 +397,9 @@ namespace TrashAstronauts.Tests
             drone.WakeNow();
             OpenWreckDoors();
             bool sawChase = false;
-            for (int i = 0; i < 6000 && m_Director.Phase == MissionPhase.Active; i++)
+            bool sawScare = false;
+            float closest = float.MaxValue;
+            for (int i = 0; i < 6000 && m_Director.Phase == MissionPhase.Active && !drone.IsScaring; i++)
             {
                 if (i % 100 == 0) m_Director.noise.Emit(new NoiseEvent(m_Player.HeadPosition, 1f, NoiseKind.Impact, PlayerId.Local));
                 drone.Step(0.05f);
@@ -406,6 +408,19 @@ namespace TrashAstronauts.Tests
             }
 
             Assert.IsTrue(sawChase, "The drone never spotted a player standing in the corridor.");
+
+            // The catch plays a short jumpscare before the run ends: the creature lunges to the player's face.
+            for (float waited = 0f; waited < 4f && m_Director.Phase == MissionPhase.Active; waited += Time.unscaledDeltaTime)
+            {
+                if (drone.IsScaring)
+                {
+                    sawScare = true;
+                    closest = Mathf.Min(closest, Vector3.Distance(drone.transform.position, m_Player.HeadPosition));
+                }
+                yield return null;
+            }
+            Assert.IsTrue(sawScare, "Being caught should trigger the jumpscare.");
+            Assert.Less(closest, 1.0f, "During the jumpscare the creature should be right in front of the player.");
             Assert.AreEqual(MissionPhase.Results, m_Director.Phase);
             Assert.AreEqual(MissionOutcome.FailedCaught, m_Director.Session.Result.Outcome);
             Assert.AreEqual(0, m_Director.Session.Result.Payout);

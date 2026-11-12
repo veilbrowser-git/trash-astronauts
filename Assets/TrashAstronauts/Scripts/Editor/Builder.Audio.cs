@@ -68,6 +68,14 @@ namespace TrashAstronauts.EditorTools
             lib.droneLost = Wav("drone_lost", 1.0f, (t, d) => (Saw(210f - 150f * t / d, t) * 0.3f + Sine(105f - 60f * t / d, t) * 0.35f) * Env(t, d, 0.03f, 1.8f)
                 + (Mathf.Repeat(t * 11f, 1f) < 0.05f ? Noise(rng) * 0.25f : 0f) * (1f - t / d));
             lib.droneCatch = Wav("drone_catch", 0.8f, (t, d) => (Saw(140f - 90f * t / d, t) * 0.5f + Noise(rng) * 0.5f + Sine(900f - 700f * t / d, t) * 0.25f) * Env(t, d, 0.004f, 3f));
+            // Jumpscare sting: short and sharp, but mixed well below full volume.
+            lib.droneScare = Wav("drone_scare", 0.7f, (t, d) =>
+                (Sine(1250f - 800f * t / d + 220f * Sine(47f, t), t) * 0.4f + Noise(rng) * 0.45f + Saw(95f, t) * 0.3f) * Env(t, d, 0.003f, 3.2f));
+            lib.tranqFire = Wav("tranq_fire", 0.16f, (t, d) => Noise(rng) * Decay(t, 38f) * 0.5f + Sine(260f - 900f * t, t) * Decay(t, 30f) * 0.3f);
+            lib.tranqHit = Wav("tranq_hit", 0.5f, (t, d) => Sine(520f - 380f * t / d, t) * Env(t, d, 0.01f, 5f) * 0.4f);
+            lib.powerDown = Wav("power_down", 1.4f, (t, d) => (Saw(120f * Mathf.Pow(1f - t / d, 2f) + 18f, t) * 0.35f + Sine(60f * (1f - t / d) + 20f, t) * 0.3f) * Env(t, d, 0.01f, 1.2f));
+            lib.powerUp = Wav("power_up", 0.9f, (t, d) => (Saw(30f + 110f * (t / d), t) * 0.25f + Sine(60f + 180f * (t / d), t) * 0.2f) * Mathf.Sin(Mathf.PI * t / d));
+
             lib.resultSuccess = Wav("result_success", 1.2f, (t, d) =>
             {
                 float[] notes = { 392f, 494f, 587f, 784f };

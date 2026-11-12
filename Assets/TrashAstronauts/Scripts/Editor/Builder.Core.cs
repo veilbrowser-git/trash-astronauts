@@ -227,6 +227,15 @@ namespace TrashAstronauts.EditorTools
             Lit("PaintOrange", new Color(0.85f, 0.38f, 0.08f), 0.45f);
             Lit("PaintWhite", new Color(0.82f, 0.82f, 0.78f), 0.4f);
             Lit("ScreenGlow", new Color(0.1f, 0.5f, 0.45f), 0.8f, null, new Color(0.15f, 0.9f, 0.8f));
+            Lit("Walkway", new Color(0.13f, 0.14f, 0.15f), 0.25f, floor, null, floorN);
+            Lit("Vent", new Color(0.1f, 0.11f, 0.12f), 0.4f);
+            Lit("Barrel", new Color(0.55f, 0.42f, 0.1f), 0.4f, plates, null, platesN);
+            Lit("BarrelBlue", new Color(0.12f, 0.28f, 0.42f), 0.4f, plates, null, platesN);
+            Lit("LockerDoor", new Color(0.36f, 0.4f, 0.36f), 0.35f, plates, null, platesN);
+            Lit("Poster", new Color(0.85f, 0.8f, 0.62f), 0.1f);
+            Lit("GuideLight", new Color(0.15f, 0.9f, 0.75f), 0.3f, null, new Color(0.08f, 0.55f, 0.45f));
+            Lit("TranqBody", new Color(0.2f, 0.5f, 0.3f), 0.45f);
+            Lit("DartGlow", new Color(0.4f, 1f, 0.5f), 0.6f, null, new Color(0.3f, 1.6f, 0.5f));
             Unlit("Fade", new Color(0f, 0f, 0f, 0f), true);
             Unlit("Line", Color.white, false, null, "Universal Render Pipeline/Particles/Unlit");
             Unlit("Flame", new Color(0.6f, 0.9f, 1f));
@@ -235,6 +244,29 @@ namespace TrashAstronauts.EditorTools
             Unlit("Stars", Color.white, false, stars);
             Unlit("Spark", new Color(1f, 0.75f, 0.3f), false, null, "Universal Render Pipeline/Particles/Unlit");
             AssetDatabase.SaveAssets();
+        }
+
+        static PhysicsMaterial s_ZeroGMaterial;
+
+        /// <summary>Bouncy, low-friction surface for everything that floats, so objects ricochet instead of sticking.</summary>
+        static PhysicsMaterial ZeroGMaterial()
+        {
+            if (s_ZeroGMaterial != null) return s_ZeroGMaterial;
+            string path = GeneratedDir + "/ZeroG.physicMaterial";
+            var mat = AssetDatabase.LoadAssetAtPath<PhysicsMaterial>(path);
+            if (mat == null)
+            {
+                mat = new PhysicsMaterial("ZeroG");
+                AssetDatabase.CreateAsset(mat, path);
+            }
+            mat.bounciness = 0.55f;
+            mat.dynamicFriction = 0.15f;
+            mat.staticFriction = 0.15f;
+            mat.bounceCombine = PhysicsMaterialCombine.Maximum;
+            mat.frictionCombine = PhysicsMaterialCombine.Minimum;
+            EditorUtility.SetDirty(mat);
+            s_ZeroGMaterial = mat;
+            return mat;
         }
 
         // ------------------------------------------------------------------ procedural textures

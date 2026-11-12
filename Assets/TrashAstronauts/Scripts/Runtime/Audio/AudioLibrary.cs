@@ -25,6 +25,8 @@ namespace TrashAstronauts.Audio
         public AudioClip cutterSparks;
         public AudioClip cutterOverheat;
         public AudioClip panelBreak;
+        public AudioClip tranqFire;
+        public AudioClip tranqHit;
 
         [Header("World")]
         public AudioClip impactLight;
@@ -33,6 +35,8 @@ namespace TrashAstronauts.Audio
         public AudioClip airlockHiss;
         public AudioClip shipAmbience;
         public AudioClip tugAmbience;
+        public AudioClip powerDown;
+        public AudioClip powerUp;
 
         [Header("Oxygen")]
         public AudioClip oxygenLow;
@@ -44,6 +48,7 @@ namespace TrashAstronauts.Audio
         public AudioClip droneChase;
         public AudioClip droneLost;
         public AudioClip droneCatch;
+        public AudioClip droneScare;
 
         [Header("Results")]
         public AudioClip resultSuccess;
