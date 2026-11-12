@@ -18,7 +18,7 @@ namespace TrashAstronauts.Mission
     /// every state change with a distinct sound and blink pattern, it never enters the tug, airlock or
     /// service duct, and losing line of sight for a few seconds makes it give up and search.
     /// </summary>
-    public sealed class EnemyDrone : MonoBehaviour
+    public sealed partial class EnemyDrone : MonoBehaviour
     {
         [Header("Variant")]
         public string displayName = "JANITOR-7";
@@ -79,7 +79,7 @@ namespace TrashAstronauts.Mission
         [Range(0f, 1f)] public float lurkChance = 0.3f;
         public Vector2 lurkSeconds = new Vector2(3f, 9f);
         /// <summary>True while it has stopped dead on its rounds: no footsteps, no hum. You lose track of it.</summary>
-        public bool IsLurking => m_Running && Brain != null && Brain.State == EnemyState.Patrol && m_Clock < m_LurkUntil;
+        public bool IsLurking => IsReplica ? ReplicaFlag(Core.Net.CreatureFlags.Lurking) : m_Running && Brain != null && Brain.State == EnemyState.Patrol && m_Clock < m_LurkUntil;
         float m_Clock;
         float m_LurkUntil;
         float m_NoLurkBefore;
@@ -97,10 +97,10 @@ namespace TrashAstronauts.Mission
         PlayerContext m_Target;
 
         public EnemyBrain Brain { get; private set; }
-        public EnemyState State => Brain != null ? Brain.State : EnemyState.Dormant;
+        public EnemyState State => IsReplica ? m_RepState : Brain != null ? Brain.State : EnemyState.Dormant;
         public bool IsRunning => m_Running;
         /// <summary>True while a tranquilizer dart has it asleep.</summary>
-        public bool IsSedated => m_SedateTimer > 0f;
+        public bool IsSedated => (IsReplica ? m_RepSedateTimer : m_SedateTimer) > 0f;
 
         [Header("Stagger")]
         [Tooltip("After a stagger it cannot be staggered again for this long (s), so it cannot be stun-locked.")]
@@ -108,7 +108,7 @@ namespace TrashAstronauts.Mission
         float m_StaggerTimer;
         float m_NextStaggerAt;
         /// <summary>Reeling from a heavy hit: it keeps its senses and its mind, but does not advance or catch.</summary>
-        public bool IsStaggered => m_StaggerTimer > 0f;
+        public bool IsStaggered => IsReplica ? ReplicaFlag(Core.Net.CreatureFlags.Staggered) : m_StaggerTimer > 0f;
         public int StaggerCount { get; private set; }
 
         /// <summary>
@@ -119,7 +119,7 @@ namespace TrashAstronauts.Mission
         /// </summary>
         public bool Stagger(float seconds)
         {
-            if (!m_Running || IsScaring || IsSedated || seconds <= 0f) return false;
+            if (IsReplica || !m_Running || IsScaring || IsSedated || seconds <= 0f) return false;
             if (Brain == null || Brain.State == EnemyState.Dormant) return false;
             if (m_Clock < m_NextStaggerAt) return false;
             m_StaggerTimer = Mathf.Clamp(seconds, 0.1f, 1.5f);
@@ -135,7 +135,7 @@ namespace TrashAstronauts.Mission
             if (momentum < threshold) return 0f;
             return Mathf.Lerp(0.5f, 1f, Mathf.Clamp01((momentum - threshold) / 140f));
         }
-        public float SedatedSecondsLeft => Mathf.Max(0f, m_SedateTimer);
+        public float SedatedSecondsLeft => Mathf.Max(0f, IsReplica ? m_RepSedateTimer : m_SedateTimer);
         /// <summary>True during the catch jumpscare.</summary>
         public bool IsScaring { get; private set; }
         /// <summary>Set by the blackout: the creature makes no sound at all.</summary>
@@ -175,6 +175,8 @@ namespace TrashAstronauts.Mission
         public void BeginRun(int seed)
         {
             EnsureBrain();
+            SetReplica(director != null && director.Net != null && director.Net.IsClient);
+            ResetReplica();
             Brain.Sleep();
             m_StaggerTimer = 0f;
             m_Running = true;
@@ -224,6 +226,7 @@ namespace TrashAstronauts.Mission
             m_StaggerTimer = 0f;
             m_HasPath = false;
             if (voice != null) voice.Stop();
+            if (IsReplica) EndReplicaRun();
             RefreshPresentation(true);
         }
 
@@ -244,29 +247,36 @@ namespace TrashAstronauts.Mission
         /// </summary>
         public bool Tranquilize(float seconds)
         {
-            if (!m_Running || IsScaring || seconds <= 0f) return false;
+            if (IsReplica || !m_Running || IsScaring || seconds <= 0f) return false;
             m_SedateTimer = Mathf.Max(m_SedateTimer, seconds * Mathf.Max(0.1f, sedationMultiplier));
             Brain.Sleep();
             m_StaggerTimer = 0f;
             m_HasPath = false;
             if (voice != null) voice.Stop();
             RefreshPresentation(true);
+            Darted?.Invoke(this, m_SedateTimer);
             return true;
         }
 
         void OnNoise(NoiseEvent noise)
         {
-            if (!m_Running || Brain == null || IsSedated) return;
+            if (IsReplica || !m_Running || Brain == null || IsSedated) return;
             if (IsForbidden(noise.Position) && !IsNearGraph(noise.Position)) return;
             if (Brain.HearNoise(noise, transform.position))
             {
                 m_HasPath = false;
                 LastHeardNoiseTime = Time.time;
+                NoteHeard(noise);
             }
         }
 
         void Update()
         {
+            if (IsReplica)
+            {
+                UpdateReplica(Time.unscaledTimeAsDouble, Time.deltaTime);
+                return;
+            }
             if (!m_Running || Brain == null) return;
             if (director != null && director.HazardsPaused) return;
             Step(Time.deltaTime);
@@ -285,7 +295,7 @@ namespace TrashAstronauts.Mission
         /// <summary>One simulation step. Public so play-mode tests can advance the drone deterministically.</summary>
         public void Step(float dt)
         {
-            if (!m_Running || IsScaring) return;
+            if (!m_Running || IsScaring || IsReplica) return;
             m_Clock += dt;
 
             if (m_SedateTimer > 0f)
@@ -658,6 +668,8 @@ namespace TrashAstronauts.Mission
                 m_CatchDeadline = Time.unscaledTime + ScareTotalSeconds + CatchDeadlineSlack;
                 m_CatchPending = true;
                 m_ScareAliveFrame = -1;
+                // Everyone else is told first, so they can play it too.
+                CatchBegan?.Invoke(this, victim);
                 // The victim is the one wearing this headset unless it is another crew member's stand-in.
                 StartCoroutine(Jumpscare(player, !player.IsRemote));
             }
@@ -667,6 +679,11 @@ namespace TrashAstronauts.Mission
         /// <summary>Ends the catch: the run is failed for the crew. Called exactly once per catch.</summary>
         void FinishCatch(PlayerId victim)
         {
+            if (IsReplica)
+            {
+                FinishReplicaCatch(victim);
+                return;
+            }
             IsScaring = false;
             m_CatchPending = false;
             if (director != null) director.FailMission(FailureReason.Caught, victim);
@@ -759,7 +776,8 @@ namespace TrashAstronauts.Mission
             // --- 1. the dark
             float total = ScareTotalSeconds;
             var blackout = director != null ? director.blackout : null;
-            if (blackout != null) blackout.TriggerNow(total + 1f);
+            // Only the victim hears the power die in their ears; a bystander's lights go out without it.
+            if (blackout != null) blackout.TriggerNow(total + 1f, victimIsLocal);
             Tools.FlashlightTool torch = null;
             if (victimIsLocal && player.tools != null)
             {
@@ -962,11 +980,21 @@ namespace TrashAstronauts.Mission
 
         void OnStateChanged(EnemyState previous, EnemyState next)
         {
+            // A replica's brain only ever sleeps (run start and end); its state and cues come from the host.
+            if (IsReplica) return;
             m_HasPath = false;
             m_Direct = false;
             // The trail went cold: search further along the way the quarry was heading.
             if (previous == EnemyState.Chase && next == EnemyState.Search) Brain.Redirect(PredictQuarry(3f));
             m_DoorTimer = 0f;
+            PresentStateChange(previous, next);
+            StateChangedForCrew?.Invoke(this, next, Quarry);
+        }
+
+        /// <summary>The presentation half of a state change: the chase loop, the cue, the eye. On a replica, driven by the host's event.</summary>
+        void PresentStateChange(EnemyState previous, EnemyState next)
+        {
+            StateCuesPresented++;
             var lib = Sfx.Library;
 
             if (voice != null)
@@ -1015,7 +1043,7 @@ namespace TrashAstronauts.Mission
             }
 
             float blink = blinkHz <= 0f ? 1f : (Mathf.Sin(Time.time * blinkHz * Mathf.PI * 2f) > 0f ? 1f : 0.15f);
-            float brightness = state == EnemyState.Dormant ? 0f : blink * (1f + (state == EnemyState.Patrol ? Brain.Suspicion : 0f));
+            float brightness = state == EnemyState.Dormant ? 0f : blink * (1f + (state == EnemyState.Patrol ? Suspicion : 0f));
             if (IsScaring)
             {
                 color = new Color(1f, 0.05f, 0.03f);

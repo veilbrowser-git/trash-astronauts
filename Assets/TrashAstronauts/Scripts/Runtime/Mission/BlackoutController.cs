@@ -36,6 +36,15 @@ namespace TrashAstronauts.Mission
         /// <summary>True while a blackout is counting down to happen on its own this contract.</summary>
         public bool IsScheduled => m_Scheduled;
         public event Action<bool> Changed;
+        /// <summary>How long the blackout in progress (or the last one) was set to last, in seconds.</summary>
+        public float LastDuration { get; private set; }
+        /// <summary>Whether the last blackout ended at once (true) or with the lights stuttering back.</summary>
+        public bool LastEndInstant { get; private set; }
+        /// <summary>
+        /// On a co-op client the host keeps the schedule: nothing is scheduled or counted down here, and blackouts
+        /// start and end only through <see cref="ApplyRemoteStart"/> and <see cref="ApplyRemoteEnd"/>.
+        /// </summary>
+        public bool Replica => director != null && director.Net != null && director.Net.IsClient;
 
         void OnEnable()
         {
@@ -139,7 +148,7 @@ namespace TrashAstronauts.Mission
             var config = director.Config;
             // Whoever started the run says whether this contract has blackouts at all (always, offline).
             bool thisRun = (director.CurrentRun.hazardFlags & TrashAstronauts.Core.Net.RunStartParams.HazardBlackouts) != 0;
-            m_Scheduled = config.blackoutsEnabled && thisRun;
+            m_Scheduled = config.blackoutsEnabled && thisRun && !Replica;
             m_Countdown = UnityEngine.Random.Range(config.blackoutMinDelay, Mathf.Max(config.blackoutMinDelay, config.blackoutMaxDelay))
                 * ContractConditions.BlackoutDelayMultiplier(director.Condition);
         }
@@ -151,6 +160,7 @@ namespace TrashAstronauts.Mission
 
             if (IsBlackout)
             {
+                if (Replica) return; // the host says when it ends
                 m_Remaining -= Time.deltaTime;
                 if (m_Remaining <= 0f)
                 {
@@ -170,13 +180,33 @@ namespace TrashAstronauts.Mission
         }
 
         /// <summary>Starts a blackout immediately. Public for tests and the dev hotkey.</summary>
-        public void TriggerNow(float seconds)
+        public void TriggerNow(float seconds) => TriggerNow(seconds, true);
+
+        /// <summary>The host's blackout began on a client (BlackoutStarted). False if one was already on.</summary>
+        public bool ApplyRemoteStart(float seconds)
+        {
+            if (IsBlackout) return false;
+            TriggerNow(seconds);
+            return true;
+        }
+
+        /// <summary>The host's blackout ended on a client (BlackoutEnded). False if none was on.</summary>
+        public bool ApplyRemoteEnd(bool instant)
+        {
+            if (!IsBlackout) return false;
+            EndBlackout(instant);
+            return true;
+        }
+
+        /// <summary>Starts a blackout immediately; <paramref name="sound"/> false leaves out the power-down in the ears.</summary>
+        public void TriggerNow(float seconds, bool sound)
         {
             if (IsBlackout) return;
             if (m_Restore != null) { StopCoroutine(m_Restore); m_Restore = null; }
             IsBlackout = true;
             BlackoutCount++;
             m_Remaining = Mathf.Max(0.1f, seconds);
+            LastDuration = m_Remaining;
             m_Ambient = RenderSettings.ambientLight;
             RenderSettings.ambientLight = m_Ambient * ambientDimming;
 
@@ -193,7 +223,7 @@ namespace TrashAstronauts.Mission
                 }
             }
             SetCreaturesSilent(true);
-            if (Sfx.Library != null) Sfx.PlayUi(Sfx.Library.powerDown, 0.45f);
+            if (sound && Sfx.Library != null) Sfx.PlayUi(Sfx.Library.powerDown, 0.45f);
             Changed?.Invoke(true);
         }
 
@@ -202,6 +232,7 @@ namespace TrashAstronauts.Mission
         {
             if (!IsBlackout) return;
             IsBlackout = false;
+            LastEndInstant = instant || !isActiveAndEnabled;
             RenderSettings.ambientLight = m_Ambient;
             if (ambience != null && m_AmbienceVolumes != null)
             {

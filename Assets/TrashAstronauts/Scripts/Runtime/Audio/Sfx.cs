@@ -101,9 +101,13 @@ namespace TrashAstronauts.Audio
         /// <summary>The sound library, or null before one is set (never throws).</summary>
         public static AudioLibrary LibraryOrNull => Library;
 
+        /// <summary>How many non-positional one-shots have been played (test seam: "nothing in your ears").</summary>
+        public static int UiPlayCount { get; private set; }
+
         public static void PlayUi(AudioClip clip, float volume = 1f, float pitch = 1f)
         {
             if (clip == null || !Application.isPlaying) return;
+            UiPlayCount++;
             var source = Instance.NextSource();
             source.spatialBlend = 0f;
             source.pitch = pitch;

@@ -99,9 +99,13 @@ namespace TrashAstronauts.Player
             if (!IsHolding) Pulse(hoverHaptic, 0.02f);
         }
 
+        /// <summary>How many haptic pulses this hand has been asked for (test seam).</summary>
+        public int PulseCount { get; private set; }
+
         /// <summary>Sends a short haptic pulse to this controller. Safe to call with no device connected.</summary>
         public void Pulse(float amplitude, float duration)
         {
+            if (amplitude > 0f) PulseCount++;
             if (haptics != null && isActiveAndEnabled && amplitude > 0f) haptics.SendHapticImpulse(Mathf.Clamp01(amplitude), duration);
         }
 

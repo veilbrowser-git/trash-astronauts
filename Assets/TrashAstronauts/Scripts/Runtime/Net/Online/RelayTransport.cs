@@ -132,6 +132,18 @@ namespace TrashAstronauts.Net.Online
         public bool AllocationInvalid => m_UsesRelay && m_Driver.IsCreated && m_Driver.GetRelayConnectionStatus() == RelayConnectionStatus.AllocationInvalid;
 
         bool m_RelayEstablished;
+        readonly NetEndpoint[] m_Dropped = new NetEndpoint[MaxConnections];
+        int m_DroppedCount;
+
+        /// <summary>Host: the next peer whose connection dropped (in the order they dropped). False when none.</summary>
+        public bool TryTakeDropped(out NetEndpoint peer)
+        {
+            if (m_DroppedCount == 0) { peer = default(NetEndpoint); return false; }
+            peer = m_Dropped[0];
+            m_DroppedCount--;
+            for (int i = 0; i < m_DroppedCount; i++) m_Dropped[i] = m_Dropped[i + 1];
+            return true;
+        }
 
         /// <summary>
         /// The connection to the Relay server itself was established and is not any more (it stopped answering, for
@@ -311,7 +323,12 @@ namespace TrashAstronauts.Net.Online
                         if (m_IsHost)
                         {
                             int i = IndexOf(c);
-                            if (i >= 0) { RemoveAt(i); Disconnects++; }
+                            if (i >= 0)
+                            {
+                                if (m_DroppedCount < m_Dropped.Length) m_Dropped[m_DroppedCount++] = PeerEndpoint(m_Serials[i]);
+                                RemoveAt(i);
+                                Disconnects++;
+                            }
                         }
                         else if (c == m_Server && !LinkLost) LoseLink();
                         break;

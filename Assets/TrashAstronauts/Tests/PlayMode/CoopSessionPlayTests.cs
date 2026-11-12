@@ -94,10 +94,11 @@ namespace TrashAstronauts.Tests
             Assert.AreEqual(run.planHash, bot.World.Run.planHash, "The bot was told exactly the contract that started here.");
             Assert.AreEqual(run.runIndex, bot.World.Run.runIndex);
             Assert.AreEqual(run.items.Length, bot.World.Run.items.Length);
-            Assert.AreEqual(RunStartParams.NoCreature, run.creatureIndex, "No creature in a co-op contract yet.");
-            Assert.AreEqual(0, run.hazardFlags);
-            Assert.AreEqual(0u, run.wireArmedMask);
-            Assert.IsFalse(m_Director.CreatureAboard);
+            Assert.AreNotEqual(RunStartParams.NoCreature, run.creatureIndex, "The shared spider is aboard a co-op contract.");
+            Assert.IsTrue(m_Director.CreatureAboard);
+            Assert.IsNull(m_Director.ActiveEnemy.GetComponent<VoiceMimic>(), "Never the Mimic in co-op.");
+            Assert.AreEqual(0u, run.wireArmedMask, "No webs in co-op yet.");
+            Assert.AreEqual(run.creatureIndex, bot.World.Run.creatureIndex);
 
             // World state right after the run start.
             yield return Until(() => bot.World.Calls[NetMsg.WorldState] > 0);
@@ -234,7 +235,7 @@ namespace TrashAstronauts.Tests
             var missionBoard = Object.FindAnyObjectByType<MissionBoard>();
             missionBoard.Refresh();
             Assert.AreEqual("CO-OP CONTRACT", missionBoard.title.text);
-            StringAssert.Contains("no creature", missionBoard.body.text);
+            StringAssert.Contains("ONE THING aboard for the whole crew", missionBoard.body.text);
             Assert.IsTrue(missionBoard.primaryButton.Interactable, "START works on the host's board.");
 
             yield return StartFromBot(bot);
@@ -306,6 +307,145 @@ namespace TrashAstronauts.Tests
             m_Director.SetHazardPause(HazardPauseReason.Scripted, false);
             yield return Until(() => !bot.World.HostPaused);
             Assert.IsFalse(bot.World.HostPaused);
+            m_Net.Leave();
+        }
+
+        // ================================================================== the shared spider, host half
+
+        EnemyDrone WakeSpiderAt(Vector3 at)
+        {
+            var creature = m_Director.ActiveEnemy;
+            creature.WakeNow();
+            creature.patrolRoute = new EnemyWaypoint[0];
+            creature.transform.position = at;
+            for (int i = 0; i < 4; i++) creature.Step(0.05f);
+            return creature;
+        }
+
+        /// <summary>Real-time paced ticks until <paramref name="done"/> or <paramref name="seconds"/> of real time.</summary>
+        IEnumerator PacedUntil(System.Func<bool> done, float seconds)
+        {
+            float until = Time.unscaledTime + seconds;
+            while (!done() && Time.unscaledTime < until) yield return Paced();
+        }
+
+        [UnityTest]
+        public IEnumerator Spider_TheBotSeesItsSamplesAndStateChanges_ItsNoiseDrawsIt_AndItsDartSedatesIt()
+        {
+            Bot bot = null;
+            yield return HostWithBot(b => bot = b);
+            yield return StartFromBot(bot);
+            var creature = WakeSpiderAt(MapPoints.Freighter(0f, m_Director.ActiveEnemy.hoverHeight, 14f));
+            Assert.IsFalse(creature.IsReplica);
+            Assert.AreEqual(EnemyState.Patrol, creature.State);
+
+            // The stream: 10 samples a second of where it is.
+            int before = bot.World.Calls[NetMsg.CreatureState];
+            yield return Frames(50); // 1 s of session time
+            Assert.That(bot.World.Calls[NetMsg.CreatureState] - before, Is.InRange(8, 21));
+            Assert.Less(Distance(bot.World.Creature.position, creature.transform.position), 0.1f);
+            Assert.Greater(bot.World.Calls[NetMsg.CreatureStateChanged], 0, "Its waking was told.");
+            Assert.AreEqual(EnemyState.Patrol, bot.World.CreatureEventState);
+
+            // The bot's crash two metres from it: it goes to look, and knows who made it.
+            Vector3 crash = MapPoints.Freighter(0f, 1.2f, 15.5f);
+            bot.Session.SendNoise(CoopConvert.ToNet(crash), 1f, NoiseKind.Impact);
+            yield return Until(() => creature.State == EnemyState.Investigate && bot.World.CreatureEventState == EnemyState.Investigate);
+            Assert.AreEqual(EnemyState.Investigate, creature.State, "The bot's noise made the real spider investigate.");
+            Assert.AreEqual(new PlayerId(1), creature.LastHeardNoiseBy);
+            Assert.AreEqual(EnemyState.Investigate, bot.World.CreatureEventState);
+
+            // The bot's dart, in range and on it: asleep, and everyone is told for how long.
+            yield return null;
+            Vector3 body = creature.Walker.surface.position;
+            bot.Session.SendTranqHitReport(CoopConvert.ToNet(body + Vector3.back * 5f), CoopConvert.ToNet(body + Vector3.up * 0.3f));
+            yield return Until(() => creature.IsSedated && bot.World.TranquilizedSeconds > 0f);
+            Assert.IsTrue(creature.IsSedated, "The bot's dart sedated it.");
+            Assert.AreEqual(creature.SedatedSecondsLeft, bot.World.TranquilizedSeconds, 0.5f);
+            Assert.AreEqual(1, m_Net.HostRules.Creature.TranqAccepted);
+            m_Net.Leave();
+        }
+
+        IEnumerator CatchBot(Bot victim, System.Action<EnemyDrone> got)
+        {
+            Vector3 feet = MapPoints.Freighter(0f, 0f, 19.6f);
+            yield return MoveBotHead(victim, feet + Vector3.up * 1.6f);
+            yield return Frames(3); // the director sees the suit out of the tug
+            Assert.IsFalse(m_Net.Crew(1).context.InSafeZone);
+            var creature = m_Director.ActiveEnemy;
+            creature.WakeNow();
+            foreach (var door in m_Director.wreckDoors) door.SetOpen(true, true);
+            Physics.SyncTransforms();
+            Vector3 head = m_Net.Crew(1).context.HeadPosition;
+            creature.transform.position = new Vector3(head.x, creature.hoverHeight, head.z + 1.6f);
+            creature.transform.rotation = Quaternion.LookRotation(Vector3.back);
+            for (int i = 0; i < 300 && !creature.IsScaring && m_Director.Phase == MissionPhase.Active; i++)
+            {
+                creature.Step(0.05f);
+            }
+            Assert.IsTrue(creature.IsScaring, "The spider caught the bot's suit.");
+            Assert.AreEqual(new PlayerId(1), creature.CatchVictim);
+            got(creature);
+        }
+
+        [UnityTest]
+        public IEnumerator Spider_CatchesTheBotsSuit_CatchStartedNamesIt_AndRunEndedReachesItAfterASilenceDuringTheScare()
+        {
+            Bot bot = null;
+            yield return HostWithBot(b => bot = b);
+            yield return StartFromBot(bot);
+            EnemyDrone creature = null;
+            yield return CatchBot(bot, c => creature = c);
+            yield return Until(() => bot.World.CatchVictim != NetProtocol.NoSlot);
+            Assert.AreEqual(1, bot.World.CatchVictim, "CatchStarted names the bot's slot.");
+            Assert.AreEqual(1, bot.World.Calls[NetMsg.CatchStarted]);
+
+            // The bot's headset goes quiet through the scare (a lost link, a sleeping headset).
+            bot.Frozen = true;
+            yield return PacedUntil(() => m_Director.Phase != MissionPhase.Active, creature.ScareTotalSeconds + 3f);
+            Assert.AreEqual(MissionPhase.Results, m_Director.Phase, "The host ended the run.");
+            Assert.AreEqual(MissionOutcome.FailedCaught, m_Director.Session.Result.Outcome);
+            Assert.IsNotNull(m_Net.Crew(1), "The bot's suit is still in the crew (its slot is held).");
+            Assert.AreEqual(0, bot.World.Calls[NetMsg.RunEnded]);
+
+            // It comes back: the reliable stream delivers the end of the run.
+            bot.Frozen = false;
+            yield return Until(() => bot.World.Calls[NetMsg.RunEnded] > 0);
+            Assert.AreEqual(1, bot.World.Calls[NetMsg.RunEnded]);
+            Assert.AreEqual(MissionOutcome.FailedCaught, bot.World.Result.outcome, "Being caught fails the contract for everyone.");
+            m_Net.Leave();
+        }
+
+        [UnityTest]
+        public IEnumerator Spider_ACaughtBotThatLeavesMidScare_KeepsItsSuitUntilTheScareEnds_AndTheRunStillEnds()
+        {
+            Bot bot = null;
+            yield return HostWithBot(b => bot = b);
+            var other = AddBot(m_Net.Transport.Local);
+            SetHead(other, AboardHead(2));
+            yield return Until(() => other.Session.Welcomed && m_Net.Crew(2) != null);
+            yield return StartFromBot(bot);
+            EnemyDrone creature = null;
+            yield return CatchBot(bot, c => creature = c);
+            var suit = m_Net.Crew(1);
+
+            // The victim says goodbye the moment it is caught: the scare still plays against its suit.
+            bot.Session.Leave(Now);
+            bot.Frozen = true;
+            yield return Until(() => other.World.Present[1] == false);
+            Assert.IsFalse(other.World.Present[1], "The others are told it left.");
+            Assert.IsTrue(creature.IsScaring);
+            Assert.IsTrue(suit != null && suit.gameObject != null, "Its suit is kept while the jumpscare plays against it.");
+            Assert.AreSame(suit, m_Net.Crew(1));
+            Assert.AreEqual(2, m_Net.PlayerCount, "...though it is no longer in the crew.");
+
+            yield return PacedUntil(() => !creature.IsScaring && m_Net.Crew(1) == null, creature.ScareTotalSeconds + 3f);
+            Assert.IsFalse(creature.IsScaring);
+            Assert.IsNull(m_Net.Crew(1), "Gone once the scare is over.");
+            yield return PacedUntil(() => m_Director.Phase != MissionPhase.Active, 3f);
+            Assert.AreEqual(MissionOutcome.FailedCaught, m_Director.Session.Result.Outcome);
+            yield return Until(() => other.World.Calls[NetMsg.RunEnded] > 0);
+            Assert.AreEqual(MissionOutcome.FailedCaught, other.World.Result.outcome);
             m_Net.Leave();
         }
 
@@ -520,6 +660,155 @@ namespace TrashAstronauts.Tests
             Assert.IsFalse(m_Director.HazardsPaused, "Nothing stranded in single-player either.");
         }
 
+        // ================================================================== the shared spider, client half
+
+        RunStartParams HostRunWithSpider(int runIndex)
+        {
+            m_Director.CoopRideAlong = true;
+            m_Director.CoopCreatureEnabled = true;
+            var run = m_Director.BuildRunParams();
+            m_Director.CoopRideAlong = false;
+            m_Director.CoopCreatureEnabled = false;
+            run.runIndex = (ushort)runIndex;
+            run.planHash = run.ComputePlanHash();
+            return run;
+        }
+
+        IEnumerator JoinSpiderRun(ScriptedHost host, int runIndex, System.Func<IEnumerator> beforeStart = null)
+        {
+            host.World.AutoStart = true;
+            host.World.NextRun = HostRunWithSpider(runIndex);
+            Assert.AreNotEqual(RunStartParams.NoCreature, host.World.NextRun.creatureIndex);
+            yield return JoinScripted(host);
+            if (beforeStart != null) yield return beforeStart();
+            m_Director.StartMission(m_Director.LocalPlayerId);
+            yield return Until(() => m_Director.Phase == MissionPhase.Active);
+            Assert.IsTrue(m_Director.CreatureAboard);
+            Assert.IsTrue(m_Director.ActiveEnemy.IsReplica, "The spider here only shows the host's.");
+        }
+
+        static CreatureSnapshot SpiderAt(Vector3 at, EnemyState state, byte target = NetProtocol.NoSlot) => new CreatureSnapshot
+        {
+            position = CoopConvert.ToNet(at), yawDegrees = 90f, state = state, targetSlot = target, flags = CreatureFlags.Running,
+        };
+
+        int LocalPulses() => (m_Player.leftHand != null ? m_Player.leftHand.PulseCount : 0) + (m_Player.rightHand != null ? m_Player.rightHand.PulseCount : 0);
+
+        [UnityTest]
+        public IEnumerator Client_TheHostsSamplesMoveTheSpider_ItsStateCuesFireOnce_TheHuntedOneFeelsIt_AndOthersAreToldWho()
+        {
+            var host = AddScriptedHost();
+            yield return JoinSpiderRun(host, 6);
+            var creature = m_Director.ActiveEnemy;
+            var wrist = Object.FindAnyObjectByType<WristDisplay>();
+
+            // The host's samples move the replica.
+            Vector3 at = MapPoints.Freighter(0f, creature.hoverHeight, 14f);
+            for (int i = 0; i < 30; i++)
+            {
+                var sample = SpiderAt(at + Vector3.forward * (i * 0.02f), EnemyState.Patrol);
+                host.Session.SetCreature(in sample);
+                yield return Paced();
+            }
+            yield return PacedUntil(() => Vector3.Distance(creature.transform.position, at + Vector3.forward * 0.58f) < 0.05f, 1f);
+            Assert.Less(Vector3.Distance(creature.transform.position, at + Vector3.forward * 0.58f), 0.05f, "It is where the host's spider is.");
+            Assert.Greater(creature.SnapshotsApplied, 10);
+
+            // A chase of crew 3: one cue here, and this suit does not buzz: it is not after this player.
+            int cues = creature.StateCuesPresented, pulses = LocalPulses();
+            host.Session.SendCreatureStateChanged(EnemyState.Chase, 2);
+            yield return Until(() => creature.State == EnemyState.Chase);
+            yield return Frames(10);
+            Assert.AreEqual(cues + 1, creature.StateCuesPresented, "One message, one cue.");
+            Assert.AreEqual(new PlayerId(2), creature.Quarry);
+            Assert.AreEqual(pulses, LocalPulses(), "No hunted buzz for someone else's chase.");
+            yield return PacedUntil(() => wrist.threatText.text.Contains("CREW 3"), 1.5f);
+            StringAssert.Contains("DRONE HUNTING CREW 3", wrist.threatText.text);
+
+            // Now it is after this player: the suit buzzes and the wrist says so.
+            host.Session.SendCreatureStateChanged(EnemyState.Chase, 1);
+            yield return Until(() => creature.Quarry == new PlayerId(1));
+            yield return Frames(10);
+            Assert.AreEqual(cues + 2, creature.StateCuesPresented);
+            Assert.Greater(LocalPulses(), pulses, "The hunted player's suit buzzes.");
+            yield return PacedUntil(() => wrist.threatText.text.Contains("HUNTING YOU"), 1.5f);
+            StringAssert.Contains("HUNTING YOU", wrist.threatText.text);
+
+            // The host's dart.
+            host.Session.SendTranquilized(8f);
+            yield return Until(() => creature.IsSedated);
+            Assert.IsTrue(creature.IsSedated);
+            m_Net.Leave();
+        }
+
+        [UnityTest]
+        public IEnumerator Client_CaughtHere_PlaysTheLocalJumpscare_AndTheRunEndsOnlyOnTheHostsRunEnded()
+        {
+            var host = AddScriptedHost();
+            yield return JoinSpiderRun(host, 7);
+            var creature = m_Director.ActiveEnemy;
+            m_Player.locomotion.TeleportTo(MapPoints.Freighter(0f, 0f, 19.6f));
+            yield return Frames(4);
+            int credits = m_Director.Profile.Data.totalCredits;
+
+            host.Session.SendCatchStarted(1);
+            yield return Until(() => creature.IsScaring);
+            Assert.AreEqual(new PlayerId(1), creature.CatchVictim);
+            float caughtAt = Time.unscaledTime;
+            yield return PacedUntil(() => creature.ScarePhase >= 2, 3f);
+            yield return Paced(0.4);
+            Assert.Greater(m_Player.visor.Stage, 0, "This player's own jumpscare: the visor cracks.");
+            yield return PacedUntil(() => !creature.IsScaring, 8f);
+            Assert.That(Time.unscaledTime - caughtAt, Is.InRange(creature.ScareTotalSeconds - 0.1f, creature.ScareTotalSeconds + 0.6f), "Today's timing.");
+            yield return Paced(0.5);
+            Assert.AreEqual(MissionPhase.Active, m_Director.Phase, "Only the host ends the run.");
+
+            host.World.CurrentPhase = MissionPhase.Results;
+            var message = new RunEndedMsg { outcome = MissionOutcome.FailedCaught, quota = m_Director.Session.Quota, elapsedSeconds = 30f, oxygenRemainingSeconds = 100f };
+            host.Session.SendRunEnded(in message);
+            yield return Until(() => m_Director.Phase == MissionPhase.Results);
+            Assert.AreEqual(MissionOutcome.FailedCaught, m_Director.Session.Result.Outcome);
+            Assert.AreEqual(credits, m_Director.Profile.Data.totalCredits, "Caught: nothing banked.");
+            Assert.AreEqual(0, creature.RunEndLinkLosses);
+            yield return PacedUntil(() => m_Player.InSafeZone && m_Player.fader.Alpha <= 0f, 4f);
+            Assert.IsTrue(m_Player.InSafeZone, "Home.");
+            m_Net.Leave();
+        }
+
+        [UnityTest]
+        public IEnumerator Client_SomeoneElseCaught_PlaysAgainstTheirSuit_WithNoVisorCrackHere()
+        {
+            var host = AddScriptedHost();
+            Bot other = null;
+            IEnumerator OtherJoins()
+            {
+                // Another crew member joins before the contract (nobody can join during one).
+                other = AddBot(host.Endpoint);
+                SetHead(other, MapPoints.Freighter(0f, 1.6f, 19.6f));
+                yield return Until(() => m_Net.Crew(2) != null && m_Net.Crew(2).HasPose);
+            }
+            yield return JoinSpiderRun(host, 8, OtherJoins);
+            Assert.IsNotNull(m_Net.Crew(2));
+            var creature = m_Director.ActiveEnemy;
+            int pulses = LocalPulses();
+
+            host.Session.SendCatchStarted(2);
+            yield return Until(() => creature.IsScaring);
+            Assert.AreEqual(new PlayerId(2), creature.CatchVictim);
+            yield return PacedUntil(() => creature.ScarePhase >= 2, 3f);
+            yield return Paced(0.4);
+            Assert.Less(Vector3.Distance(creature.transform.position, m_Net.Crew(2).context.HeadPosition), 0.8f, "On the other player's suit.");
+            while (creature.IsScaring)
+            {
+                Assert.AreEqual(0, m_Player.visor.Stage, "No visor crack here.");
+                Assert.AreEqual(0f, m_Player.fader.Alpha);
+                Assert.AreEqual(pulses, LocalPulses());
+                yield return Paced();
+            }
+            Assert.AreEqual(MissionPhase.Active, m_Director.Phase);
+            m_Net.Leave();
+        }
+
         [UnityTest]
         public IEnumerator Client_HostPauseAndSilence_AreShown_And60sOfSilenceAbortsWithNothingBanked()
         {
@@ -600,6 +889,11 @@ namespace TrashAstronauts.Tests
             yield return Until(() => m_Director.Phase == MissionPhase.Active && bot.World.Calls[NetMsg.RunStart] > 0, maxFrames: 100000, maxRealSeconds: 8f);
             Assert.AreEqual(MissionPhase.Active, m_Director.Phase);
             Assert.IsTrue(bot.World.RunHashValid);
+            Assert.IsTrue(m_Director.CreatureAboard, "The spider rides with the crew.");
+            var spider = m_Director.ActiveEnemy;
+            yield return Until(() => bot.World.Calls[NetMsg.CreatureState] > 0, maxFrames: 100000, maxRealSeconds: 5f);
+            int samplesAtStart = bot.World.Calls[NetMsg.CreatureState];
+            Assert.Greater(samplesAtStart, 0, "The bot sees the spider from the start.");
 
             // Salvage dropped into the host's locker hopper until the quota is met.
             var locker = m_Director.locker;
@@ -619,6 +913,10 @@ namespace TrashAstronauts.Tests
             Assert.AreEqual(deposits, bot.World.Calls[NetMsg.ItemDeposited], "The bot saw every deposit.");
             Assert.Greater(bot.World.PosesAccepted, 0, "...and the items' poses while it rode along.");
 
+            Assert.AreSame(spider, m_Director.ActiveEnemy);
+            Assert.IsTrue(spider.IsRunning, "Still aboard at extraction.");
+            Assert.Greater(bot.World.Calls[NetMsg.CreatureState], samplesAtStart, "...and the bot kept seeing it.");
+            Assert.Less(Distance(bot.World.Creature.position, spider.transform.position), 0.2f);
             int credits = m_Director.Profile.Data.totalCredits;
             bot.Session.SendExtractRequest();
             yield return Until(() => bot.World.Calls[NetMsg.RunEnded] > 0, maxFrames: 100000, maxRealSeconds: 8f);

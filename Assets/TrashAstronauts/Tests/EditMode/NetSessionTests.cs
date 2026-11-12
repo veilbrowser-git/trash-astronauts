@@ -635,6 +635,23 @@ namespace TrashAstronauts.Tests
         }
 
         [Test]
+        public void DropPeer_ALinkTheTransportSaysIsGone_FreesThatSlotAtOnce_AndTheOthersSeeItLeave()
+        {
+            NetTestRig.Member a = m_Rig.Join();
+            NetTestRig.Member b = m_Rig.Join();
+            Assert.IsFalse(m_Rig.Host.DropPeer(new NetEndpoint(10, 9, 9, 9, 1234)), "nobody there");
+            Assert.IsTrue(m_Rig.Host.DropPeer(a.Transport.Local));
+            Assert.IsFalse(m_Rig.Host.IsConnected(1));
+            Assert.AreEqual(PlayerLeaveReason.LinkLost, m_Rig.HostWorld.LeftReason[1]);
+            Assert.AreEqual(1, m_Rig.HostWorld.LeftCount);
+            Assert.IsFalse(m_Rig.Host.DropPeer(a.Transport.Local), "once");
+            m_Rig.Step(0.2);
+            Assert.IsFalse(b.World.Present[1], "the others see it leave");
+            Assert.IsTrue(m_Rig.Host.IsConnected(2), "the rest of the crew stays");
+            Assert.AreEqual(2, m_Rig.Host.PlayerCount);
+        }
+
+        [Test]
         public void HostClose_TellsEveryClient_EvenWhenTwoOfTheThreeCopiesAreLost()
         {
             NetTestRig.Member a = m_Rig.Join();

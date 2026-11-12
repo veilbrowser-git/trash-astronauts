@@ -860,6 +860,24 @@ namespace TrashAstronauts.Core.Net
             BroadcastRoster(peer.slot, away ? RosterChange.Away : RosterChange.Back, peer.handedness, -1);
         }
 
+        /// <summary>
+        /// The transport knows this peer's connection is gone (an online Relay link dropped it): free its slot at
+        /// once, as a Bye would (items returned, its leave told to the world and RosterChanged to the others),
+        /// instead of holding it for 45 s. False if no peer has that endpoint.
+        /// </summary>
+        public bool DropPeer(NetEndpoint endpoint)
+        {
+            if (m_Closed || m_Disposed) return false;
+            for (int i = 1; i < m_Peers.Length; i++)
+            {
+                Peer peer = m_Peers[i];
+                if (!peer.used || peer.endpoint != endpoint) continue;
+                Drop(peer, PlayerLeaveReason.LinkLost, false);
+                return true;
+            }
+            return false;
+        }
+
         void Drop(Peer peer, PlayerLeaveReason reason, bool tellPeer)
         {
             if (!peer.used) return;

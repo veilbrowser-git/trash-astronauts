@@ -18,9 +18,21 @@ namespace TrashAstronauts.Mission
         /// <summary>When muted (no contract running) noises are dropped.</summary>
         public bool Muted { get; set; } = true;
 
+        /// <summary>How many of the local player's noises went to the host instead of a creature here (co-op client).</summary>
+        public int ForwardedCount { get; private set; }
+
         public void Emit(in NoiseEvent noise)
         {
             if (Muted || noise.Loudness <= 0f) return;
+            // On a co-op client the creature lives on the host: what the local player does is sent there. It is
+            // still raised here (the wrist's noise meter), where the creature replica does not listen.
+            var director = MissionDirector.Active;
+            if (director != null && director.noise == this && director.Net != null && director.Net.IsClient
+                && noise.Source == director.LocalPlayerId)
+            {
+                ForwardedCount++;
+                director.Net.ForwardNoise(in noise);
+            }
             EmittedCount++;
             LastNoise = noise;
             LastNoiseTime = Time.time;

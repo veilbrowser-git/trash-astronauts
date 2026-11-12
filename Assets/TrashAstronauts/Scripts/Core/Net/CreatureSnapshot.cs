@@ -13,6 +13,8 @@ namespace TrashAstronauts.Core.Net
         /// <summary>Flips every time the creature hears a noise (drives LastHeardNoiseTime on replicas).</summary>
         public const byte HeardNoiseToggle = 32;
         public const byte Scaring = 64;
+        /// <summary>Reeling from a heavy hit (EnemyDrone.IsStaggered).</summary>
+        public const byte Staggered = 128;
     }
 
     /// <summary>
@@ -57,7 +59,7 @@ namespace TrashAstronauts.Core.Net
             int target = targetSlot <= 6 ? targetSlot : 7;
             int climb = climbStep <= 3 ? climbStep : 3;
             w.U8((byte)(s | (target << 3) | (climb << 6)));
-            w.U8((byte)(flags & 0x7F));
+            w.U8(flags);
             w.U8(Quant.ToBits(suspicion, 4));
             float sedation = sedationSecondsLeft;
             w.U8(!(sedation > 0f) ? (byte)0 : sedation >= MaxSedationSeconds ? (byte)255 : (byte)Math.Ceiling(sedation));
@@ -75,7 +77,7 @@ namespace TrashAstronauts.Core.Net
             int target = (packed >> 3) & 7;
             s.targetSlot = target == 7 ? NetProtocol.NoSlot : (byte)target;
             s.climbStep = (byte)(packed >> 6);
-            s.flags = (byte)(r.U8() & 0x7F);
+            s.flags = r.U8();
             s.suspicion = Quant.FromBits(r.U8() & 15, 4);
             s.sedationSecondsLeft = r.U8();
             return !r.Failed;

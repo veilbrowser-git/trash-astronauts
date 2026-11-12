@@ -697,7 +697,12 @@ namespace TrashAstronauts.Mission
                     ActiveEnemy.ParkAtDock();
                 }
             }
-            if (tugHatch != null) tugHatch.SetOpen(true);
+            // A client's hatch only shows the host's (no door noise of its own: the creature listens on the host).
+            if (tugHatch != null)
+            {
+                if (Net != null && Net.IsClient) tugHatch.ApplyReplicated(true);
+                else tugHatch.SetOpen(true);
+            }
 
             MissionStarted?.Invoke();
             return true;

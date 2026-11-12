@@ -183,10 +183,11 @@ namespace TrashAstronauts.UI
                         "Wreck: assigned when the host launches\n"
                         + "Quota: " + config.quotaCredits + " cr     Bonus: +" + config.contractBonusCredits + " cr\n"
                         + "One shared oxygen tank (the host's).\n\n"
-                        + "CO-OP, THIS VERSION: no creature aboard yet.\n"
-                        + "Only the host can carry salvage; the crew rides\n"
-                        + "along, opens doors and cuts panels. Everyone\n"
-                        + "must be inside the tug to extract. Everyone is paid.\n\n"
+                        + "ONE THING aboard for the whole crew. It can hunt\n"
+                        + "anyone; if it catches one of you, the contract\n"
+                        + "fails for all. Anyone's tranquilizer works on it.\n"
+                        + "Only the host can carry salvage. Everyone must be\n"
+                        + "inside the tug to extract. Everyone is paid.\n\n"
                         + (client ? "START asks the host to launch.\n" : "")
                         + "Banked credits: " + profile.totalCredits + " cr" + hostLine + notice);
                     SetPrimary("START CONTRACT", true);

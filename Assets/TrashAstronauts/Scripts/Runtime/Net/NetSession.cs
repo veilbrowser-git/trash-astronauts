@@ -82,6 +82,7 @@ namespace TrashAstronauts.Net
         readonly LobbyState m_Lobby = new LobbyState { ContractsEnabled = true };
         readonly RemoteAvatar[] m_Crew = new RemoteAvatar[NetProtocol.MaxPlayers];
         readonly bool[] m_Present = new bool[NetProtocol.MaxPlayers];
+        readonly bool[] m_RemoveAfterScare = new bool[NetProtocol.MaxPlayers];
 
         NetSessionHost m_Host;
         NetSessionClient m_Client;
@@ -97,7 +98,6 @@ namespace TrashAstronauts.Net
         bool m_AppPaused;
         bool m_ReportedAway;
         bool m_LocalAway;
-        int m_RelayDisconnects;
         readonly List<Task> m_Abandoned = new List<Task>();
 
         // the shared contract
@@ -237,10 +237,23 @@ namespace TrashAstronauts.Net
 
         // Stage 3: a client never simulates salvage in this version (every item is HOST ONLY), so it has no damage to report.
         public void ReportSalvageDamage(SalvageItem item, int newValue) { }
-        // Stage 4: a co-op contract has no creature and no armed webs yet, so there is nothing to report or to hear.
+        // Stage 4: webs are never armed in a co-op contract, so a client has none to report.
         public void ReportWire(WebTripwire wire, WireChange change) { }
-        public void ReportTranqHit(Vector3 origin, Vector3 hitPoint) { }
-        public void ForwardNoise(in NoiseEvent noise) { }
+
+        /// <summary>The local player's dart hit the host's creature on this screen: the host checks it and sedates it.</summary>
+        public void ReportTranqHit(Vector3 origin, Vector3 hitPoint)
+        {
+            if (m_Client == null || !m_Client.Welcomed) return;
+            m_Client.SendTranqHitReport(CoopConvert.ToNet(origin), CoopConvert.ToNet(hitPoint));
+            FlushClient();
+        }
+
+        /// <summary>A gameplay noise the local player made: the creature lives on the host, so it is heard there (Noise stream).</summary>
+        public void ForwardNoise(in NoiseEvent noise)
+        {
+            if (m_Client == null || !m_Client.Welcomed) return;
+            m_Client.SendNoise(CoopConvert.ToNet(noise.Position), noise.Loudness, noise.Kind);
+        }
 
         /// <summary>The director's own Away state changed (headset off, tracking or focus lost: MissionDirector.SetLocalAway).</summary>
         public void ReportPause(bool paused)
@@ -738,9 +751,10 @@ namespace TrashAstronauts.Net
             };
             DisposeContract();
             m_Rules = new CoopHostRules(director, new HostBroadcast(this)) { Clock = () => Now };
+            // Co-op contracts carry the shared spider (never the Mimic) and its blackouts; webs stay unstrung.
+            m_Rules.CreatureEnabled = true;
             m_Host = new NetSessionHost(transport, new SceneHostWorld(this, director, m_Rules), config);
             m_Online = online;
-            m_RelayDisconnects = transport is IRelayLink relay ? relay.Disconnects : 0;
             CoopItemReplica.Delay = InterpolationDelay;
             m_LastPoseTick = double.NegativeInfinity;
             m_NextClock = 0.0;
@@ -856,20 +870,20 @@ namespace TrashAstronauts.Net
                 m_Lobby.SearchTick(now, m_Discovery.Hosts.Count);
             }
             m_Lobby.OnRoster(PlayerCount);
+            RemoveCrewAfterScare();
         }
 
         /// <summary>
-        /// Hosting online, the Relay side is gone: the allocation is invalid, the connection to the Relay server
-        /// dropped (a headset that slept past Relay's 10 s idle limit), or every crew member's connection dropped at
-        /// once while the roster still lists them.
+        /// Hosting online. A crew member whose own Relay connection dropped is let go at once (its slot freed as a
+        /// Bye would, the others told), and the game stays open and listed. True only when the host's own side is
+        /// gone: the allocation is invalid, or the connection to the Relay server dropped (a headset that slept past
+        /// Relay's 10 s idle limit).
         /// </summary>
         bool HostRelayLost(IRelayLink relay)
         {
             if (relay.AllocationInvalid || relay.RelayLost) return true;
-            int disconnects = relay.Disconnects;
-            bool grew = disconnects > m_RelayDisconnects;
-            m_RelayDisconnects = disconnects;
-            return grew && relay.ConnectionCount == 0 && PlayerCount > 1;
+            while (relay.TryTakeDropped(out NetEndpoint peer)) m_Host.DropPeer(peer);
+            return false;
         }
 
         /// <summary>The online game cannot go on: close it as LEAVE would (unlisting it), and say LINK LOST.</summary>
@@ -928,6 +942,8 @@ namespace TrashAstronauts.Net
         {
             m_Rules.Tick(Time.deltaTime);
             if (director.Phase != MissionPhase.Active) return;
+            // The spider: 10 samples a second, 20 while it investigates or chases.
+            if (m_Rules.TrySampleCreature(now, out CreatureSnapshot creature)) m_Host.SetCreature(in creature);
             if (now >= m_NextClock)
             {
                 m_NextClock = now + ClockInterval;
@@ -995,6 +1011,7 @@ namespace TrashAstronauts.Net
         {
             if (slot >= NetProtocol.MaxPlayers || slot == m_LocalSlot) return;
             m_Present[slot] = true;
+            m_RemoveAfterScare[slot] = false;
             RemoteAvatar crew = m_Crew[slot];
             if (crew == null && remoteAvatarPrefab != null)
             {
@@ -1015,9 +1032,42 @@ namespace TrashAstronauts.Net
         {
             if (slot >= NetProtocol.MaxPlayers || slot == m_LocalSlot) return;
             m_Present[slot] = false;
-            if (m_Crew[slot] != null) Destroy(m_Crew[slot].gameObject);
-            m_Crew[slot] = null;
+            if (m_Crew[slot] != null)
+            {
+                // A jumpscare may be playing against this suit: it stays (hidden from the roster) until the scare ends.
+                if (AnyCreatureScaring()) m_RemoveAfterScare[slot] = true;
+                else
+                {
+                    Destroy(m_Crew[slot].gameObject);
+                    m_Crew[slot] = null;
+                }
+            }
             m_Lobby.OnRoster(PlayerCount);
+        }
+
+        bool AnyCreatureScaring()
+        {
+            var enemies = director != null ? director.enemies : null;
+            if (enemies == null) return false;
+            for (int i = 0; i < enemies.Length; i++)
+                if (enemies[i] != null && enemies[i].IsScaring) return true;
+            return false;
+        }
+
+        /// <summary>Suits whose players left during a jumpscare go once it is over.</summary>
+        void RemoveCrewAfterScare()
+        {
+            bool any = false;
+            for (int i = 0; i < m_RemoveAfterScare.Length; i++) any |= m_RemoveAfterScare[i];
+            if (!any || AnyCreatureScaring()) return;
+            for (int i = 0; i < m_RemoveAfterScare.Length; i++)
+            {
+                if (!m_RemoveAfterScare[i]) continue;
+                m_RemoveAfterScare[i] = false;
+                if (m_Present[i] || m_Crew[i] == null) continue;
+                Destroy(m_Crew[i].gameObject);
+                m_Crew[i] = null;
+            }
         }
 
         internal void SetCrewAway(byte slot, bool away)
@@ -1123,6 +1173,11 @@ namespace TrashAstronauts.Net
             public void DoorState(byte doorId, bool open) => Host?.SendDoorState(doorId, open);
             public void PointCut(byte panel, byte index) => Host?.SendPointCut(panel, index);
             public void PanelOpened(byte panel, byte by, NetVec3 plateImpulse, NetVec3 plateTorque) => Host?.SendPanelOpened(panel, by, plateImpulse, plateTorque);
+            public void CreatureStateChanged(EnemyState state, byte targetSlot) => Host?.SendCreatureStateChanged(state, targetSlot);
+            public void Tranquilized(float seconds) => Host?.SendTranquilized(seconds);
+            public void CatchStarted(byte victimSlot) => Host?.SendCatchStarted(victimSlot);
+            public void BlackoutStarted(float seconds) => Host?.SendBlackoutStarted(seconds);
+            public void BlackoutEnded(bool instant) => Host?.SendBlackoutEnded(instant);
         }
 
         // ================================================================== helpers
@@ -1152,6 +1207,7 @@ namespace TrashAstronauts.Net
                 if (m_Crew[i] != null) Destroy(m_Crew[i].gameObject);
                 m_Crew[i] = null;
                 m_Present[i] = false;
+                m_RemoveAfterScare[i] = false;
             }
         }
 

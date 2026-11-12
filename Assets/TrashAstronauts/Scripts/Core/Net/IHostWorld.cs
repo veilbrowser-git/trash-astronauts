@@ -13,6 +13,8 @@ namespace TrashAstronauts.Core.Net
         Replaced = 3,
         /// <summary>The host closed the session.</summary>
         HostClosed = 4,
+        /// <summary>The transport reported that peer's connection gone (an online Relay link dropped it).</summary>
+        LinkLost = 5,
     }
 
     /// <summary>Why the host took an item back from a client.</summary>

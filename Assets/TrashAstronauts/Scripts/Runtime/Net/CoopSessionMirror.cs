@@ -115,6 +115,13 @@ namespace TrashAstronauts.Net
             if (panelId != null) Session.TryOpenPanel(panelId, Who(by));
         }
 
+        // The creature and the blackouts change nothing in the books (a catch ends the run through RunEnded).
+        public void CreatureStateChanged(EnemyState state, byte targetSlot) => MessageCount++;
+        public void Tranquilized(float seconds) => MessageCount++;
+        public void CatchStarted(byte victimSlot) => MessageCount++;
+        public void BlackoutStarted(float seconds) => MessageCount++;
+        public void BlackoutEnded(bool instant) => MessageCount++;
+
         /// <summary>The host's Clock (not a broadcast: the session samples it).</summary>
         public bool ApplyClock(float elapsedSeconds, float oxygenRemainingSeconds) => Session.ApplyClock(elapsedSeconds, oxygenRemainingSeconds);
     }
