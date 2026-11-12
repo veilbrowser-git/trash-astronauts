@@ -286,6 +286,18 @@ Everything loose is a real mass obeying Newton's laws, tuned to stay comfortable
 - Hand tracking is implemented but experimental: the gesture thresholds and palm alignment are untested on a headset. Thumbstick-driven continuous locomotion is out of scope.
 - Co-op is a first slice only: players on the same Wi-Fi can see each other in the tug, nothing else is shared, and no contract can start while a crew is linked. It has never been run on two real headsets. See `Docs/MULTIPLAYER_NOTES.md`.
 
+## Online play (groundwork, not in the game yet)
+
+Co-op over the internet ("play anywhere") is being added next to same-Wi-Fi co-op. The code is in `Assets/TrashAstronauts/Scripts/Runtime/Net/Online/` (its own assembly, `TrashAstronauts.Online`); the entry point is `OnlineLink` (its header comment shows how a lobby board uses it).
+
+- It uses **Unity Relay** to carry the game's own datagrams between headsets and **Unity Lobby** to list open games (`TUG 4821  2/4  IN HUB`, newest first, at most 5), both from Unity Gaming Services (package `com.unity.services.multiplayer` 2.4.1, on Unity Transport). It does not use Netcode for GameObjects. A host also gets a 6-character code friends can type if the list fails.
+- Players sign in **anonymously** (no account, no name, no email). Unity gives the device a random player id.
+- It contacts Unity's servers **only after you choose to host or find an online game**. A player who never does that never initialises Unity Services; an automated test checks this in the real game scene.
+- No microphone audio is sent, online or on Wi-Fi: the game's network messages carry poses, items and game events only.
+- **Not yet wired to the in-game board**, so this build cannot start an online game yet. It has **not been run on a headset**.
+- Tested on a Mac only: one automated test signs in two anonymous players, hosts a game through Relay, finds it in the Lobby list, joins it, and runs the game's real host and client sessions over it (handshake, 200 reliable messages each way, avatar snapshots both ways). It passed against the live service. Measured over Relay with DTLS encryption, one datagram can carry 1315 bytes; the game's datagrams are at most 1200.
+- Relay drops a connection that stays silent for a while, so a headset that sleeps for long may lose an online game where it would keep a Wi-Fi one; this is untested.
+
 ## Privacy
 
 The game is single-player and works without any network. The app does hold Android's network (INTERNET)
@@ -302,6 +314,8 @@ If you allow microphone access, the microphone is normally read only to measure 
 **The Mimic is the exception.** Only while a Mimic is the creature aboard, the game also keeps the last four things you said (up to four seconds each) in memory, so that it can play them back to you. The wrist display shows **MIC REC** while this is happening. Those phrases are erased when the contract ends, when you switch MIC off, and when the app closes.
 
 In every case the audio is never written to storage, never analysed for words, and never leaves the headset. Refusing the permission, or switching MIC off in the suit menu, disables this and nothing else. Because the game uses the microphone, Android also lists the audio-settings and Bluetooth permissions (they let a Bluetooth headset's microphone work); the game does nothing else with them.
+
+Online play (see above; not in this build yet) will be the only part of the game that contacts the internet, and only after you choose to host or find an online game. It then signs in to Unity Gaming Services anonymously and sends game data, never audio, through Unity's Relay servers.
 
 ## Terms of Use
 
