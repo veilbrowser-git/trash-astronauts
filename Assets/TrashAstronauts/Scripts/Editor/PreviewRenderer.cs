@@ -108,9 +108,24 @@ namespace TrashAstronauts.EditorTools
                 handLight.range = 5f;
                 handLight.intensity = 5f;
                 foreach (var l in rig.GetComponentsInChildren<Light>(true)) if (l != handLight) l.enabled = false;
+                // The hands moved: bring the suit's arms onto the glove cuffs again.
+                var ownAvatar = rig.GetComponentInChildren<TrashAstronauts.Player.PlayerAvatar>(true);
+                if (ownAvatar != null)
+                {
+                    ownAvatar.SnapToHead();
+                    ownAvatar.Pose(0f);
+                }
                 Shot("15_hands_player_view", new Vector3(0f, 1.55f, -49.9f), new Vector3(0f, 1.2f, -49.6f));
                 Shot("16_right_hand_side", new Vector3(0.55f, 1.27f, -49.62f), new Vector3(0.16f, 1.25f, -49.64f));
                 Shot("17_left_hand_side", new Vector3(-0.55f, 1.27f, -49.62f), new Vector3(-0.16f, 1.25f, -49.64f));
+                // Close-ups of the gloves with nothing in them: open (back of the right, palm of the left), then a fist.
+                foreach (var tool in tools) tool.gameObject.SetActive(false);
+                var gloves = rig.GetComponentsInChildren<TrashAstronauts.Player.GloveVisual>(true);
+                foreach (var glove in gloves) glove.Apply(0f, 0f);
+                Shot("37_glove_open_back", new Vector3(0.42f, 1.34f, -49.42f), new Vector3(0.16f, 1.24f, -49.68f), false, 40f);
+                Shot("38_glove_open_palm", new Vector3(0.14f, 1.32f, -49.4f), new Vector3(-0.16f, 1.24f, -49.68f), false, 40f);
+                foreach (var glove in gloves) glove.Apply(1f, 1f);
+                Shot("39_glove_fist", new Vector3(0.42f, 1.34f, -49.42f), new Vector3(0.16f, 1.24f, -49.68f), false, 40f);
                 Object.DestroyImmediate(rig);
             }
 

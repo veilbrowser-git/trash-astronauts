@@ -184,6 +184,66 @@ namespace TrashAstronauts.Tests
                 Assert.AreEqual(Glove(hand).restCurl[0], FingerCurl(Glove(hand), 2, 0), 1f);
         }
 
+        /// <summary>A box in the glove's own space (palm -Y, fingers +Z), with a collider, for the fingers to close on.</summary>
+        static BoxCollider BoxInGlove(GloveVisual glove, Vector3 centre, Vector3 size)
+        {
+            var box = new GameObject("Held Box").AddComponent<BoxCollider>();
+            box.transform.SetPositionAndRotation(glove.transform.TransformPoint(centre), glove.transform.rotation);
+            box.size = size;
+            return box;
+        }
+
+        static float NearestFingerGap(GloveVisual glove, int finger, Collider col)
+        {
+            float best = float.MaxValue;
+            for (int k = 0; k < 3; k++)
+            {
+                Transform joint = finger < 4 ? glove.fingerJoints[finger * 3 + k] : glove.thumbJoints[k];
+                for (float z = 0f; z <= 0.03f; z += 0.005f)
+                {
+                    Vector3 p = joint.TransformPoint(new Vector3(0f, -0.004f, z));
+                    best = Mathf.Min(best, Vector3.Distance(col.ClosestPoint(p), p));
+                }
+            }
+            return best;
+        }
+
+        [UnityTest]
+        public IEnumerator Holding_FingersCloseUntilTheyMeetTheObject_AndMakeAFirmFistOnATool()
+        {
+            yield return Drive(0f, 0f);
+            var glove = Glove(m_Player.rightHand);
+
+            // A big block against the palm: the fingers stop on it, part closed.
+            var big = BoxInGlove(glove, new Vector3(0f, -0.1f, -0.04f), new Vector3(0.1f, 0.05f, 0.14f));
+            Physics.SyncTransforms();
+            glove.FitTo(new Collider[] { big }, false);
+            float[] bigHold = new float[5];
+            for (int f = 0; f < 5; f++) bigHold[f] = glove.HoldAmount(f);
+            string held = string.Join(", ", bigHold);
+            for (int f = 0; f < 4; f++)
+            {
+                Assert.Greater(bigHold[f], 0f, "Finger " + f + " should close some way onto the block (" + held + ").");
+                Assert.Less(bigHold[f], 0.95f, "Finger " + f + " should stop on the block, not close into a fist through it.");
+            }
+            glove.ApplyFingers(bigHold);
+            for (int f = 0; f < 4; f++)
+                Assert.Less(NearestFingerGap(glove, f, big), 0.02f, "Finger " + f + " should end up touching the block.");
+            Object.Destroy(big.gameObject);
+
+            // A thin rod across the fingers closes them further than the block does.
+            var rod = BoxInGlove(glove, new Vector3(0f, -0.08f, -0.035f), new Vector3(0.1f, 0.02f, 0.02f));
+            Physics.SyncTransforms();
+            glove.FitTo(new Collider[] { rod }, false);
+            Assert.Greater(glove.HoldAmount(1), bigHold[1] + 0.05f, "A thin handle lets the fingers close further.");
+            Object.Destroy(rod.gameObject);
+
+            // A tool: a firm fist, whatever its shape.
+            glove.FitTo(null, true);
+            for (int f = 0; f < 5; f++) Assert.AreEqual(1f, glove.HoldAmount(f));
+            yield return null;
+        }
+
         [UnityTest]
         public IEnumerator GrabPoint_StaysAtThePalm_OfTheModelledGlove()
         {
