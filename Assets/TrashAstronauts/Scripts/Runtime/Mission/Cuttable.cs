@@ -128,6 +128,20 @@ namespace TrashAstronauts.Mission
             return true;
         }
 
+        /// <summary>
+        /// Another crew member's burn on one weld (co-op, display only): the weld glows and swells as theirs does but
+        /// is never completed or reported from here. False if the index is out of range, the weld is through or the
+        /// panel is open.
+        /// </summary>
+        public bool ApplyRemoteProgress(int index, float progress)
+        {
+            if (IsOpen || cutPoints == null || index < 0 || index >= cutPoints.Length) return false;
+            var point = cutPoints[index];
+            if (point == null || point.IsCut) return false;
+            point.ApplyRemoteProgress(progress);
+            return true;
+        }
+
         /// <summary>Presentation of the opened state. Only the mission director (or a training panel) calls this.</summary>
         public void ApplyOpened()
         {

@@ -33,7 +33,7 @@ namespace TrashAstronauts.Core.Net
     /// into <see cref="IClientWorld"/>. Pure C#, explicit time, same call pattern as <see cref="NetSessionHost"/>:
     /// Poll(now) from Update, SendTick(now) from LateUpdate.
     /// </summary>
-    public sealed class NetSessionClient : IDisposable
+    public sealed partial class NetSessionClient : IDisposable
     {
         const int k_MaxDatagramsPerPoll = 512;
         const int k_MaxExtraDatagrams = 3;
@@ -550,6 +550,7 @@ namespace TrashAstronauts.Core.Net
                 Tap?.Invoke(true, 0, NetMsg.Noise, m_Send, start, w.Position - start, time);
             }
             m_NoiseCount = 0;
+            WriteCutProgress(ref w, time);
         }
 
         // ================================================================== receiving
@@ -723,6 +724,7 @@ namespace TrashAstronauts.Core.Net
                 case NetMsg.ItemPoses: return ItemPoseBatch.Read(ref r, ref m_PoseRead);
                 case NetMsg.Clock: return ClockMsg.Read(ref r, out _);
                 case NetMsg.Voice: return VoiceMsg.Read(ref r, ref m_VoiceRead);
+                case CutProgressMsg.Id: return CutProgressMsg.Read(ref r, out _);
                 default: return false;
             }
         }
@@ -784,6 +786,7 @@ namespace TrashAstronauts.Core.Net
                             handler(m_VoiceRead.slot, (ushort)(m_VoiceRead.sequence + f), m_VoiceRead.data, m_VoiceRead.Offset(f), m_VoiceRead.Length(f));
                     return true;
                 }
+                case CutProgressMsg.Id: return DispatchCutProgress(ref r);
 
                 // ---------------- session
                 case NetMsg.Welcome:

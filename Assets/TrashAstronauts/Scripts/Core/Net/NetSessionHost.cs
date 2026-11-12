@@ -56,7 +56,7 @@ namespace TrashAstronauts.Core.Net
     /// Call order per frame: Poll(now) from Update, the game's own work, SendTick(now) from LateUpdate
     /// (it sends at 20 Hz whatever the frame rate). <see cref="Tick"/> does both. Not thread-safe.
     /// </summary>
-    public sealed class NetSessionHost : IDisposable
+    public sealed partial class NetSessionHost : IDisposable
     {
         sealed class Peer
         {
@@ -327,6 +327,7 @@ namespace TrashAstronauts.Core.Net
             m_CreatureFresh = false;
             m_ClockFresh = false;
             m_HostPoseCount = 0;
+            ClearCutProgress();
             for (int i = 1; i < m_Peers.Length; i++)
             {
                 m_Peers[i].avatarFresh = false;
@@ -684,6 +685,7 @@ namespace TrashAstronauts.Core.Net
                 case NetMsg.ItemPoses: return ItemPoseBatch.Read(ref r, ref m_PoseRead);
                 case NetMsg.Noise: return NoiseMsg.Read(ref r, out _);
                 case NetMsg.Voice: return VoiceMsg.Read(ref r, ref m_VoiceRead);
+                case CutProgressMsg.Id: return CutProgressMsg.Read(ref r, out _);
                 default: return false;
             }
         }
@@ -764,6 +766,7 @@ namespace TrashAstronauts.Core.Net
                     HandleVoice(peer);
                     return true;
                 }
+                case CutProgressMsg.Id: return HandleCutProgress(peer, ref r);
                 default:
                     return false;
             }
@@ -1503,6 +1506,7 @@ namespace TrashAstronauts.Core.Net
                 m_PoseWrite.Write(ref w);
                 Tap?.Invoke(true, to.slot, NetMsg.ItemPoses, m_Send, start, w.Position - start, m_Now);
             }
+            WriteCutProgress(to, ref w);
         }
 
         void WriteAvatar(Peer to, byte slot, in AvatarSnapshot avatar, ref NetWriter w)
