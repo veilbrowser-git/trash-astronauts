@@ -60,6 +60,8 @@ namespace TrashAstronauts.Tests
         {
             m_SwimWas = ZeroG.openHandSwim;
             ZeroG.openHandSwim = false; // the test's swing must not also swim the host backwards
+            // The test moves the hands itself (no headset: the pose drivers would put them back every frame).
+            foreach (var driver in m_Player.GetComponentsInChildren<UnityEngine.InputSystem.XR.TrackedPoseDriver>()) driver.enabled = false;
             Assert.IsTrue(m_Net.Host());
             var bot = AddBot(m_Net.Transport.Local);
             m_Bot = bot;
@@ -73,6 +75,8 @@ namespace TrashAstronauts.Tests
         }
 
         Bot m_Bot;
+        string SwingLog = "";
+        bool TwoHanded;
 
         /// <summary>Swings the right hand forward from chest height at <paramref name="speed"/> until a shove is sent (or the reach runs out), then holds it still.</summary>
         IEnumerator Swing(CrewShove shove, float speed, float from = 0.1f, float to = 1.0f)
@@ -81,13 +85,24 @@ namespace TrashAstronauts.Tests
             Vector3 chest = m_Player.head.position + Vector3.down * 0.35f;
             Vector3 dir = Forward;
             int sent = shove.Sent, thudOnly = shove.ThudOnly;
+            var log = new System.Text.StringBuilder();
+            var crew = m_Net.Crew(1);
             for (float along = from; along <= to; along += speed * (float)dt)
             {
-                m_Player.rightHand.transform.position = chest + dir * along;
+                Vector3 set = chest + dir * along;
+                m_Player.rightHand.transform.position = set;
+                if (TwoHanded) m_Player.leftHand.transform.position = set + Vector3.Cross(Vector3.up, dir) * 0.16f;
                 Tick(dt);
                 yield return null;
+                Vector3 palm = m_Player.rightHand.interactor != null ? m_Player.rightHand.interactor.transform.position : m_Player.rightHand.transform.position;
+                bool touch = CrewShape.Touches(crew, palm, CrewShove.HandRadius, out _, out _);
+                log.Append(along.ToString("0.00")).Append(" set").Append(set).Append(" now").Append(m_Player.rightHand.transform.position).Append(" touch=").Append(touch).Append('\n');
                 if (shove.Sent > sent || shove.ThudOnly > thudOnly) break;
             }
+            SwingLog = log.ToString() + " away=" + m_Player.IsAway + " holding=" + m_Player.rightHand.IsHolding + " anchored=" + m_Player.rightHand.IsAnchored
+                + " zgAnchored=" + ZeroG.IsHandAnchored(m_Player.rightHand) + " crewHead=" + (crew != null && crew.head != null ? crew.head.position.ToString() : "-")
+                + " torso=" + (crew != null && crew.suit != null && crew.suit.torso != null ? crew.suit.torso.position.ToString() : "-") + " suitOn=" + (crew != null && crew.suit != null && crew.suit.isActiveAndEnabled)
+                + " crewAway=" + (crew != null && crew.context != null && crew.context.IsAway);
             yield return Frames(15);
         }
 
@@ -100,7 +115,7 @@ namespace TrashAstronauts.Tests
             yield return Swing(shove, 1.6f);
 
             Assert.AreEqual(0, shove.BlockedByWall, "Test set-up: nothing between the two.");
-            Assert.AreEqual(1, shove.Sent, "One swing, one shove.");
+            Assert.AreEqual(1, shove.Sent, "One swing, one shove.\n" + SwingLog);
             Assert.AreEqual(1, shove.LastTarget);
             Assert.AreEqual(1, heard.Count, "The bot heard it once, whatever the copies.");
             Assert.AreEqual(0, heard[0].sender);
@@ -118,13 +133,27 @@ namespace TrashAstronauts.Tests
         }
 
         [UnityTest]
+        public IEnumerator Host_ATwoHandedShove_AddsUpToTheCap_AsOneShove()
+        {
+            var heard = new List<(byte sender, NetVec3 v)>();
+            yield return HostWithBotInFront(0.75f, heard);
+            var shove = m_Net.GetComponent<CrewShove>();
+            TwoHanded = true;
+            yield return Swing(shove, 1.6f);
+            Assert.AreEqual(1, shove.Sent, "Both hands together are one shove.\n" + SwingLog);
+            Assert.AreEqual(1, heard.Count);
+            Assert.AreEqual(CrewPushMsg.MaxTargetSpeed, heard[0].v.Magnitude, 0.01f, "Two hands at 1.6 m/s add up past the cap: capped.");
+            Assert.AreEqual(CrewPushMsg.MaxPusherSpeed, shove.LastRecoil.magnitude, 0.01f, "The pusher's kick is capped lower.");
+        }
+
+        [UnityTest]
         public IEnumerator Host_ASlowPress_GentlyPushesInProportion()
         {
             var heard = new List<(byte sender, NetVec3 v)>();
             yield return HostWithBotInFront(0.75f, heard);
             var shove = m_Net.GetComponent<CrewShove>();
             yield return Swing(shove, 0.4f);
-            Assert.AreEqual(1, shove.Sent, "A slow press still pushes.");
+            Assert.AreEqual(1, shove.Sent, "A slow press still pushes.\n" + SwingLog);
             Assert.AreEqual(1, heard.Count);
             Assert.That(heard[0].v.Magnitude, Is.InRange(0.1f, 0.3f), "About half the 0.4 m/s hand speed.");
             Assert.That(shove.LastRecoil.magnitude, Is.InRange(0.1f, 0.3f), "And as much back.");
