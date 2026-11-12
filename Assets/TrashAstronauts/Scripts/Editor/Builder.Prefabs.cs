@@ -134,7 +134,9 @@ namespace TrashAstronauts.EditorTools
             grab.useDynamicAttach = true;
             grab.throwOnDetach = true;
             grab.retainTransformParent = false;
-            grab.selectMode = InteractableSelectMode.Single;
+            // Anything over 2 kg can be taken in both hands (HeldWeight shares the load between them).
+            var grabBody = go.GetComponent<Rigidbody>();
+            grab.selectMode = grabBody != null && grabBody.mass > 2f ? InteractableSelectMode.Multiple : InteractableSelectMode.Single;
             // Throws follow the last fifth of a second of hand movement, so a flick of the wrist counts.
             // The release keeps the hand's true velocity and spin (no boost); HeldWeight limits it to what
             // an arm can give the object's mass, and makes heavy things lag and swing while held.
@@ -474,6 +476,17 @@ namespace TrashAstronauts.EditorTools
             AddOcclusion(stepSource);
             walker.steps = stepSource;
             walker.stepVolume = listener ? 0.35f : warden ? 0.75f : mimic ? 0.4f : 0.55f;
+
+            // The spider is a physical body: a kinematic pusher on its body (legs included) knocks floating
+            // junk aside in proportion to its speed and their mass, instead of ghosting through it. It is
+            // not a dynamic body, so nothing can shove it off its path.
+            var pusher = Empty(go.transform, "Body Pusher", Vector3.zero).AddComponent<Bumper>();
+            pusher.target = surfaceGo.transform;
+            pusher.localOffset = new Vector3(0f, 0.2f, 0f);
+            pusher.radius = warden ? 0.6f : 0.5f;
+            pusher.minSpeed = 0f;
+            pusher.bounce = 0.2f;
+            pusher.ownerMass = warden ? 320f : 220f;
             return SavePrefab(go, go.name);
         }
 
@@ -567,6 +580,7 @@ namespace TrashAstronauts.EditorTools
             light.range = 15f;
             light.intensity = 9f;
             light.color = new Color(1f, 0.96f, 0.88f);
+            light.cookie = FlashlightCookie(); // soft hot spot and a faint reflector ring
             light.shadows = LightShadows.None;
 
             var tool = go.AddComponent<FlashlightTool>();

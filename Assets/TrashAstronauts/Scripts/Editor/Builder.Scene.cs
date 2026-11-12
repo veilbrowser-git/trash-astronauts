@@ -64,7 +64,7 @@ namespace TrashAstronauts.EditorTools
 
             // Lighting: dim flat ambient so routes stay readable with the flashlight off, dark fog for mood.
             RenderSettings.ambientMode = AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.095f, 0.11f, 0.145f); // darker than before: the flashlight matters now
+            RenderSettings.ambientLight = new Color(0.085f, 0.1f, 0.14f); // darker than before: the flashlight matters now
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.ExponentialSquared;
             RenderSettings.fogColor = new Color(0.015f, 0.02f, 0.03f);
@@ -169,6 +169,7 @@ namespace TrashAstronauts.EditorTools
             // --- player
             var rig = (GameObject)PrefabUtility.InstantiatePrefab(s_RigPrefab);
             rig.transform.SetPositionAndRotation(hubSpawn.transform.position, hubSpawn.transform.rotation);
+            BuildDustMotes(rig.transform.position);
 
             // --- tutorial
             var tutorial = missionGo.AddComponent<TutorialController>();
@@ -226,8 +227,13 @@ namespace TrashAstronauts.EditorTools
             var freighter = FinishFreighter(missionGo.transform, dock.transform, doorR, practicePanel, reactorHum);
             var barge = BuildOreBarge(sharedLights, sharedGlow);
             var survey = BuildSurveyShip(sharedLights, sharedGlow);
+            var cave = BuildLavaTube(sharedLights, sharedGlow);
+            DressWreck(freighter, "Hauler");
+            DressWreck(barge, "Barge");
+            DressWreck(survey, "Survey");
+            DressTugView();
             foreach (var creature in creatures) creature.transform.SetPositionAndRotation(dock.transform.position, dock.transform.rotation);
-            director.maps = new[] { freighter, barge, survey };
+            director.maps = new[] { freighter, barge, survey, cave };
             director.sharedCuttables = new[] { practicePanel };
             director.sharedDoors = new[] { doorA };
             // Every web belongs to a wreck today; one strung in the tug or the airlock would go here.

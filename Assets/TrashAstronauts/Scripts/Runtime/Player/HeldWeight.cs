@@ -35,6 +35,10 @@ namespace TrashAstronauts.Player
         Vector3 m_LocalGrip;
         float m_FarFor;
         float m_LimitUntil = -1f;
+        float m_TwoHandedUntil = -1f;
+        int m_ReleaseArms = 1;
+        /// <summary>Arms behind the last throw (2 if both hands were on it as it was let go).</summary>
+        public int LastThrowArms => m_ReleaseArms;
         Vector3 m_ThrowerVelocity;
 
         /// <summary>The grip slipped because the hand was pulled away from where the object was stuck.</summary>
@@ -77,15 +81,34 @@ namespace TrashAstronauts.Player
             damping = Mathf.Clamp(freeMass / mass + 0.25f, 0.3f, 1f);
         }
 
+        /// <summary>How many hands hold this right now.</summary>
+        public int HandCount => m_Grab != null ? m_Grab.interactorsSelecting.Count : 0;
+
+        /// <summary>
+        /// Two hands share the load: each arm moves half of it, so a pair steers it as if it weighed
+        /// <see cref="TwoHandShare"/> of its mass. Heavy items (over <see cref="freeMass"/>) allow a second
+        /// hand (the builder sets their select mode to Multiple); light ones never change.
+        /// </summary>
+        public const float TwoHandShare = 0.25f;
+
         void OnGrabbed(SelectEnterEventArgs args)
         {
-            m_Holder = args.interactorObject;
             m_FarFor = 0f;
             m_LimitUntil = -1f;
+            RefreshHolders();
+        }
+
+        /// <summary>Re-reads who is holding it and sets the follow for one or two hands.</summary>
+        void RefreshHolders()
+        {
+            int hands = HandCount;
+            if (hands >= 2) m_TwoHandedUntil = float.MaxValue;
+            m_Holder = hands > 0 ? m_Grab.interactorsSelecting[0] : null;
+            if (m_Holder == null) return;
             Transform attach = m_Holder.GetAttachTransform(m_Grab);
             m_LocalGrip = transform.InverseTransformPoint(attach != null ? attach.position : m_Holder.transform.position);
 
-            Follow(m_Body.mass, out float scale, out float damping, freeMass);
+            Follow(hands >= 2 ? m_Body.mass * TwoHandShare : m_Body.mass, out float scale, out float damping, freeMass);
             m_Grab.smoothPosition = false;
             m_Grab.smoothRotation = false;
             m_Grab.velocityScale = scale;
@@ -96,7 +119,17 @@ namespace TrashAstronauts.Player
 
         void OnReleased(SelectExitEventArgs args)
         {
-            if (m_Grab.isSelected) return; // passed to the other hand
+            if (m_Grab.isSelected)
+            {
+                // One of two hands let go: the other carries on alone, without dropping it. A throw made
+                // with both hands lets go of them a moment apart, so it still counts as two-handed.
+                if (m_TwoHandedUntil == float.MaxValue) m_TwoHandedUntil = Time.time + 0.25f;
+                m_FarFor = 0f;
+                RefreshHolders();
+                return;
+            }
+            m_ReleaseArms = Time.time <= m_TwoHandedUntil ? 2 : 1;
+            m_TwoHandedUntil = -1f;
             m_Holder = null;
             GripGap = 0f;
             var player = args.interactorObject != null ? args.interactorObject.transform.GetComponentInParent<PlayerContext>() : null;
@@ -110,7 +143,7 @@ namespace TrashAstronauts.Player
             if (m_LimitUntil >= 0f)
             {
                 if (Time.time > m_LimitUntil || m_Grab.isSelected || m_Body.isKinematic) m_LimitUntil = -1f;
-                else LimitThrow(m_ThrowerVelocity);
+                else LimitThrow(m_ThrowerVelocity, m_ReleaseArms);
             }
             if (m_Holder == null || !m_Grab.isSelected || m_Body.isKinematic) return;
 
@@ -122,9 +155,10 @@ namespace TrashAstronauts.Player
         }
 
         /// <summary>Clamps the body's speed relative to the thrower, and its spin, to what an arm can give this mass.</summary>
-        public void LimitThrow(Vector3 throwerVelocity)
+        public void LimitThrow(Vector3 throwerVelocity, int arms = 1)
         {
-            float mass = m_Body.mass;
+            // Two arms put twice the energy in: the same as one arm throwing half the mass.
+            float mass = m_Body.mass / Mathf.Clamp(arms, 1, 2);
             Vector3 relative = m_Body.linearVelocity - throwerVelocity;
             float maxSpeed = RealPhysics.MaxThrowSpeed(mass);
             if (relative.sqrMagnitude > maxSpeed * maxSpeed) m_Body.linearVelocity = throwerVelocity + relative.normalized * maxSpeed;
