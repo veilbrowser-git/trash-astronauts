@@ -30,6 +30,7 @@ namespace TrashAstronauts.Tests
             m_Storage = new MemorySaveStorage();
             MissionDirector.StorageOverride = m_Storage;
             MissionDirector.SeedOverride = 77;
+            MissionDirector.CreatureOverride = 0;
             yield return SceneManager.LoadSceneAsync("TrashAstronauts", LoadSceneMode.Single);
             yield return null;
             yield return null;
@@ -51,6 +52,7 @@ namespace TrashAstronauts.Tests
         {
             MissionDirector.StorageOverride = null;
             MissionDirector.SeedOverride = null;
+            MissionDirector.CreatureOverride = null;
         }
 
         /// <summary>A point beside the player with nothing grabbable within reach.</summary>

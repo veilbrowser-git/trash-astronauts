@@ -36,6 +36,8 @@ namespace TrashAstronauts.Mission
         public static ISaveStorage StorageOverride;
         /// <summary>Test seam: forces the loot seed for the next run.</summary>
         public static int? SeedOverride;
+        /// <summary>Test seam: forces which creature from the roster is aboard.</summary>
+        public static int? CreatureOverride;
 
         [Header("Data")]
         [SerializeField] MissionConfig m_Config;
@@ -69,6 +71,8 @@ namespace TrashAstronauts.Mission
         public IReadOnlyList<PlayerContext> Players => m_Players;
         public IReadOnlyList<SalvageItem> Items => m_Items;
         public bool HazardsPaused => m_PauseReasons != HazardPauseReason.None;
+        /// <summary>The creature aboard this contract. A different one is picked from the roster each run.</summary>
+        public EnemyDrone ActiveEnemy { get; private set; }
         public MissionPhase Phase => Session != null ? Session.Phase : MissionPhase.Hub;
         public float NextRunOxygenCapacity => m_Config.GetOxygenCapacity(Profile.Data.oxygenUpgradeLevel);
 
@@ -115,6 +119,19 @@ namespace TrashAstronauts.Mission
                     if (enemy != null) enemy.EndRun();
                 }
             }
+            SelectCreature(0);
+        }
+
+        /// <summary>Makes one creature from the roster the one aboard; the others are switched off.</summary>
+        void SelectCreature(int index)
+        {
+            if (enemies == null || enemies.Length == 0) return;
+            index = Mathf.Clamp(index, 0, enemies.Length - 1);
+            for (int i = 0; i < enemies.Length; i++)
+            {
+                if (enemies[i] != null) enemies[i].gameObject.SetActive(i == index);
+            }
+            ActiveEnemy = enemies[index];
         }
 
         void OnDestroy()
@@ -193,7 +210,7 @@ namespace TrashAstronauts.Mission
             {
                 foreach (var def in m_Catalog)
                 {
-                    if (def != null && def.prefab != null) specs.Add(def.ToSpec());
+                    if (def != null && def.prefab != null && !def.bonusSpawn) specs.Add(def.ToSpec());
                 }
             }
 
@@ -220,12 +237,12 @@ namespace TrashAstronauts.Mission
                 }
             }
             if (noise != null) noise.Muted = false;
-            if (enemies != null)
+            if (enemies != null && enemies.Length > 0)
             {
-                foreach (var enemy in enemies)
-                {
-                    if (enemy != null) enemy.BeginRun(seed);
-                }
+                // A different thing is waiting in the wreck each time.
+                int pick = CreatureOverride ?? new System.Random(seed ^ 0x5f3759df).Next(enemies.Length);
+                SelectCreature(pick);
+                if (ActiveEnemy != null) ActiveEnemy.BeginRun(seed);
             }
             if (tugHatch != null) tugHatch.SetOpen(true);
 
@@ -257,6 +274,41 @@ namespace TrashAstronauts.Mission
                 Session.RegisterSalvage(assignment.salvageId, def.id, def.creditValue);
                 m_Items.Add(item);
             }
+
+            SpawnBonusItem(plan, pointsById);
+        }
+
+        /// <summary>Hides one bonus item (the rubber duck) at a free, open spawn point. It is extra: never part of the quota maths.</summary>
+        void SpawnBonusItem(SpawnPlan plan, Dictionary<string, SalvageSpawnPoint> pointsById)
+        {
+            SalvageDefinition bonus = null;
+            foreach (var def in m_Catalog)
+            {
+                if (def != null && def.bonusSpawn && def.prefab != null) bonus = def;
+            }
+            if (bonus == null) return;
+
+            var used = new HashSet<string>();
+            foreach (var assignment in plan.Assignments) used.Add(assignment.spawnPointId);
+            var free = new List<SalvageSpawnPoint>();
+            foreach (var point in spawnPoints)
+            {
+                if (point != null && point.Gate == null && !used.Contains(point.pointId)) free.Add(point);
+            }
+            if (free.Count == 0) return;
+
+            var spot = free[new System.Random(Session.Seed ^ 0x2545f491).Next(free.Count)];
+            var go = Instantiate(bonus.prefab, spot.transform.position, spot.transform.rotation, salvageRoot);
+            var item = go.GetComponent<SalvageItem>();
+            if (item == null)
+            {
+                Destroy(go);
+                return;
+            }
+            string id = SalvageSpawnPlanner.MakeSalvageId(Session.RunIndex, spot.pointId + "#bonus");
+            item.Initialize(this, id, bonus, null);
+            Session.RegisterSalvage(id, bonus.id, bonus.creditValue);
+            m_Items.Add(item);
         }
 
         void ClearRunObjects()
@@ -373,6 +425,14 @@ namespace TrashAstronauts.Mission
             return result;
         }
 
+        /// <summary>Pays the trick-shot bonus for an item that was just deposited. Returns the bonus credits.</summary>
+        public int AwardTrickShot(SalvageItem item)
+        {
+            if (item == null) return 0;
+            int bonus = Mathf.RoundToInt(item.Value * m_Config.trickShotBonusFraction);
+            return Session.AwardTrickShot(item.SalvageId, bonus) ? bonus : 0;
+        }
+
         /// <summary>Opens a cuttable once all of its points are burnt through.</summary>
         public bool RequestOpenPanel(Cuttable cuttable, PlayerId by)
         {
@@ -422,7 +482,17 @@ namespace TrashAstronauts.Mission
             if (Session.Phase == MissionPhase.Active && !HazardsPaused)
             {
                 // With no registered player (tests) oxygen is controlled explicitly via TickMission.
-                if (m_Players.Count > 0) TickMission(Time.deltaTime, everyoneSafe);
+                // Working hard (swimming, thrusting) uses oxygen faster.
+                if (m_Players.Count > 0)
+                {
+                    float exertion = 0f;
+                    foreach (var player in m_Players)
+                    {
+                        if (player != null && player.locomotion != null && player.locomotion.zeroG != null)
+                            exertion = Mathf.Max(exertion, player.locomotion.zeroG.Exertion);
+                    }
+                    TickMission(Time.deltaTime * (1f + m_Config.exertionOxygenCost * exertion), everyoneSafe);
+                }
             }
 
             if (Time.time >= m_NextBoundsCheck)

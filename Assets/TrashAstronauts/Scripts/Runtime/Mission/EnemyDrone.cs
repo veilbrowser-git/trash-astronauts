@@ -20,6 +20,16 @@ namespace TrashAstronauts.Mission
     /// </summary>
     public sealed class EnemyDrone : MonoBehaviour
     {
+        [Header("Variant")]
+        public string displayName = "JANITOR-7";
+        [Tooltip("One line on the mission board telling the player how this one hunts.")]
+        public string trait = "Sees and hears about equally.";
+        [Tooltip("When set, this creature uses its own senses and speeds instead of the mission config's.")]
+        public bool overrideTuning;
+        public EnemyTuning tuning = new EnemyTuning();
+        [Tooltip("Scales how long a tranquilizer dart keeps it asleep.")]
+        public float sedationMultiplier = 1f;
+
         public MissionDirector director;
         public EnemyWaypoint[] graph;
         public EnemyWaypoint[] patrolRoute;
@@ -85,7 +95,7 @@ namespace TrashAstronauts.Mission
         {
             if (Brain != null) return;
             if (director == null) director = MissionDirector.Active;
-            m_Tuning = director != null && director.Config != null ? director.Config.enemy : new EnemyTuning();
+            m_Tuning = overrideTuning ? tuning : director != null && director.Config != null ? director.Config.enemy : new EnemyTuning();
             Brain = new EnemyBrain(m_Tuning);
             Brain.StateChanged += OnStateChanged;
         }
@@ -147,7 +157,7 @@ namespace TrashAstronauts.Mission
         public bool Tranquilize(float seconds)
         {
             if (!m_Running || IsScaring || seconds <= 0f) return false;
-            m_SedateTimer = Mathf.Max(m_SedateTimer, seconds);
+            m_SedateTimer = Mathf.Max(m_SedateTimer, seconds * Mathf.Max(0.1f, sedationMultiplier));
             Brain.Sleep();
             m_HasPath = false;
             if (voice != null) voice.Stop();

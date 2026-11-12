@@ -67,8 +67,8 @@ namespace TrashAstronauts.UI
         {
             "You are weightless. Nothing here can hurt you:\nno oxygen drain, and nothing is awake.\nLook at your hands, then follow these steps.",
             "Reach out to a wall or a yellow rail.\nHOLD GRIP to grab it, pull yourself along,\nthen LET GO while moving to glide away.",
-            "Float clear of the walls and LOOK where you want\nto go. Sweep your arms back quickly, like swimming.\nNo button needed. (Hold GRIP to paddle backward.)",
-            "Drifting? GRAB any surface to stop dead, or just\nput a hand on a wall: hands are solid here.\nThumbstick FORWARD teleports. Left / right turns.",
+            "LOOK where you want to go and sweep your arms\nback, like swimming. No button needed.\nOr point an EMPTY hand and hold TRIGGER to thrust.",
+            "To stop: GRAB any surface, or CLICK a thumbstick\nto brake. Hands are solid: push off walls.\nThumbstick FORWARD teleports. Left / right turns.",
             "Grip at your CHEST: flashlight, and the tranq\nlauncher beside it. HIPS: scanner and cutter.\nTRIGGER uses a tool. Let go and it returns.",
             "Grab the yellow PRACTICE SCRAP floating nearby.\nCarry it to the collection locker and\nLET GO of it inside the open hopper.",
             "Draw the PLASMA CUTTER from your hip.\nHold TRIGGER and keep the flame on each orange\nweld of the PRACTICE PLATE. Watch the heat gauge.",

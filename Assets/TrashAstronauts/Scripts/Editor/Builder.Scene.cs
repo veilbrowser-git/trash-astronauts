@@ -127,16 +127,23 @@ namespace TrashAstronauts.EditorTools
             practice.transform.position = practiceSpawn.transform.position;
 
             // --- drone
-            var droneGo = (GameObject)PrefabUtility.InstantiatePrefab(s_DronePrefab);
+            // All three are placed at the dock; the director switches on one of them per contract.
             var dock = Empty(missionGo.transform, "Drone Dock", new Vector3(3.4f, 1.45f, 28.4f), Quaternion.Euler(0, 200f, 0));
-            droneGo.transform.SetPositionAndRotation(dock.transform.position, dock.transform.rotation);
-            var drone = droneGo.GetComponent<EnemyDrone>();
-            drone.director = director;
-            drone.dock = dock.transform;
-            drone.graph = s_Waypoints.Values.ToArray();
-            drone.patrolRoute = Route("R3", "R4", "R0", "C4", "C3", "C2", "G0", "G1", "G4", "G3", "G4", "G2", "G4", "G1", "G0", "C2", "C1",
-                "M0", "M1", "M2", "M1", "M0", "C1", "C0", "C1", "C2", "C3", "C4", "R0", "R1", "R2");
-            drone.doors = new[] { doorR };
+            var creatures = new List<EnemyDrone>();
+            for (int i = 0; i < s_CreaturePrefabs.Length; i++)
+            {
+                var droneGo = (GameObject)PrefabUtility.InstantiatePrefab(s_CreaturePrefabs[i]);
+                droneGo.transform.SetPositionAndRotation(dock.transform.position, dock.transform.rotation);
+                var creature = droneGo.GetComponent<EnemyDrone>();
+                creature.director = director;
+                creature.dock = dock.transform;
+                creature.graph = s_Waypoints.Values.ToArray();
+                creature.patrolRoute = Route("R3", "R4", "R0", "C4", "C3", "C2", "G0", "G1", "G4", "G3", "G4", "G2", "G4", "G1", "G0", "C2", "C1",
+                    "M0", "M1", "M2", "M1", "M0", "C1", "C0", "C1", "C2", "C3", "C4", "R0", "R1", "R2");
+                creature.doors = new[] { doorR };
+                droneGo.SetActive(i == 0);
+                creatures.Add(creature);
+            }
 
             // --- player
             var rig = (GameObject)PrefabUtility.InstantiatePrefab(s_RigPrefab);
@@ -174,7 +181,7 @@ namespace TrashAstronauts.EditorTools
             director.salvageRoot = salvageRoot.transform;
             director.spawnPoints = s_SpawnPoints.ToArray();
             director.cuttables = s_Cuttables.ToArray();
-            director.enemies = new[] { drone };
+            director.enemies = creatures.ToArray();
             director.wreckDoors = new[] { doorA, doorR };
 
             // --- ambience

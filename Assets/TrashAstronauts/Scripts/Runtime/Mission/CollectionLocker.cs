@@ -30,6 +30,7 @@ namespace TrashAstronauts.Mission
 
         /// <summary>Raised when the tutorial's practice item is dropped in.</summary>
         public event System.Action TrainingItemDeposited;
+        public int TrickShotCount { get; private set; }
 
         void OnEnable()
         {
@@ -113,10 +114,25 @@ namespace TrashAstronauts.Mission
             DepositResult result = director.DepositSalvage(item, item.LastHolder);
             if (result == DepositResult.Accepted)
             {
+                // Thrown in from across the cabin? That is a trick shot.
+                int trickBonus = 0;
+                var config = director.Config;
+                if (item.WasThrown && zone != null && Vector3.Distance(item.ReleasePosition, zone.position) >= config.trickShotDistance)
+                    trickBonus = director.AwardTrickShot(item);
+
                 item.Secure(NextSlot());
                 string itemName = item.definition != null ? item.definition.displayName : "Salvage";
-                Flash("SECURED: " + itemName + "\n+" + item.Value + " cr", 3f);
-                Feedback(item, item.Value >= 300);
+                if (trickBonus > 0)
+                {
+                    TrickShotCount++;
+                    Flash("TRICK SHOT!  " + itemName + "\n+" + item.Value + " cr  +" + trickBonus + " bonus", 4f);
+                    if (Sfx.Library != null) Sfx.PlayAt(Sfx.Library.trickShot, transform.position, 0.8f);
+                }
+                else
+                {
+                    Flash("SECURED: " + itemName + "\n+" + item.Value + " cr", 3f);
+                }
+                Feedback(item, item.Value >= 300 || trickBonus > 0);
                 return true;
             }
 
@@ -171,7 +187,8 @@ namespace TrashAstronauts.Mission
             {
                 string status = session.QuotaMet ? "QUOTA MET - extract when ready" : "Quota not met yet";
                 display.text = "SECURED: " + session.DepositedCount + " items\n"
-                    + session.DepositedValue + " / " + session.Quota + " cr\n" + status;
+                    + session.SecuredValue + " / " + session.Quota + " cr\n" + status
+                    + (session.TrickShots > 0 ? "\nTrick shots: " + session.TrickShots : "\nThrow it in from far away for a bonus");
             }
         }
 

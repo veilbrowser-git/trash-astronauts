@@ -76,6 +76,40 @@ namespace TrashAstronauts.EditorTools
             lib.powerDown = Wav("power_down", 1.4f, (t, d) => (Saw(120f * Mathf.Pow(1f - t / d, 2f) + 18f, t) * 0.35f + Sine(60f * (1f - t / d) + 20f, t) * 0.3f) * Env(t, d, 0.01f, 1.2f));
             lib.powerUp = Wav("power_up", 0.9f, (t, d) => (Saw(30f + 110f * (t / d), t) * 0.25f + Sine(60f + 180f * (t / d), t) * 0.2f) * Mathf.Sin(Mathf.PI * t / d));
 
+            lib.squeak = Wav("squeak", 0.24f, (t, d) =>
+            {
+                float f = t < 0.09f ? 950f + 7000f * t : 1580f - 2600f * (t - 0.09f);
+                return (Sine(f + 60f * Sine(38f, t), t) * 0.5f + Square(f * 0.5f, t) * 0.08f) * Mathf.Sin(Mathf.PI * Mathf.Clamp01(t / d)) * 0.8f;
+            });
+            lib.trickShot = Wav("trick_shot", 0.9f, (t, d) =>
+            {
+                float[] notes = { 659f, 784f, 988f, 1319f, 1568f };
+                int i = Mathf.Min(4, (int)(t / 0.09f));
+                return (Sine(notes[i], t) + 0.35f * Sine(notes[i] * 2f, t) + 0.15f * Square(notes[i] * 0.5f, t)) * Env(t, d, 0.005f, 2.5f) * 0.42f;
+            });
+            float lpT = 0f;
+            lib.thruster = Wav("thruster", 1.0f, (t, d) =>
+            {
+                lpT += (Noise(rng) - lpT) * 0.35f;
+                return lpT * 0.55f * (0.9f + 0.1f * Sine(23f, t)) + Noise(rng) * 0.08f;
+            }, true);
+            // Breathing inside the helmet: in for a second, a pause, out a little longer. Loops at silence.
+            float lpIn = 0f, lpOut = 0f;
+            lib.breathing = Wav("breathing", 3.4f, (t, d) =>
+            {
+                lpIn += (Noise(rng) - lpIn) * 0.22f;
+                lpOut += (Noise(rng) - lpOut) * 0.09f;
+                float inhale = t < 1.2f ? Mathf.Pow(Mathf.Sin(Mathf.PI * t / 1.2f), 1.5f) : 0f;
+                float exhale = t > 1.55f && t < 3.15f ? Mathf.Pow(Mathf.Sin(Mathf.PI * (t - 1.55f) / 1.6f), 1.2f) : 0f;
+                return lpIn * inhale * 0.9f + lpOut * exhale * 1.5f;
+            }, true);
+            lib.heartbeat = Wav("heartbeat", 0.85f, (t, d) =>
+            {
+                float lub = Sine(58f, t) * Decay(t, 22f) * Mathf.Clamp01(t * 200f);
+                float dub = t > 0.26f ? Sine(72f, t - 0.26f) * Decay(t - 0.26f, 28f) * Mathf.Clamp01((t - 0.26f) * 200f) * 0.8f : 0f;
+                return (lub + dub) * 0.9f;
+            }, true);
+
             lib.resultSuccess = Wav("result_success", 1.2f, (t, d) =>
             {
                 float[] notes = { 392f, 494f, 587f, 784f };

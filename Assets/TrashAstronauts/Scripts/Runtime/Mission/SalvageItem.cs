@@ -50,12 +50,59 @@ namespace TrashAstronauts.Mission
 
         void OnEnable()
         {
-            if (grab != null) grab.selectEntered.AddListener(OnGrabbed);
+            if (grab != null)
+            {
+                grab.selectEntered.AddListener(OnGrabbed);
+                grab.selectExited.AddListener(OnReleased);
+            }
         }
 
         void OnDisable()
         {
-            if (grab != null) grab.selectEntered.RemoveListener(OnGrabbed);
+            if (grab != null)
+            {
+                grab.selectEntered.RemoveListener(OnGrabbed);
+                grab.selectExited.RemoveListener(OnReleased);
+            }
+        }
+
+        /// <summary>Where the item was when it was last let go, and whether it was thrown rather than placed.</summary>
+        public Vector3 ReleasePosition { get; private set; }
+        public bool WasThrown { get; private set; }
+        public float LastThrowSpeed { get; private set; }
+
+        void OnReleased(SelectExitEventArgs args)
+        {
+            if (grab.isSelected) return; // passed to the other hand
+            ReleasePosition = transform.position;
+            WasThrown = false;
+            var player = PlayerContext.From(args.interactorObject);
+            if (isActiveAndEnabled) StartCoroutine(AfterRelease(player));
+        }
+
+        IEnumerator AfterRelease(PlayerContext player)
+        {
+            // XRI applies the throw velocity as it detaches; read it once physics has it.
+            yield return new WaitForFixedUpdate();
+            yield return new WaitForFixedUpdate();
+            if (IsHeld || IsSecured || m_Body.isKinematic) yield break;
+            RegisterThrow(m_Body.linearVelocity, player);
+        }
+
+        /// <summary>
+        /// Records a throw and kicks the thrower back the other way (momentum is conserved: hurling the
+        /// 14 kg reactor core shoves you noticeably, tossing a scrap plate barely at all).
+        /// </summary>
+        public void RegisterThrow(Vector3 velocity, PlayerContext player, Vector3? releasedAt = null)
+        {
+            if (releasedAt.HasValue) ReleasePosition = releasedAt.Value;
+            LastThrowSpeed = velocity.magnitude;
+            WasThrown = LastThrowSpeed > 0.8f;
+            if (!WasThrown || player == null || player.locomotion == null || player.locomotion.zeroG == null) return;
+            var director = m_Director != null ? m_Director : MissionDirector.Active;
+            float playerMass = director != null ? Mathf.Max(20f, director.Config.playerMass) : 90f;
+            Vector3 recoil = -velocity * (m_Body.mass / playerMass);
+            player.locomotion.zeroG.AddImpulse(Vector3.ClampMagnitude(recoil, 1.2f));
         }
 
         /// <summary>Called by the mission director right after spawning.</summary>
@@ -98,6 +145,7 @@ namespace TrashAstronauts.Mission
         {
             var player = PlayerContext.From(args.interactorObject);
             LastHolder = player != null ? player.Id : PlayerId.Local;
+            WasThrown = false;
             if (impact != null) impact.LastHandler = LastHolder;
             if (scanTag != null && definition != null) scanTag.Show(definition.displayName, definition.creditValue, 2.5f);
 

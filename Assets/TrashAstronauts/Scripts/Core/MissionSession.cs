@@ -51,6 +51,7 @@ namespace TrashAstronauts.Core
         public SalvageState State;
         public PlayerId CollectedBy = PlayerId.None;
         public PlayerId DepositedBy = PlayerId.None;
+        public bool TrickShot;
     }
 
     public sealed class MissionResult
@@ -59,6 +60,9 @@ namespace TrashAstronauts.Core
         public int Quota;
         public int DepositedValue;
         public int DepositedCount;
+        /// <summary>Extra credits earned from trick shots this run.</summary>
+        public int TrickBonus;
+        public int TrickShots;
         public int Bonus;
         /// <summary>Credits this run pays out. Zero on failure.</summary>
         public int Payout;
@@ -66,7 +70,7 @@ namespace TrashAstronauts.Core
         public float ElapsedSeconds;
 
         public bool IsFailure => Outcome == MissionOutcome.FailedOxygen || Outcome == MissionOutcome.FailedCaught;
-        public bool QuotaMet => DepositedValue >= Quota;
+        public bool QuotaMet => DepositedValue + TrickBonus >= Quota;
     }
 
     /// <summary>
@@ -90,6 +94,10 @@ namespace TrashAstronauts.Core
         public int Quota { get; private set; }
         public int DepositedValue { get; private set; }
         public int DepositedCount { get; private set; }
+        /// <summary>Extra credits from trick shots. Counts toward the quota and is paid out on extraction.</summary>
+        public int TrickBonus { get; private set; }
+        public int TrickShots { get; private set; }
+        public int SecuredValue => DepositedValue + TrickBonus;
         public float ElapsedSeconds { get; private set; }
         public OxygenTank Oxygen { get; }
         public MissionResult Result { get; private set; }
@@ -97,7 +105,7 @@ namespace TrashAstronauts.Core
         public bool Banked { get; private set; }
 
         public IReadOnlyCollection<SalvageRecord> Items => m_Items.Values;
-        public bool QuotaMet => DepositedValue >= Quota;
+        public bool QuotaMet => SecuredValue >= Quota;
 
         public event Action<MissionPhase> PhaseChanged;
         public event Action<SalvageRecord> SalvageCollected;
@@ -188,6 +196,17 @@ namespace TrashAstronauts.Core
             return DepositResult.Accepted;
         }
 
+        /// <summary>Adds a trick-shot bonus for an item that has just been deposited. One bonus per item.</summary>
+        public bool AwardTrickShot(string salvageId, int bonus)
+        {
+            if (Phase != MissionPhase.Active || bonus <= 0) return false;
+            if (!TryGetSalvage(salvageId, out var record) || record.State != SalvageState.Deposited || record.TrickShot) return false;
+            record.TrickShot = true;
+            TrickBonus += bonus;
+            TrickShots++;
+            return true;
+        }
+
         public bool IsPanelOpen(string panelId) => panelId != null && m_OpenPanels.Contains(panelId);
 
         /// <summary>Opens a cuttable panel or mount. Returns false if it was already open.</summary>
@@ -217,7 +236,7 @@ namespace TrashAstronauts.Core
             if (Phase != MissionPhase.Active) return null;
             bool met = QuotaMet;
             int bonus = met ? m_ContractBonus : 0;
-            return End(met ? MissionOutcome.ContractComplete : MissionOutcome.QuotaMissed, DepositedValue + bonus, bonus);
+            return End(met ? MissionOutcome.ContractComplete : MissionOutcome.QuotaMissed, SecuredValue + bonus, bonus);
         }
 
         /// <summary>Fails the run. This run's earnings are forfeited; banked credits are untouched.</summary>
@@ -235,6 +254,8 @@ namespace TrashAstronauts.Core
                 Quota = Quota,
                 DepositedValue = DepositedValue,
                 DepositedCount = DepositedCount,
+                TrickBonus = TrickBonus,
+                TrickShots = TrickShots,
                 Bonus = bonus,
                 Payout = Math.Max(0, payout),
                 OxygenRemainingSeconds = Oxygen.Remaining,
@@ -272,6 +293,8 @@ namespace TrashAstronauts.Core
             m_OpenPanels.Clear();
             DepositedValue = 0;
             DepositedCount = 0;
+            TrickBonus = 0;
+            TrickShots = 0;
             ElapsedSeconds = 0f;
             Result = null;
             Banked = false;

@@ -30,21 +30,34 @@ namespace TrashAstronauts.Player
 
         [Header("Grabbing surfaces")]
         [Tooltip("How close the palm must be to a surface to grab it.")]
-        public float grabReach = 0.16f;
+        public float grabReach = 0.22f;
         [Tooltip("Speed kept when letting go, as a fraction of how fast you were pulling.")]
         public float pushOffScale = 1f;
 
         [Header("Swimming")]
         [Tooltip("How much of a stroke's hand speed becomes body speed.")]
-        public float swimStrength = 1.05f;
+        public float swimStrength = 1.6f;
         [Tooltip("Strokes slower than this (m/s) do nothing, so small hand movements do not push you around.")]
         public float swimMinHandSpeed = 0.35f;
 
         [Header("Open-hand swimming (no button)")]
         public bool openHandSwim = true;
         [Tooltip("Open-hand strokes must be at least this fast (m/s) to count, so normal hand movement is ignored.")]
-        public float openSwimMinHandSpeed = 0.85f;
-        public float openSwimStrength = 0.6f;
+        public float openSwimMinHandSpeed = 0.65f;
+        public float openSwimStrength = 1.15f;
+
+        [Header("Suit thruster (point an empty hand and hold trigger)")]
+        public bool thrusterEnabled = true;
+        [Tooltip("Acceleration in m/s^2 along the direction the hand points.")]
+        public float thrusterAcceleration = 1.9f;
+        [Tooltip("The thruster stops adding speed once you are moving this fast in that direction.")]
+        public float thrusterMaxSpeed = 2.4f;
+        [Range(0.1f, 0.9f)] public float thrusterTriggerThreshold = 0.45f;
+        [Tooltip("Speed lost per second while a thumbstick is clicked in (brake).")]
+        public float brakeDeceleration = 4.5f;
+        [Tooltip("How loud the thruster is to the creature (0 = silent). Swimming and pushing off are silent.")]
+        [Range(0f, 1f)] public float thrusterLoudness = 0.2f;
+        float m_ThrusterNoiseTimer;
 
         [Header("Solid hands")]
         [Tooltip("Head transform. The arm is checked from the chest to the palm so a hand cannot pass through a wall.")]
@@ -54,9 +67,9 @@ namespace TrashAstronauts.Player
         public float maxPushPerFrame = 0.2f;
 
         [Header("Drift")]
-        public float maxSpeed = 3.2f;
+        public float maxSpeed = 3.6f;
         [Tooltip("Fraction of speed lost per second while drifting. Low = long glides.")]
-        public float drag = 0.22f;
+        public float drag = 0.16f;
         [Tooltip("Drag used when the comfort option 'drift' is off: you stop almost as soon as you let go.")]
         public float comfortDrag = 7f;
         [Range(0f, 1f)] public float bounce = 0.55f;
@@ -94,6 +107,12 @@ namespace TrashAstronauts.Player
         public bool IsAnchored => m_Driver != null;
         /// <summary>Total speed gained from swimming strokes since start (m/s). Used by the tutorial.</summary>
         public float SwimSpeedGained { get; private set; }
+        /// <summary>Total speed gained from the suit thruster since start (m/s).</summary>
+        public float ThrusterSpeedGained { get; private set; }
+        public bool IsThrusting { get; private set; }
+        public bool IsBraking { get; private set; }
+        /// <summary>0..1, how hard the player is working (strokes, thrust). Raises oxygen use and breathing.</summary>
+        public float Exertion { get; private set; }
 
         /// <summary>A hand took hold of a surface. Argument: body speed at that moment.</summary>
         public event Action<float> Grabbed;
@@ -139,6 +158,8 @@ namespace TrashAstronauts.Player
 
             Vector3 anchoredMotion = Vector3.zero;
             m_ThrustThisFrame = false;
+            bool thrusting = false;
+            bool braking = false;
 
             foreach (var state in m_Hands)
             {
@@ -178,7 +199,31 @@ namespace TrashAstronauts.Player
                 }
 
                 if (m_Driver == null) anchoredMotion += SolidHand(state, palm, handVelocity);
+                thrusting |= UpdateThruster(state, dt);
+                braking |= state.hand.ThumbstickClickHeld;
             }
+            IsThrusting = thrusting;
+            // The thruster hisses. It is quiet, but something with good ears will notice.
+            if (thrusting)
+            {
+                m_ThrusterNoiseTimer -= dt;
+                if (m_ThrusterNoiseTimer <= 0f)
+                {
+                    m_ThrusterNoiseTimer = 0.9f;
+                    var director = TrashAstronauts.Mission.MissionDirector.Active;
+                    if (director != null && director.noise != null)
+                        director.noise.Emit(new TrashAstronauts.Core.NoiseEvent(transform.position + Vector3.up * 1.2f, thrusterLoudness,
+                            TrashAstronauts.Core.NoiseKind.Impact, TrashAstronauts.Core.PlayerId.Local));
+                }
+            }
+            else m_ThrusterNoiseTimer = 0f;
+            IsBraking = braking;
+            if (braking && m_Driver == null)
+            {
+                m_Velocity = Vector3.MoveTowards(m_Velocity, Vector3.zero, brakeDeceleration * dt);
+                m_ThrustThisFrame = m_Velocity.sqrMagnitude > 1e-6f;
+            }
+            Exertion = Mathf.MoveTowards(Exertion, m_ThrustThisFrame ? 1f : 0f, dt * (m_ThrustThisFrame ? 1.2f : 0.35f));
             anchoredMotion = Vector3.ClampMagnitude(anchoredMotion, maxPushPerFrame);
 
             if (m_Driver != null)
@@ -207,6 +252,38 @@ namespace TrashAstronauts.Player
             {
                 TryEndLocomotion();
             }
+        }
+
+        /// <summary>
+        /// Suit thruster: an empty hand that is not on a surface or a button, with the trigger held,
+        /// pushes the player the way the hand points. Gentle, capped, and usable with hand tracking (pinch).
+        /// </summary>
+        bool UpdateThruster(HandState state, float dt)
+        {
+            var hand = state.hand;
+            bool firing = thrusterEnabled && !state.anchored && !state.touchingWall && !hand.IsHolding && !hand.IsPointingAtButton
+                && hand.Trigger >= thrusterTriggerThreshold && m_Driver == null;
+
+            if (hand.thrusterVisual != null && hand.thrusterVisual.activeSelf != firing) hand.thrusterVisual.SetActive(firing);
+            if (hand.thrusterAudio != null && Application.isPlaying)
+            {
+                if (firing && !hand.thrusterAudio.isPlaying) hand.thrusterAudio.Play();
+                else if (!firing && hand.thrusterAudio.isPlaying) hand.thrusterAudio.Stop();
+            }
+            if (!firing) return false;
+
+            Vector3 direction = hand.transform.forward;
+            float along = Vector3.Dot(m_Velocity, direction);
+            if (along < thrusterMaxSpeed)
+            {
+                Vector3 before = m_Velocity;
+                float gain = Mathf.Min(thrusterAcceleration * dt, thrusterMaxSpeed - along);
+                m_Velocity = Vector3.ClampMagnitude(m_Velocity + direction * gain, maxSpeed);
+                ThrusterSpeedGained += (m_Velocity - before).magnitude;
+            }
+            m_ThrustThisFrame = true;
+            hand.Pulse(0.08f, 0.03f);
+            return true;
         }
 
         void ApplyStroke(Vector3 gain)

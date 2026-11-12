@@ -82,7 +82,7 @@ namespace TrashAstronauts.UI
             switch (session.Phase)
             {
                 case MissionPhase.Active:
-                    Set(salvageText, "SECURED " + session.DepositedValue + " / " + session.Quota + " cr"
+                    Set(salvageText, "SECURED " + session.SecuredValue + " / " + session.Quota + " cr"
                         + (session.QuotaMet ? "\nQUOTA MET" : ""));
                     break;
                 case MissionPhase.Results:

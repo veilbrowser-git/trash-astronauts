@@ -75,6 +75,7 @@ namespace TrashAstronauts.Player
 
             if (target != null && !target.Interactable) target = null;
             SetPointed(target);
+            hand.IsPointingAtButton = target != null || m_Touching.Count > 0;
 
             if (pointerLine != null)
             {

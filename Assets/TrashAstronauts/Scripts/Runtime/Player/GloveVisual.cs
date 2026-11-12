@@ -12,7 +12,7 @@ namespace TrashAstronauts.Player
         public Transform[] indexPivots;
         public Transform[] gripPivots;
         public Transform thumbPivot;
-        public float curlDegrees = 48f;
+        public float curlDegrees = 68f;
         public float thumbDegrees = 40f;
         public float smoothing = 18f;
 
@@ -26,6 +26,12 @@ namespace TrashAstronauts.Player
             m_Index = Mathf.Lerp(m_Index, hand.Trigger, t);
             m_Grip = Mathf.Lerp(m_Grip, Mathf.Max(hand.Grip, hand.IsHolding ? 1f : 0f), t);
 
+            Apply(m_Index, m_Grip);
+        }
+
+        /// <summary>Poses the fingers: 0 = open hand, 1 = closed fist.</summary>
+        public void Apply(float m_Index, float m_Grip)
+        {
             if (indexPivots != null)
             {
                 for (int i = 0; i < indexPivots.Length; i++)
@@ -42,7 +48,7 @@ namespace TrashAstronauts.Player
             }
             if (thumbPivot != null)
             {
-                float sign = hand.side == Core.Handedness.Left ? 1f : -1f;
+                float sign = hand == null || hand.side == Core.Handedness.Left ? 1f : -1f;
                 thumbPivot.localRotation = Quaternion.Euler(0f, 0f, sign * Mathf.Max(m_Grip, m_Index) * thumbDegrees);
             }
         }

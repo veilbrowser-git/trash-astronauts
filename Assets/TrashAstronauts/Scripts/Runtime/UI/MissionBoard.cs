@@ -144,8 +144,8 @@ namespace TrashAstronauts.UI
                         "Wreck: hauler MARGIN CALL (derelict)\n"
                         + "Quota: " + config.quotaCredits + " cr     Bonus: +" + config.contractBonusCredits + " cr\n"
                         + "Oxygen: " + OxygenTank.FormatClock(director.NextRunOxygenCapacity) + " (drains outside this tug)\n\n"
-                        + "NOTICE: maintenance unit JANITOR-7 is still\n"
-                        + "aboard. It reacts to NOISE. It cannot enter the tug.\n\n"
+                        + "NOTICE: something is still aboard. It is a\n"
+                        + "different thing each contract. It cannot enter the tug.\n\n"
                         + "Banked credits: " + profile.totalCredits + " cr" + notice);
                     SetPrimary("START CONTRACT", true);
                     break;
@@ -154,8 +154,9 @@ namespace TrashAstronauts.UI
                     bool confirming = Time.unscaledTime <= m_ConfirmUntil;
                     Set(title, "CONTRACT ACTIVE");
                     Set(body,
-                        "Secured: " + session.DepositedValue + " / " + session.Quota + " cr  (" + session.DepositedCount + " items)\n"
-                        + "Oxygen: " + OxygenTank.FormatClock(session.Oxygen.Remaining) + "\n\n"
+                        "Secured: " + session.SecuredValue + " / " + session.Quota + " cr  (" + session.DepositedCount + " items)\n"
+                        + "Oxygen: " + OxygenTank.FormatClock(session.Oxygen.Remaining) + "\n"
+                        + (director.ActiveEnemy != null ? "Aboard: " + director.ActiveEnemy.displayName + "\n  " + director.ActiveEnemy.trait + "\n\n" : "\n")
                         + (session.QuotaMet
                             ? "QUOTA MET. Extract now for the bonus,\nor risk another trip for more."
                             : "Quota NOT met. Extracting now pays only\nfor what is already secured.")
@@ -169,6 +170,7 @@ namespace TrashAstronauts.UI
                     Set(title, Heading(result));
                     Set(body,
                         "Salvage secured: " + result.DepositedValue + " cr  (" + result.DepositedCount + " items)\n"
+                        + (result.TrickShots > 0 ? "Trick shots: " + result.TrickShots + "  (+" + result.TrickBonus + " cr)\n" : "")
                         + "Quota: " + result.Quota + " cr\n"
                         + "Contract bonus: +" + result.Bonus + " cr\n"
                         + "PAYOUT: " + result.Payout + " cr\n"

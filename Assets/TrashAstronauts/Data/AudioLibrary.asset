@@ -18,6 +18,11 @@ MonoBehaviour:
   depositJackpot: {fileID: 8300000, guid: 2bd162287ef17409ba02d9290b7d6445, type: 3}
   teleport: {fileID: 8300000, guid: bcd53a03f43fe42da9d85ec452436782, type: 3}
   toolHolster: {fileID: 8300000, guid: 1b8476fc7d2994c91a4e4411754990e4, type: 3}
+  squeak: {fileID: 8300000, guid: 5a4a6f34acaf54b78a8985bcc8da0c48, type: 3}
+  trickShot: {fileID: 8300000, guid: 4323abb42c659485d978feb2c5cbca0b, type: 3}
+  thruster: {fileID: 8300000, guid: 0d4b4a200a2a2433fa91f3ea6bcc05e7, type: 3}
+  breathing: {fileID: 8300000, guid: c537057c475c9484a898414836bae017, type: 3}
+  heartbeat: {fileID: 8300000, guid: 9691cf25e7d264923b702ca62c9fb230, type: 3}
   flashlightClick: {fileID: 8300000, guid: d9fa2b940afc54f9b83c3a75cd5d7564, type: 3}
   scannerPing: {fileID: 8300000, guid: 5c3badcf257fb48ccb134b628bf7331d, type: 3}
   scannerHit: {fileID: 8300000, guid: 879647b5b88cd490cb7559e3fbd4eb21, type: 3}

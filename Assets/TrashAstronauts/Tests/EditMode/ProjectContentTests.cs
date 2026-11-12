@@ -95,6 +95,96 @@ namespace TrashAstronauts.Tests
         }
 
         [Test]
+        public void ThreeDifferentCreatures_CanBeAboard_AndOnlyOneIsSwitchedOnInTheScene()
+        {
+            var janitor = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/TrashAstronauts/Prefabs/Drone_Janitor7.prefab").GetComponent<EnemyDrone>();
+            var listener = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/TrashAstronauts/Prefabs/Creature_Listener.prefab").GetComponent<EnemyDrone>();
+            var warden = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/TrashAstronauts/Prefabs/Creature_Warden.prefab").GetComponent<EnemyDrone>();
+            Assert.AreEqual(3, new[] { janitor.displayName, listener.displayName, warden.displayName }.Distinct().Count());
+            Assert.IsFalse(janitor.overrideTuning);
+            Assert.IsTrue(listener.overrideTuning && warden.overrideTuning);
+            Assert.Less(listener.tuning.sightRange, 2f, "The Listener is blind.");
+            Assert.Greater(listener.tuning.hearingRadiusAtFullLoudness, 20f);
+            Assert.Greater(warden.tuning.sightRange, 12f, "The Warden sees far.");
+            Assert.Less(warden.tuning.chaseSpeed, 2f, "The Warden is slow.");
+            Assert.AreEqual(6, listener.GetComponent<CreatureAnimator>().shoulders.Length, "The Listener has a third pair of limbs.");
+            Assert.AreEqual(0, listener.extraEyes.Length);
+            foreach (var creature in new[] { listener, warden })
+            {
+                Assert.IsNotNull(creature.eyeRenderer);
+                Assert.IsNotNull(creature.GetComponent<CreatureAnimator>().jaw);
+                Assert.Greater(creature.GetComponentsInChildren<MeshRenderer>().Length, 60);
+            }
+
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            var director = scene.GetRootGameObjects().SelectMany(g => g.GetComponentsInChildren<MissionDirector>(true)).Single();
+            Assert.AreEqual(3, director.enemies.Length);
+            Assert.AreEqual(1, director.enemies.Count(e => e.gameObject.activeSelf), "Only one creature is aboard at a time.");
+            foreach (var enemy in director.enemies)
+            {
+                Assert.IsNotNull(enemy.dock);
+                Assert.Greater(enemy.patrolRoute.Length, 10);
+            }
+        }
+
+        [Test]
+        public void Hands_AreInAHandshakePose_AndToolsAreHeldByTheirHandles()
+        {
+            var rig = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/TrashAstronauts/Prefabs/PlayerRig.prefab");
+            var hands = rig.GetComponentsInChildren<HandRig>(true);
+            Assert.AreEqual(2, hands.Length);
+            foreach (var hand in hands)
+            {
+                bool left = hand.side == TrashAstronauts.Core.Handedness.Left;
+                var glove = hand.GetComponentInChildren<GloveVisual>(true).transform;
+                // The modelled palm faces glove -Y; held like a handshake it must face the other hand.
+                Vector3 palmNormal = glove.localRotation * Vector3.down;
+                Assert.Greater(Vector3.Dot(palmNormal, left ? Vector3.right : Vector3.left), 0.95f, hand.name + " palm should face inward.");
+                Vector3 thumbSide = glove.localRotation * (left ? Vector3.right : Vector3.left);
+                Assert.Greater(Vector3.Dot(thumbSide, Vector3.up), 0.95f, hand.name + " thumb should be on top.");
+
+                // The grab point is in front of the palm surface, not inside the glove or out at the fingertips.
+                Vector3 grab = hand.transform.InverseTransformPoint(hand.interactor.transform.position);
+                Vector3 palmCentre = hand.transform.InverseTransformPoint(glove.TransformPoint(new Vector3(0, -0.03f, -0.075f)));
+                Assert.Less(Vector3.Distance(grab, palmCentre), 0.06f);
+                Assert.Greater(Vector3.Dot(grab - palmCentre, left ? Vector3.right : Vector3.left), 0.015f);
+
+                Assert.IsNotNull(hand.thumbstickClick, "Brake input missing.");
+                Assert.IsNotNull(hand.thrusterVisual);
+                Assert.IsFalse(hand.thrusterVisual.activeSelf);
+                Assert.IsNotNull(hand.thrusterAudio);
+                Assert.AreSame(glove, hand.GetComponent<HandTrackingDriver>().glove);
+                Assert.IsTrue(hand.fingertip.IsChildOf(glove));
+            }
+
+            foreach (var tool in rig.GetComponentsInChildren<SuitTool>(true))
+            {
+                var grip = tool.grab.attachTransform;
+                Assert.IsNotNull(grip, tool.toolName);
+                Assert.Less(grip.localPosition.y, -0.04f, tool.toolName + " should be held by its handle, below the body.");
+                Assert.AreEqual(Quaternion.identity, grip.localRotation);
+            }
+            Assert.IsNotNull(rig.GetComponent<SuitAudio>().breathing);
+            Assert.IsNotNull(rig.GetComponent<SuitAudio>().heartbeat);
+        }
+
+        [Test]
+        public void RubberDuck_IsAHiddenBonus_ThatSqueaks()
+        {
+            var duck = AssetDatabase.LoadAssetAtPath<SalvageDefinition>("Assets/TrashAstronauts/Data/Salvage/novelty_rubber_duck.asset");
+            Assert.IsNotNull(duck);
+            Assert.IsTrue(duck.bonusSpawn);
+            Assert.IsNotNull(duck.prefab.GetComponent<TrashAstronauts.World.SqueakyToy>());
+            Assert.IsNotNull(duck.prefab.GetComponent<SalvageItem>());
+            var audio = AssetDatabase.LoadAssetAtPath<TrashAstronauts.Audio.AudioLibrary>("Assets/TrashAstronauts/Data/AudioLibrary.asset");
+            Assert.IsNotNull(audio.squeak);
+            Assert.IsNotNull(audio.trickShot);
+            Assert.IsNotNull(audio.thruster);
+            Assert.IsNotNull(audio.breathing);
+            Assert.IsNotNull(audio.heartbeat);
+        }
+
+        [Test]
         public void RealLevel_AlwaysGeneratesEnoughLoot_ForEverySeed()
         {
             var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
@@ -103,7 +193,8 @@ namespace TrashAstronauts.Tests
             var config = director.Config;
             var points = director.spawnPoints.Select(p => p.ToInfo()).ToList();
             var specs = AssetDatabase.FindAssets("t:SalvageDefinition")
-                .Select(g => AssetDatabase.LoadAssetAtPath<SalvageDefinition>(AssetDatabase.GUIDToAssetPath(g)).ToSpec()).ToList();
+                .Select(g => AssetDatabase.LoadAssetAtPath<SalvageDefinition>(AssetDatabase.GUIDToAssetPath(g)))
+                .Where(d => !d.bonusSpawn).Select(d => d.ToSpec()).ToList();
 
             Assert.AreEqual(points.Count, points.Select(p => p.id).Distinct().Count(), "Spawn point ids must be unique.");
 

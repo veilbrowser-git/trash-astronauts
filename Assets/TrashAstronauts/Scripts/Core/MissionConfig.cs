@@ -118,6 +118,17 @@ namespace TrashAstronauts.Core
         [Tooltip("With the coolant upgrade the cutter takes this many times longer to overheat.")]
         [Min(1f)] public float cutterUpgradeHeatMultiplier = 1.6f;
 
+        [Header("Fun")]
+        [Tooltip("Salvage thrown into the locker from at least this far away earns a trick-shot bonus.")]
+        public float trickShotDistance = 2.2f;
+        [Range(0f, 1f)] public float trickShotBonusFraction = 0.25f;
+
+        [Header("Realism")]
+        [Tooltip("Extra oxygen use at full exertion (0.4 = 40% faster while swimming or thrusting hard).")]
+        [Range(0f, 1f)] public float exertionOxygenCost = 0.4f;
+        [Tooltip("Mass of the player in kg, for the kick-back when throwing heavy salvage.")]
+        public float playerMass = 90f;
+
         [Header("Blackouts")]
         public bool blackoutsEnabled = true;
         [Tooltip("Seconds of contract time before the first blackout, and between blackouts (random in range).")]

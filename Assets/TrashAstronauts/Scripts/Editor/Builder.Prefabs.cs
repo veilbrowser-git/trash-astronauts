@@ -30,6 +30,7 @@ namespace TrashAstronauts.EditorTools
         static AudioLibrary s_Audio;
         static readonly Dictionary<string, SalvageDefinition> s_Defs = new Dictionary<string, SalvageDefinition>();
         static GameObject s_TrainingScrapPrefab, s_JunkCanPrefab, s_JunkCratePrefab, s_DronePrefab, s_RigPrefab;
+        static GameObject[] s_CreaturePrefabs;
 
         // ------------------------------------------------------------------ data assets
 
@@ -45,6 +46,12 @@ namespace TrashAstronauts.EditorTools
             Def("elec_comms_relay", "Comms Relay Module", SalvageCategory.Electronics, 190, 2.5f, false, "Receives. Does not listen.");
             Def("reactor_regulator_core", "Fusion Regulator Core", SalvageCategory.ReactorComponent, 600, 14f, true, "Reactor part. Heavy. Do not lick.");
             Def("novelty_orbital_toaster", "Deluxe Orbital Toaster", SalvageCategory.Novelty, 350, 2f, false, "MSRP 349.99. Why? Nobody knows.");
+            Def("novelty_rubber_duck", "Emergency Rubber Duck", SalvageCategory.Novelty, 75, 0.15f, false, "Squeeze the trigger. It is LOUD.");
+            if (!s_Defs["novelty_rubber_duck"].bonusSpawn)
+            {
+                s_Defs["novelty_rubber_duck"].bonusSpawn = true;
+                EditorUtility.SetDirty(s_Defs["novelty_rubber_duck"]);
+            }
             AssetDatabase.SaveAssets();
         }
 
@@ -71,7 +78,8 @@ namespace TrashAstronauts.EditorTools
         static void BuildPrefabs()
         {
             BuildSalvagePrefabs();
-            s_DronePrefab = BuildDronePrefab();
+            s_CreaturePrefabs = new[] { BuildCreaturePrefab(0), BuildCreaturePrefab(1), BuildCreaturePrefab(2) };
+            s_DronePrefab = s_CreaturePrefabs[0];
             s_RigPrefab = BuildPlayerRigPrefab();
             AssetDatabase.SaveAssets();
         }
@@ -250,6 +258,24 @@ namespace TrashAstronauts.EditorTools
             Part(t, "Cord Stub", Tube(0.007f, 0.06f, 6), new Vector3(-0.08f, -0.05f, 0.09f), M("Rubber"), new Vector3(70, 0, 0));
             FinishSalvage(go, "novelty_orbital_toaster");
 
+            // The hidden bonus: a rubber duck that squeaks (loudly) when its trigger is squeezed.
+            go = FloatingRoot("Salvage_RubberDuck", 0.15f, GameLayers.Salvage);
+            t = go.transform;
+            go.AddComponent<SphereCollider>().radius = 0.065f;
+            var duck = Empty(t, "Visual", Vector3.zero).transform;
+            Prim(duck, "Body", PrimitiveType.Sphere, new Vector3(0, -0.01f, -0.005f), new Vector3(0.11f, 0.085f, 0.13f), M("DuckYellow"));
+            Prim(duck, "Head", PrimitiveType.Sphere, new Vector3(0, 0.05f, 0.035f), new Vector3(0.07f, 0.065f, 0.07f), M("DuckYellow"));
+            Part(duck, "Tail", Cone(0.022f, 0.002f, 0.045f, 8), new Vector3(0, 0.012f, -0.068f), M("DuckYellow"), new Vector3(-55, 0, 0));
+            CBox(duck, "Beak", new Vector3(0, 0.043f, 0.072f), new Vector3(0.032f, 0.012f, 0.03f), M("PaintOrange"), 0.005f);
+            foreach (float side in new[] { -1f, 1f })
+            {
+                Prim(duck, "Eye", PrimitiveType.Sphere, new Vector3(side * 0.022f, 0.062f, 0.058f), Vector3.one * 0.011f, M("Claw"));
+                Prim(duck, "Wing", PrimitiveType.Sphere, new Vector3(side * 0.05f, -0.005f, -0.01f), new Vector3(0.025f, 0.045f, 0.07f), M("DuckYellow"));
+            }
+            var squeaky = go.AddComponent<SqueakyToy>();
+            squeaky.squashTarget = duck;
+            FinishSalvage(go, "novelty_rubber_duck");
+
             // Tutorial practice scrap (worth nothing)
             go = FloatingRoot("Salvage_TrainingScrap", 1f, GameLayers.Salvage);
             t = go.transform;
@@ -290,19 +316,25 @@ namespace TrashAstronauts.EditorTools
         /// What is left of maintenance unit JANITOR-7: a hunched black carapace with too many eyes, a
         /// jaw full of scavenged spikes, four long clawed limbs and trailing cables. No gore.
         /// </summary>
-        static GameObject BuildDronePrefab()
+        /// <summary>
+        /// One of the three things that can be aboard. 0 = JANITOR-7 (balanced), 1 = the Listener (blind,
+        /// sharp hearing), 2 = the Warden (slow, long sight). They share a skeleton so one animator drives all.
+        /// </summary>
+        static GameObject BuildCreaturePrefab(int variant)
         {
-            var go = new GameObject("Drone_Janitor7") { layer = GameLayers.Enemy };
+            bool listener = variant == 1, warden = variant == 2;
+            string hide = listener ? "PaleHide" : warden ? "WardenPlate" : "Carapace";
+            var go = new GameObject(variant == 0 ? "Drone_Janitor7" : listener ? "Creature_Listener" : "Creature_Warden") { layer = GameLayers.Enemy };
             var rb = go.AddComponent<Rigidbody>();
             rb.isKinematic = true;
             rb.useGravity = false;
-            go.AddComponent<SphereCollider>().radius = 0.3f;
+            go.AddComponent<SphereCollider>().radius = warden ? 0.38f : 0.3f;
 
             var body = Empty(go.transform, "Body", Vector3.zero).transform;
 
             // Hunched torso
-            CBox(body, "Thorax", new Vector3(0, 0.05f, -0.04f), new Vector3(0.36f, 0.28f, 0.5f), M("Carapace"), 0.09f, new Vector3(-12, 0, 0));
-            CBox(body, "Abdomen", new Vector3(0, 0.15f, -0.38f), new Vector3(0.28f, 0.22f, 0.4f), M("Carapace"), 0.08f, new Vector3(-30, 0, 0));
+            CBox(body, "Thorax", new Vector3(0, 0.05f, -0.04f), new Vector3(0.36f, 0.28f, 0.5f), M(hide), 0.09f, new Vector3(-12, 0, 0));
+            CBox(body, "Abdomen", new Vector3(0, 0.15f, -0.38f), new Vector3(0.28f, 0.22f, 0.4f), M(hide), 0.08f, new Vector3(-30, 0, 0));
             CBox(body, "Underbelly", new Vector3(0, -0.09f, -0.08f), new Vector3(0.22f, 0.08f, 0.36f), M("Sinew"), 0.03f, new Vector3(-10, 0, 0));
             for (int i = 0; i < 6; i++)
             {
@@ -321,13 +353,13 @@ namespace TrashAstronauts.EditorTools
             var casing = Empty(body, "Old Casing", new Vector3(-0.2f, 0.05f, -0.3f), Quaternion.Euler(8f, -80f, 18f)).transform;
             CBox(casing, "Panel", Vector3.zero, new Vector3(0.24f, 0.15f, 0.012f), M("PaintWhite"), 0.004f);
             CBox(casing, "Stripe", new Vector3(0, -0.055f, -0.007f), new Vector3(0.24f, 0.03f, 0.002f), M("Hazard"), 0.0005f);
-            Text(casing, "Label", "JANITOR-7", new Vector3(0, 0.02f, -0.008f), Quaternion.identity, 0.32f, new Vector2(0.22f, 0.06f), new Color(0.25f, 0.25f, 0.25f)).fontStyle = FontStyles.Bold;
+            Text(casing, "Label", variant == 0 ? "JANITOR-7" : listener ? "ACOUSTICS-3" : "WARDEN-12", new Vector3(0, 0.02f, -0.008f), Quaternion.identity, 0.32f, new Vector2(0.22f, 0.06f), new Color(0.25f, 0.25f, 0.25f)).fontStyle = FontStyles.Bold;
 
             // Head: low and forward, a cluster of eyes over a hinged jaw.
             var head = Empty(body, "Head", new Vector3(0, -0.03f, 0.27f)).transform;
-            CBox(head, "Skull", new Vector3(0, 0.02f, 0.02f), new Vector3(0.22f, 0.15f, 0.24f), M("Carapace"), 0.055f);
+            CBox(head, "Skull", new Vector3(0, 0.02f, 0.02f), new Vector3(0.22f, 0.15f, 0.24f), M(hide), 0.055f);
             CBox(head, "Brow", new Vector3(0, 0.085f, 0.1f), new Vector3(0.24f, 0.04f, 0.1f), M("Claw"), 0.014f, new Vector3(18, 0, 0));
-            var mainEye = Prim(head, "Eye Main", PrimitiveType.Sphere, new Vector3(0, 0.03f, 0.135f), new Vector3(0.06f, 0.06f, 0.035f), M("CreatureEye"));
+            var mainEye = Prim(head, "Eye Main", PrimitiveType.Sphere, new Vector3(0, 0.03f, 0.135f), listener ? new Vector3(0.02f, 0.02f, 0.012f) : warden ? new Vector3(0.14f, 0.13f, 0.06f) : new Vector3(0.06f, 0.06f, 0.035f), M("CreatureEye"));
             var extraEyes = new List<Renderer>();
             Vector3[] eyeOffsets =
             {
@@ -335,28 +367,60 @@ namespace TrashAstronauts.EditorTools
                 new Vector3(0.08f, 0.012f, 0.118f), new Vector3(-0.03f, -0.012f, 0.134f), new Vector3(0.035f, 0.072f, 0.12f),
             };
             float[] eyeSizes = { 0.03f, 0.026f, 0.02f, 0.022f, 0.018f, 0.016f };
-            for (int i = 0; i < eyeOffsets.Length; i++)
+            for (int i = 0; i < (variant == 0 ? eyeOffsets.Length : 0); i++)
                 extraEyes.Add(Prim(head, "Eye " + i, PrimitiveType.Sphere, eyeOffsets[i], new Vector3(eyeSizes[i], eyeSizes[i], eyeSizes[i] * 0.6f), M("CreatureEye")).GetComponent<MeshRenderer>());
             for (int i = 0; i < 6; i++)
                 Part(head, "Upper Fang", Cone(0.011f, 0f, 0.05f + (i % 3) * 0.012f, 6), new Vector3(-0.075f + i * 0.03f, -0.07f, 0.125f - Mathf.Abs(i - 2.5f) * 0.008f), M("Bone"), new Vector3(180 + (i - 2.5f) * 4f, 0, 0));
             var jaw = Empty(head, "Jaw", new Vector3(0, -0.07f, -0.02f)).transform;
-            CBox(jaw, "Jaw Plate", new Vector3(0, -0.03f, 0.08f), new Vector3(0.19f, 0.035f, 0.2f), M("Carapace"), 0.014f);
+            CBox(jaw, "Jaw Plate", new Vector3(0, -0.03f, 0.08f), new Vector3(0.19f, 0.035f, 0.2f), M(hide), 0.014f);
             for (int i = 0; i < 5; i++)
                 Part(jaw, "Lower Fang", Cone(0.011f, 0f, 0.045f + (i % 2) * 0.014f, 6), new Vector3(-0.065f + i * 0.0325f, 0.01f, 0.165f), M("Bone"));
             foreach (float side in new[] { -1f, 1f })
                 Part(head, "Mandible", Cone(0.02f, 0f, 0.2f, 6), new Vector3(side * 0.12f, -0.05f, 0.14f), M("Claw"), new Vector3(105, side * 28f, 0));
 
-            // Four long limbs: upper arm, elbow, forearm, three claws.
+            if (listener)
+            {
+                // No eyes worth the name: two huge listening dishes instead, and a row of blind pits.
+                foreach (float side in new[] { -1f, 1f })
+                {
+                    Part(head, "Ear Dish", Lathe("ListenerEar", 16, new Vector2(0.012f, 0f), new Vector2(0.115f, 0.05f), new Vector2(0.122f, 0.05f), new Vector2(0.02f, -0.008f)),
+                        new Vector3(side * 0.17f, 0.07f, -0.01f), M("Bone"), new Vector3(90f, side * 50f, 0));
+                    Part(head, "Ear Stalk", Tube(0.012f, 0.12f, 6), new Vector3(side * 0.12f, 0.05f, -0.03f), M("Sinew"), new Vector3(0, 0, side * -62f));
+                    for (int i = 0; i < 3; i++)
+                        Prim(head, "Blind Pit", PrimitiveType.Sphere, new Vector3(side * (0.03f + i * 0.028f), 0.05f - i * 0.012f, 0.128f - i * 0.006f), new Vector3(0.018f, 0.018f, 0.008f), M("Claw"));
+                }
+            }
+            if (warden)
+            {
+                // One enormous eye under an armoured hood, and plated shoulders.
+                CBox(head, "Hood", new Vector3(0, 0.115f, 0.07f), new Vector3(0.3f, 0.05f, 0.26f), M("Claw"), 0.02f, new Vector3(14, 0, 0));
+                Part(head, "Eye Socket", Torus(0.075f, 0.014f, 18, 6), new Vector3(0, 0.03f, 0.132f), M("Claw"), new Vector3(90, 0, 0));
+                foreach (float side in new[] { -1f, 1f })
+                {
+                    CBox(body, "Pauldron", new Vector3(side * 0.25f, 0.11f, 0.11f), new Vector3(0.17f, 0.1f, 0.28f), M("Hazard"), 0.03f, new Vector3(0, 0, side * -22f));
+                    CBox(body, "Flank Plate", new Vector3(side * 0.2f, 0.06f, -0.2f), new Vector3(0.04f, 0.2f, 0.3f), M("Claw"), 0.012f, new Vector3(0, 0, side * 10f));
+                }
+            }
+
+            // Long limbs: upper arm, elbow, forearm, three claws. The Listener has a third pair.
             var shoulders = new List<Transform>();
             var elbows = new List<Transform>();
-            Vector3[] shoulderPos = { new Vector3(-0.19f, 0.03f, 0.12f), new Vector3(0.19f, 0.03f, 0.12f), new Vector3(-0.17f, 0.08f, -0.2f), new Vector3(0.17f, 0.08f, -0.2f) };
-            for (int i = 0; i < 4; i++)
+            var shoulderPos = new List<Vector3> { new Vector3(-0.19f, 0.03f, 0.12f), new Vector3(0.19f, 0.03f, 0.12f), new Vector3(-0.17f, 0.08f, -0.2f), new Vector3(0.17f, 0.08f, -0.2f) };
+            if (listener)
+            {
+                shoulderPos.Add(new Vector3(-0.19f, 0.06f, -0.04f));
+                shoulderPos.Add(new Vector3(0.19f, 0.06f, -0.04f));
+            }
+            for (int i = 0; i < shoulderPos.Count; i++)
             {
                 float side = i % 2 == 0 ? -1f : 1f;
                 bool front = i < 2;
-                var shoulder = Empty(body, "Shoulder " + i, shoulderPos[i], Quaternion.Euler(front ? -22f : 18f, 0f, side * (front ? 30f : 40f))).transform;
+                bool middle = i >= 4;
+                var shoulder = Empty(body, "Shoulder " + i, shoulderPos[i], Quaternion.Euler(middle ? 0f : front ? -22f : 18f, 0f, side * (middle ? 62f : front ? 30f : 40f))).transform;
+                if (listener) shoulder.localScale = new Vector3(0.72f, 1.18f, 0.72f);
+                if (warden) shoulder.localScale = front ? new Vector3(1.9f, 1.05f, 1.9f) : new Vector3(1.2f, 0.85f, 1.2f);
                 Prim(shoulder, "Joint", PrimitiveType.Sphere, Vector3.zero, Vector3.one * 0.075f, M("Sinew"));
-                CBox(shoulder, "Upper Arm", new Vector3(0, -0.2f, 0), new Vector3(0.04f, 0.4f, 0.04f), M("Carapace"), 0.012f);
+                CBox(shoulder, "Upper Arm", new Vector3(0, -0.2f, 0), new Vector3(0.04f, 0.4f, 0.04f), M(hide), 0.012f);
                 Part(shoulder, "Tendon", Tube(0.007f, 0.36f, 6), new Vector3(0.022f, -0.2f, 0.01f), M("Sinew"));
                 var elbow = Empty(shoulder, "Elbow", new Vector3(0, -0.4f, 0), Quaternion.Euler(front ? 30f : 22f, 0, 0)).transform;
                 Prim(elbow, "Joint", PrimitiveType.Sphere, Vector3.zero, Vector3.one * 0.06f, M("Sinew"));
@@ -407,7 +471,40 @@ namespace TrashAstronauts.EditorTools
             drone.extraEyes = extraEyes.ToArray();
             drone.hum = hum;
             drone.voice = voice;
-            drone.hoverHeight = 1.45f;
+            drone.hoverHeight = listener ? 1.15f : warden ? 1.55f : 1.45f;
+            body.localScale = Vector3.one * (listener ? 0.9f : warden ? 1.3f : 1f);
+            hum.pitch = listener ? 1.3f : warden ? 0.72f : 1f;
+            if (listener)
+            {
+                drone.displayName = "THE LISTENER";
+                drone.trait = "Blind. Hears everything. Go quietly.";
+                drone.overrideTuning = true;
+                drone.tuning = new EnemyTuning
+                {
+                    sightRange = 1.6f, sightHalfAngle = 35f, sightAcquireSeconds = 0.5f, hearingRadiusAtFullLoudness = 27f,
+                    patrolSpeed = 1.0f, investigateSpeed = 2.1f, chaseSpeed = 2.4f, searchSpeed = 1.3f,
+                    investigateLingerSeconds = 6f, chaseLoseSightSeconds = 2f, searchSeconds = 6f, catchRadius = 0.9f, wakeDelaySeconds = 20f,
+                };
+                drone.sedationMultiplier = 1.3f;
+            }
+            else if (warden)
+            {
+                drone.displayName = "THE WARDEN";
+                drone.trait = "Slow and half deaf. Sees far. Break line of sight.";
+                drone.overrideTuning = true;
+                drone.tuning = new EnemyTuning
+                {
+                    sightRange = 14f, sightHalfAngle = 38f, sightAcquireSeconds = 0.7f, hearingRadiusAtFullLoudness = 9f,
+                    patrolSpeed = 0.65f, investigateSpeed = 1.0f, chaseSpeed = 1.75f, searchSpeed = 0.9f,
+                    investigateLingerSeconds = 4f, chaseLoseSightSeconds = 5f, searchSeconds = 10f, catchRadius = 1.2f, wakeDelaySeconds = 20f,
+                };
+                drone.sedationMultiplier = 0.6f;
+            }
+            else
+            {
+                drone.displayName = "JANITOR-7";
+                drone.trait = "Sees and hears about equally.";
+            }
 
             var animator = go.AddComponent<CreatureAnimator>();
             animator.drone = drone;
@@ -447,9 +544,14 @@ namespace TrashAstronauts.EditorTools
             return go;
         }
 
-        static XRGrabInteractable ToolGrab(GameObject go)
+        /// <summary>
+        /// Makes a tool grabbable. <paramref name="gripLocalPos"/> is the point on the handle that sits in the
+        /// middle of the fist; the hand's attach point is in the curl of the fingers, so the handle ends up
+        /// inside the closed hand and the body of the tool above it, pointing where the controller points.
+        /// </summary>
+        static XRGrabInteractable ToolGrab(GameObject go, Vector3 gripLocalPos)
         {
-            var grip = Empty(go.transform, "Grip", Vector3.zero);
+            var grip = Empty(go.transform, "Grip", gripLocalPos);
             var grab = go.AddComponent<XRGrabInteractable>();
             grab.movementType = XRBaseInteractable.MovementType.VelocityTracking;
             grab.useDynamicAttach = false;
@@ -467,23 +569,25 @@ namespace TrashAstronauts.EditorTools
             var go = ToolRoot("Tool_Flashlight");
             go.transform.SetParent(parent, false);
             Transform t = go.transform;
+            // An angle-head torch: the handle is held upright in the fist and the lamp points forward.
             var col = go.AddComponent<CapsuleCollider>();
-            col.direction = 2;
-            col.radius = 0.028f;
-            col.height = 0.24f;
-            col.center = new Vector3(0, 0, 0.02f);
+            col.direction = 1;
+            col.radius = 0.032f;
+            col.height = 0.2f;
+            col.center = new Vector3(0, -0.03f, 0.008f);
             var x90 = new Vector3(90, 0, 0);
-            Part(t, "Body", Tube(0.02f, 0.15f), new Vector3(0, 0, -0.005f), M("ToolBody"), x90);
-            for (int i = 0; i < 4; i++) Part(t, "Grip Ring", Torus(0.0205f, 0.0035f, 14, 6), new Vector3(0, 0, -0.055f + i * 0.022f), M("Rubber"), x90);
-            Part(t, "Tail Cap", Tube(0.022f, 0.014f), new Vector3(0, 0, -0.087f), M("Steel"), x90);
-            Part(t, "Head", Cone(0.021f, 0.034f, 0.045f, 14), new Vector3(0, 0, 0.092f), M("PaintOrange"), x90);
-            Part(t, "Bezel", Tube(0.036f, 0.014f, 16), new Vector3(0, 0, 0.121f), M("Steel"), x90);
-            var lens = Part(t, "Lens", Tube(0.03f, 0.003f, 16), new Vector3(0, 0, 0.128f), M("Lens"), x90);
-            CBox(t, "Switch", new Vector3(0, 0.022f, 0.02f), new Vector3(0.012f, 0.008f, 0.024f), M("PaintOrange"), 0.003f);
-            CBox(t, "Clip", new Vector3(0, -0.024f, -0.02f), new Vector3(0.01f, 0.004f, 0.08f), M("Steel"), 0.0015f);
-            var grab = ToolGrab(go);
+            Part(t, "Handle", Tube(0.019f, 0.13f), new Vector3(0, -0.05f, 0), M("ToolBody"));
+            for (int i = 0; i < 4; i++) Part(t, "Grip Ring", Torus(0.0195f, 0.0035f, 14, 6), new Vector3(0, -0.095f + i * 0.022f, 0), M("Rubber"));
+            Part(t, "Tail Cap", Tube(0.021f, 0.014f), new Vector3(0, -0.12f, 0), M("Steel"));
+            Prim(t, "Elbow", PrimitiveType.Sphere, new Vector3(0, 0.03f, 0), Vector3.one * 0.05f, M("ToolBody"));
+            Part(t, "Head", Cone(0.022f, 0.03f, 0.05f, 14), new Vector3(0, 0.032f, 0.03f), M("PaintOrange"), x90);
+            Part(t, "Bezel", Tube(0.033f, 0.012f, 16), new Vector3(0, 0.032f, 0.06f), M("Steel"), x90);
+            var lens = Part(t, "Lens", Tube(0.028f, 0.003f, 16), new Vector3(0, 0.032f, 0.0665f), M("Lens"), x90);
+            CBox(t, "Switch", new Vector3(0, 0.058f, 0.005f), new Vector3(0.014f, 0.008f, 0.022f), M("PaintOrange"), 0.003f);
+            CBox(t, "Clip", new Vector3(0, -0.04f, -0.023f), new Vector3(0.012f, 0.08f, 0.004f), M("Steel"), 0.0015f);
+            var grab = ToolGrab(go, new Vector3(0, -0.055f, 0));
 
-            var lightGo = Empty(t, "Beam", new Vector3(0, 0, 0.132f));
+            var lightGo = Empty(t, "Beam", new Vector3(0, 0.032f, 0.07f));
             var light = lightGo.AddComponent<Light>();
             light.type = LightType.Spot;
             light.spotAngle = 62f;
@@ -510,14 +614,14 @@ namespace TrashAstronauts.EditorTools
             col.size = new Vector3(0.08f, 0.09f, 0.2f);
             col.center = new Vector3(0, -0.01f, 0.02f);
             CBox(t, "Body", new Vector3(0, 0, 0.02f), new Vector3(0.07f, 0.038f, 0.16f), M("ToolBody"), 0.01f);
-            CBox(t, "Grip", new Vector3(0, -0.05f, -0.035f), new Vector3(0.034f, 0.085f, 0.042f), M("Rubber"), 0.01f, new Vector3(-14, 0, 0));
+            CBox(t, "Grip", new Vector3(0, -0.05f, -0.035f), new Vector3(0.034f, 0.085f, 0.042f), M("Rubber"), 0.01f, new Vector3(15, 0, 0));
             CBox(t, "Trigger Guard", new Vector3(0, -0.035f, 0.005f), new Vector3(0.012f, 0.008f, 0.05f), M("Steel"), 0.002f);
             CBox(t, "Side Stripe L", new Vector3(-0.0355f, 0, 0.02f), new Vector3(0.002f, 0.014f, 0.12f), M("Hazard"), 0.0005f);
             CBox(t, "Side Stripe R", new Vector3(0.0355f, 0, 0.02f), new Vector3(0.002f, 0.014f, 0.12f), M("Hazard"), 0.0005f);
             Part(t, "Dish", Lathe("ScannerDish", 16, new Vector2(0.012f, 0f), new Vector2(0.044f, 0.03f), new Vector2(0.047f, 0.03f), new Vector2(0.016f, -0.004f)), new Vector3(0, 0, 0.1f), M("PaintOrange"), new Vector3(90, 0, 0));
             Part(t, "Emitter Pin", Cone(0.006f, 0.002f, 0.035f, 8), new Vector3(0, 0, 0.125f), M("Chrome"), new Vector3(90, 0, 0));
             Part(t, "Antenna", Tube(0.003f, 0.07f, 6), new Vector3(0.028f, 0.05f, -0.04f), M("Chrome"));
-            var grab = ToolGrab(go);
+            var grab = ToolGrab(go, new Vector3(0, -0.062f, -0.035f));
 
             var screenRoot = Empty(t, "Screen", new Vector3(0, 0.052f, -0.01f), Quaternion.Euler(40f, 0f, 0f));
             CBox(screenRoot.transform, "Housing", new Vector3(0, 0, 0.006f), new Vector3(0.13f, 0.085f, 0.012f), M("ToolBody"), 0.004f);
@@ -543,7 +647,7 @@ namespace TrashAstronauts.EditorTools
             col.center = new Vector3(0, -0.02f, 0.04f);
             var x90 = new Vector3(90, 0, 0);
             CBox(t, "Body", new Vector3(0, 0, 0.03f), new Vector3(0.05f, 0.06f, 0.17f), M("ToolBody"), 0.012f);
-            CBox(t, "Grip", new Vector3(0, -0.06f, -0.03f), new Vector3(0.034f, 0.09f, 0.044f), M("Rubber"), 0.01f, new Vector3(-12, 0, 0));
+            CBox(t, "Grip", new Vector3(0, -0.06f, -0.03f), new Vector3(0.034f, 0.09f, 0.044f), M("Rubber"), 0.01f, new Vector3(15, 0, 0));
             Part(t, "Fuel Tank", Lathe("CutterTank", 12, new Vector2(0f, -0.055f), new Vector2(0.018f, -0.05f), new Vector2(0.022f, -0.035f), new Vector2(0.022f, 0.035f), new Vector2(0.018f, 0.05f), new Vector2(0f, 0.055f)),
                 new Vector3(0, -0.05f, 0.06f), M("PaintOrange"), x90);
             Part(t, "Barrel", Tube(0.014f, 0.06f, 12), new Vector3(0, 0, 0.14f), M("Steel"), x90);
@@ -552,7 +656,7 @@ namespace TrashAstronauts.EditorTools
             Part(t, "Guard Ring", Torus(0.026f, 0.003f, 14, 6), new Vector3(0, 0, 0.165f), M("Chrome"), x90);
             CBox(t, "Top Rail", new Vector3(0, 0.034f, 0.04f), new Vector3(0.016f, 0.008f, 0.12f), M("Steel"), 0.002f);
             CBox(t, "Hazard Band", new Vector3(0, 0, 0.1f), new Vector3(0.052f, 0.062f, 0.012f), M("Hazard"), 0.002f);
-            var grab = ToolGrab(go);
+            var grab = ToolGrab(go, new Vector3(0, -0.072f, -0.03f));
 
             var tip = Empty(t, "Tip", new Vector3(0, 0, 0.225f));
             var flame = Part(t, "Flame", Cone(0.007f, 0.001f, 0.05f, 8), new Vector3(0, 0, 0.228f), M("Flame"), x90);
@@ -622,7 +726,7 @@ namespace TrashAstronauts.EditorTools
             col.center = new Vector3(0, -0.02f, 0.03f);
             var x90 = new Vector3(90, 0, 0);
             CBox(t, "Body", new Vector3(0, 0, 0.02f), new Vector3(0.04f, 0.05f, 0.13f), M("TranqBody"), 0.01f);
-            CBox(t, "Grip", new Vector3(0, -0.055f, -0.03f), new Vector3(0.032f, 0.085f, 0.04f), M("Rubber"), 0.01f, new Vector3(-12, 0, 0));
+            CBox(t, "Grip", new Vector3(0, -0.055f, -0.03f), new Vector3(0.032f, 0.085f, 0.04f), M("Rubber"), 0.01f, new Vector3(15, 0, 0));
             Part(t, "Barrel", Tube(0.011f, 0.11f, 10), new Vector3(0, 0.005f, 0.13f), M("Steel"), x90);
             Part(t, "Muzzle Ring", Torus(0.013f, 0.003f, 12, 6), new Vector3(0, 0.005f, 0.185f), M("Chrome"), x90);
             // Three spare darts in a clip along the side, with glowing tails.
@@ -632,7 +736,7 @@ namespace TrashAstronauts.EditorTools
                 Part(t, "Dart Tail", Tube(0.006f, 0.012f, 6), new Vector3(0.025f, 0.012f - i * 0.014f, 0.003f), M("DartGlow"), x90);
             }
             CBox(t, "Sight", new Vector3(0, 0.032f, 0.06f), new Vector3(0.008f, 0.012f, 0.03f), M("Steel"), 0.002f);
-            var grab = ToolGrab(go);
+            var grab = ToolGrab(go, new Vector3(0, -0.067f, -0.03f));
 
             var muzzle = Empty(t, "Muzzle", new Vector3(0, 0.005f, 0.19f));
             var readoutRoot = Empty(t, "Readout", new Vector3(0, 0.05f, -0.03f), Quaternion.Euler(40f, 0f, 0f));
@@ -829,10 +933,27 @@ namespace TrashAstronauts.EditorTools
             prompt.body = Text(promptVisuals.transform, "Body", "", new Vector3(0, -0.02f, -0.001f), Quaternion.identity, 0.25f, new Vector2(0.7f, 0.17f), new Color(0.88f, 0.96f, 1f));
             promptVisuals.SetActive(false);
 
+            var suitAudio = rig.AddComponent<SuitAudio>();
+            suitAudio.player = context;
+            suitAudio.breathing = HelmetSource(camGo.transform, "Breathing", s_Audio != null ? s_Audio.breathing : null);
+            suitAudio.heartbeat = HelmetSource(camGo.transform, "Heartbeat", s_Audio != null ? s_Audio.heartbeat : null);
+
             var alerts = rig.AddComponent<SuitAlerts>();
             alerts.player = context;
 
             return SavePrefab(rig, "PlayerRig");
+        }
+
+        /// <summary>A non-positional looping source for sounds inside the helmet.</summary>
+        static AudioSource HelmetSource(Transform parent, string name, AudioClip clip)
+        {
+            var source = Empty(parent, name, Vector3.zero).AddComponent<AudioSource>();
+            source.clip = clip;
+            source.loop = true;
+            source.playOnAwake = false;
+            source.spatialBlend = 0f;
+            source.volume = 0f;
+            return source;
         }
 
         static void MakeHolster(GameObject holsterGo, SuitTool tool, Quaternion dockRotation)
@@ -877,14 +998,17 @@ namespace TrashAstronauts.EditorTools
             haptics.hapticOutput.inputSourceMode = XRInputHapticImpulseProvider.InputSourceMode.InputActionReference;
             haptics.hapticOutput.inputActionReference = Ref(side + "/Haptic");
 
-            // Grab interactor: one sphere, no rigidbody, so XRI uses its accurate overlap mode.
-            // Centred on the palm of the glove (the palm block sits at 0, -0.03, -0.075 and faces down),
-            // so things are held in the palm rather than out at the fingers.
-            var grabGo = Empty(go.transform, "Grab Interactor", new Vector3(0, -0.04f, -0.08f), null, GameLayers.Hand);
+            // The controller is held like a handshake: thumb up, palm facing the other hand. The glove is
+            // modelled flat (palm down, fingers forward) and rolled a quarter turn here so it matches the
+            // real hand, sitting beside the controller's centre line instead of on top of it.
+            // Grab interactor: one sphere, no rigidbody, so XRI uses its accurate overlap mode. It sits just
+            // in front of the palm, where a closed fist holds things.
+            var grabGo = Empty(go.transform, "Grab Interactor", new Vector3(0, -0.035f, -0.075f), null, GameLayers.Hand);
             var sphere = grabGo.AddComponent<SphereCollider>();
             sphere.isTrigger = true;
             sphere.radius = 0.09f;
-            var attach = Empty(grabGo.transform, "Attach", new Vector3(0, -0.012f, 0), null, GameLayers.Hand);
+            // Tool handles go a little further forward, in the curl of the fingers.
+            var attach = Empty(grabGo.transform, "Attach", new Vector3(0, 0, 0.03f), null, GameLayers.Hand);
             var interactor = grabGo.AddComponent<XRDirectInteractor>();
             ConfigureButtonReader(interactor.selectInput, side + "/Select", side + "/SelectValue");
             ConfigureButtonReader(interactor.activateInput, side + "/Activate", side + "/ActivateValue");
@@ -899,7 +1023,7 @@ namespace TrashAstronauts.EditorTools
             interactor.attachTransform = attach.transform;
 
             // Glove: padded suit glove with two-jointed fingers that follow grip and trigger.
-            var glove = Empty(go.transform, "Glove", Vector3.zero, null, GameLayers.Hand);
+            var glove = Empty(go.transform, "Glove", new Vector3(left ? -0.065f : 0.065f, -0.035f, 0f), Quaternion.Euler(0f, 0f, left ? 90f : -90f), GameLayers.Hand);
             Transform g = glove.transform;
             CBox(g, "Palm", new Vector3(0, -0.03f, -0.075f), new Vector3(0.086f, 0.032f, 0.098f), M("PaintWhite"), 0.011f);
             CBox(g, "Back Plate", new Vector3(0, -0.011f, -0.078f), new Vector3(0.062f, 0.01f, 0.064f), M("PaintOrange"), 0.004f);
@@ -925,8 +1049,17 @@ namespace TrashAstronauts.EditorTools
             var thumbPivot = Empty(g, "Thumb", new Vector3(s * 0.046f, -0.034f, -0.095f), null, GameLayers.Hand);
             CBox(thumbPivot.transform, "Segment", new Vector3(s * 0.014f, 0, 0.026f), new Vector3(0.022f, 0.022f, 0.05f), M("PaintWhite"), 0.007f, new Vector3(0, s * 28f, 0));
             CBox(thumbPivot.transform, "Tip", new Vector3(s * 0.03f, 0, 0.058f), new Vector3(0.02f, 0.02f, 0.034f), M("Rubber"), 0.007f, new Vector3(0, s * 18f, 0));
-            var fingertip = Empty(go.transform, "Fingertip", new Vector3(s * 0.031f, -0.03f, 0.055f), null, GameLayers.Hand);
-            var wristMount = Empty(go.transform, "Wrist Mount", new Vector3(0, 0.0f, -0.2f),
+            var fingertip = Empty(g, "Fingertip", new Vector3(s * 0.031f, -0.03f, 0.055f), null, GameLayers.Hand);
+
+            // Suit thruster on the back of the wrist: a nozzle, and a flame that shows while it fires.
+            Part(g, "Thruster Nozzle", Cone(0.013f, 0.009f, 0.03f, 10), new Vector3(0, 0.006f, -0.165f), M("Steel"), new Vector3(-90, 0, 0), GameLayers.Hand);
+            var thrusterFx = Empty(g, "Thruster Flame", new Vector3(0, 0.006f, -0.18f), null, GameLayers.Hand);
+            Part(thrusterFx.transform, "Flame", Cone(0.009f, 0.001f, 0.09f, 8), new Vector3(0, 0, -0.045f), M("Flame"), new Vector3(-90, 0, 0), GameLayers.Hand);
+            thrusterFx.SetActive(false);
+            var thrusterAudio = Empty(go.transform, "Thruster Audio", Vector3.zero, null, GameLayers.Hand).AddComponent<AudioSource>();
+            ConfigureSpatial(thrusterAudio, s_Audio != null ? s_Audio.thruster : null, true, 0.3f, 0.3f, 6f);
+
+            var wristMount = Empty(go.transform, "Wrist Mount", new Vector3(left ? -0.035f : 0.035f, 0.032f, -0.19f),
                 Quaternion.LookRotation(Vector3.down, left ? Vector3.left : Vector3.right), GameLayers.Hand);
 
             var hand = go.AddComponent<HandRig>();
@@ -940,6 +1073,9 @@ namespace TrashAstronauts.EditorTools
             hand.triggerValue = Ref(side + "/ActivateValue");
             hand.triggerButton = Ref(side + "/Activate");
             hand.menuButton = Ref(side + "/Menu");
+            hand.thumbstickClick = Ref(side + "/ThumbstickClick");
+            hand.thrusterVisual = thrusterFx;
+            hand.thrusterAudio = thrusterAudio;
 
             var gloveVisual = glove.AddComponent<GloveVisual>();
             gloveVisual.hand = hand;
@@ -953,6 +1089,7 @@ namespace TrashAstronauts.EditorTools
 
             var tracking = go.AddComponent<HandTrackingDriver>();
             tracking.hand = hand;
+            tracking.glove = glove.transform;
             tracking.poseDriver = driver;
             tracking.trackingSpace = cameraOffset;
             tracking.head = cameraOffset.Find("Main Camera");

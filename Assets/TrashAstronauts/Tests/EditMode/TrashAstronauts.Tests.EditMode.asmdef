@@ -6,7 +6,8 @@
         "TrashAstronauts.Runtime",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",
-        "Unity.XR.Interaction.Toolkit"
+        "Unity.XR.Interaction.Toolkit",
+        "Unity.InputSystem"
     ],
     "includePlatforms": [
         "Editor"

@@ -182,6 +182,15 @@
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false
+                },
+                {
+                    "name": "ThumbstickClick",
+                    "type": "Button",
+                    "id": "95b48ee1-0e4b-4ee6-a225-ec4ad1b43548",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
                 }
             ],
             "bindings": [
@@ -371,6 +380,17 @@
                     "action": "Haptic",
                     "isComposite": false,
                     "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "f325af54-bb10-4ab4-8ffe-4c941877e896",
+                    "path": "<XRController>{LeftHand}/{Primary2DAxisClick}",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "ThumbstickClick",
+                    "isComposite": false,
+                    "isPartOfComposite": false
                 }
             ]
         },
@@ -464,6 +484,15 @@
                     "type": "PassThrough",
                     "id": "91211e16-9eb9-440c-842d-a86420c3873e",
                     "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "ThumbstickClick",
+                    "type": "Button",
+                    "id": "87414ce8-044b-4bfe-81d9-ba9bdc5a046c",
+                    "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false
@@ -654,6 +683,17 @@
                     "processors": "",
                     "groups": "",
                     "action": "Haptic",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "58f4bf8f-4136-4c90-9e78-890f5360cc02",
+                    "path": "<XRController>{RightHand}/{Primary2DAxisClick}",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "ThumbstickClick",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }

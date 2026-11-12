@@ -40,6 +40,7 @@ namespace TrashAstronauts.Tests
 
             MissionDirector.StorageOverride = new MemorySaveStorage();
             MissionDirector.SeedOverride = 4242;
+            MissionDirector.CreatureOverride = 0;
             yield return SceneManager.LoadSceneAsync("TrashAstronauts", LoadSceneMode.Single);
             yield return null;
             m_Director = MissionDirector.Active;
@@ -60,6 +61,7 @@ namespace TrashAstronauts.Tests
             InputSystem.settings.editorInputBehaviorInPlayMode = m_OldEditorBehavior;
             MissionDirector.StorageOverride = null;
             MissionDirector.SeedOverride = null;
+            MissionDirector.CreatureOverride = null;
         }
 
         static IEnumerator Settle(int frames = 3)
@@ -138,7 +140,7 @@ namespace TrashAstronauts.Tests
             Transform palmAttach = m_Hand.interactor.attachTransform;
             Vector3 nearest = item.GetComponentInChildren<Collider>().ClosestPoint(palmAttach.position);
             Assert.Less(Vector3.Distance(nearest, palmAttach.position), 0.05f, "A held item should rest against the palm." + Diagnose());
-            Vector3 palmLocal = m_Hand.transform.InverseTransformPoint(palmAttach.position);
+            Vector3 palmLocal = m_Hand.transform.InverseTransformPoint(m_Hand.interactor.transform.position);
             Assert.Less(palmLocal.z, -0.06f, "The grab point should be back at the palm, behind the finger joints.");
 
             // Carry it somewhere else: it follows the hand.

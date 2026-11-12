@@ -16,6 +16,11 @@ namespace TrashAstronauts.Audio
         public AudioClip depositJackpot;
         public AudioClip teleport;
         public AudioClip toolHolster;
+        public AudioClip squeak;
+        public AudioClip trickShot;
+        public AudioClip thruster;
+        public AudioClip breathing;
+        public AudioClip heartbeat;
 
         [Header("Tools")]
         public AudioClip flashlightClick;

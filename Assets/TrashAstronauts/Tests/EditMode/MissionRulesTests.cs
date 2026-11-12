@@ -23,6 +23,30 @@ namespace TrashAstronauts.Tests
         }
 
         [Test]
+        public void TrickShot_PaysABonusOnce_OnlyForDepositedSalvage_AndCountsTowardQuota()
+        {
+            var session = NewRun(out var profile);
+            Assert.IsFalse(session.AwardTrickShot("a", 25), "Nothing deposited yet.");
+            session.TryDeposit("a", PlayerId.Local);
+            session.TryDeposit("b", PlayerId.Local);
+            Assert.IsFalse(session.QuotaMet, "250 of 300.");
+            Assert.IsTrue(session.AwardTrickShot("a", 25));
+            Assert.IsFalse(session.AwardTrickShot("a", 25), "One bonus per item.");
+            Assert.IsFalse(session.AwardTrickShot("zzz", 25));
+            Assert.IsFalse(session.AwardTrickShot("b", 0));
+            Assert.IsTrue(session.AwardTrickShot("b", 38));
+            Assert.AreEqual(2, session.TrickShots);
+            Assert.AreEqual(63, session.TrickBonus);
+            Assert.AreEqual(313, session.SecuredValue);
+            Assert.IsTrue(session.QuotaMet, "Trick-shot bonuses count toward the quota.");
+
+            var result = session.Extract(PlayerId.Local);
+            Assert.AreEqual(2, result.TrickShots);
+            Assert.AreEqual(63, result.TrickBonus);
+            Assert.AreEqual(250 + 63 + Bonus, result.Payout);
+        }
+
+        [Test]
         public void Extract_AtOrAboveQuota_IsContractComplete_AndPaysDepositsPlusBonus()
         {
             var session = NewRun(out var profile);

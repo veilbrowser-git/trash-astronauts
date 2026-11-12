@@ -29,8 +29,9 @@ namespace TrashAstronauts.Player
         [Tooltip("Tracking space (the rig's Camera Offset). Hand joint poses are relative to it.")]
         public Transform trackingSpace;
         public Transform head;
-        [Tooltip("Where the rig's origin sits relative to the tracked palm, so the glove covers the real hand.")]
-        public Vector3 palmToRigOffset = new Vector3(0f, 0.03f, 0.075f);
+        [Tooltip("The glove model. Its palm block is centred at 'glovePalmCentre' in the glove's own space, palm facing -Y, fingers +Z.")]
+        public Transform glove;
+        public Vector3 glovePalmCentre = new Vector3(0f, -0.03f, -0.075f);
 
         /// <summary>A button reader fed by gestures. Plugged into the grab interactor as a bypass.</summary>
         sealed class GestureButton : IXRInputButtonReader
@@ -70,6 +71,9 @@ namespace TrashAstronauts.Player
         readonly GestureButton m_Grip = new GestureButton();
         readonly GestureButton m_Pinch = new GestureButton();
         Vector3 m_FingertipRest;
+        bool m_GloveCached;
+        Quaternion m_GloveRestRotation = Quaternion.identity;
+        Vector3 m_GloveRestPosition;
         bool m_RestCached;
 
         public bool IsActive { get; private set; }
@@ -85,10 +89,22 @@ namespace TrashAstronauts.Player
             if (useHand != IsActive) SetActive(useHand);
             if (!IsActive) return;
 
-            // Pose: the palm joint already matches the glove's layout (fingers along +Z, palm facing -Y).
-            Quaternion rotation = trackingSpace != null ? trackingSpace.rotation * palm.rotation : palm.rotation;
+            // Pose: the tracked palm joint has the same layout as the glove model (fingers along +Z, palm
+            // facing -Y), so place the rig such that the glove lands exactly on the real hand.
+            Quaternion palmRotation = trackingSpace != null ? trackingSpace.rotation * palm.rotation : palm.rotation;
             Vector3 palmWorld = trackingSpace != null ? trackingSpace.TransformPoint(palm.position) : palm.position;
-            hand.transform.SetPositionAndRotation(palmWorld + rotation * palmToRigOffset, rotation);
+            if (!m_GloveCached && glove != null)
+            {
+                // Read once: the wall clamp nudges the glove around afterwards.
+                m_GloveRestRotation = glove.localRotation;
+                m_GloveRestPosition = glove.localPosition;
+                m_GloveCached = true;
+            }
+            Quaternion gloveLocalRotation = m_GloveCached ? m_GloveRestRotation : Quaternion.identity;
+            Vector3 gloveLocalPosition = m_GloveCached ? m_GloveRestPosition : Vector3.zero;
+            Quaternion rotation = palmRotation * Quaternion.Inverse(gloveLocalRotation);
+            Vector3 palmCentreInRig = gloveLocalPosition + gloveLocalRotation * glovePalmCentre;
+            hand.transform.SetPositionAndRotation(palmWorld - rotation * palmCentreInRig, rotation);
 
             m_Grip.Set(HandGestures.FistAmount(palm.position, middleTip, ringTip, littleTip));
             m_Pinch.Set(HandGestures.PinchAmount(thumbTip, indexTip));
@@ -100,7 +116,7 @@ namespace TrashAstronauts.Player
             {
                 // Left palm turned toward the face + pinch opens the suit menu instead of pulling a trigger.
                 bool palmTowardFace = head != null && hand.side == TrashAstronauts.Core.Handedness.Left
-                    && Vector3.Dot(-(rotation * Vector3.up), (head.position - palmWorld).normalized) > 0.6f;
+                    && Vector3.Dot(-(palmRotation * Vector3.up), (head.position - palmWorld).normalized) > 0.6f;
                 if (palmTowardFace) hand.MenuPressedFrame = Time.frameCount;
                 else hand.TriggerPressedFrame = Time.frameCount;
             }

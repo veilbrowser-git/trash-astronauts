@@ -59,6 +59,8 @@ namespace TrashAstronauts.Core
         [Min(0.05f)] public float mass = 1f;
         [Tooltip("Bulky items are large and awkward (slower to swing around) but still carried by one player.")]
         public bool bulky;
+        [Tooltip("Bonus items are not part of the planned loot or the quota guarantee; one is hidden somewhere each run.")]
+        public bool bonusSpawn;
         [TextArea] public string scannerBlurb = "";
         [Tooltip("Prefab with a SalvageItem component. Assigned by the project builder.")]
         public GameObject prefab;

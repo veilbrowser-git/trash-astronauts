@@ -8,7 +8,7 @@ janitor finds you.
 
 ## Download
 
-**[Download TrashAstronauts.apk](https://github.com/veilbrowser-git/trash-astronauts/raw/builds/TrashAstronauts.apk)** (version 0.3.0, about 33 MB, Meta Quest 3 / 3S)
+**[Download TrashAstronauts.apk](https://github.com/veilbrowser-git/trash-astronauts/raw/builds/TrashAstronauts.apk)** (version 0.4.0, about 33 MB, Meta Quest 3 / 3S)
 
 That one file is the whole game. To install it:
 
@@ -16,10 +16,12 @@ That one file is the whole game. To install it:
 2. Connect the headset to a computer by USB and install the APK with [Meta Quest Developer Hub](https://developers.meta.com/horizon/documentation/unity/ts-mqdh/), SideQuest, or `adb install -r TrashAstronauts.apk`.
 3. In the headset, open the app library and look under **Unknown Sources**.
 
-Version 0.3.0 moves the grab point into the palm, makes swimming work with open hands, makes hands and walls solid, quiets the creature and gives it a jumpscare, and adds a shop, a tranquilizer, random blackouts, a map art pass and experimental hand tracking. Version 0.2.0 was played on a Quest; 0.3.0 has not been run on a headset yet.
+Version 0.4.0 puts one of three different creatures aboard at random each contract, turns the hands to a natural handshake pose so tools are held by their handles, makes swimming stronger and adds a wrist thruster and a brake so moving is easier, and adds trick-shot bonuses, a hidden squeaky rubber duck, throw recoil, breathing and a heartbeat. It has not been run on a headset yet.
+
+Version 0.3.0 moved the grab point into the palm, made swimming work with open hands, made hands and walls solid, quieted the creature and gave it a jumpscare, and added a shop, a tranquilizer, random blackouts, a map art pass and experimental hand tracking. Versions 0.2.0 and 0.3.0 were played on a Quest by the project owner.
 
 > **Verification status, read this first.** The project compiles, the scene and all assets are
-> generated, 89 automated tests pass in the Unity editor on macOS, and a Quest APK builds
+> generated, 100 automated tests pass in the Unity editor on macOS, and a Quest APK builds
 > (`Builds/Quest/TrashAstronauts.apk`). It has **not** been installed or run on a headset. Comfort,
 > hand/controller alignment, text legibility in the headset, haptic strength and frame rate are all
 > **unverified on hardware**. See [What was and was not tested](#what-was-and-was-not-tested).
@@ -58,12 +60,13 @@ audio, prefabs and the scene in place, and it never overwrites the balancing ass
    practice plate. The current step shows on the wall board and on a small panel that floats with
    you. Any step, or all of it, can be skipped, and it can be replayed later from the board. No
    oxygen drains and the creature is dormant until you start a contract.
-2. **START CONTRACT** opens the hatch. Your flashlight (chest), scanner and plasma cutter (hips) are already on your suit.
+2. **START CONTRACT** opens the hatch and puts **one of three creatures** aboard, chosen at random: **JANITOR-7** (sees and hears about equally), **THE LISTENER** (blind, but hears everything, including your thruster) or **THE WARDEN** (slow and half deaf, but sees a long way). The mission board tells you which one and how it hunts. Your flashlight (chest), scanner and plasma cutter (hips) are already on your suit.
 3. **Airlock > corridor > cargo bay / maintenance / reactor.** Loot is placed at random among 20 curated spots each run.
 4. **Cut** the marked welds on access panels: the reactor housing (the high-value core), the secure
    cargo locker, the rack clamp (mounted electronics) and the service-duct cover (a shortcut from
    maintenance to the reactor that the drone cannot use).
-5. **Carry salvage back** and let go of it in the collection locker. It is counted once and locked away.
+5. **Carry salvage back** and let go of it in the collection locker. It is counted once and locked away. **Throw it in from more than 2.2 m away for a TRICK SHOT**: +25% of its value, and the bonus counts toward the quota.
+   Somewhere in the wreck there is also a **rubber duck**. Squeeze the trigger while holding it and it squeaks, loudly enough to draw the creature, so it can be thrown as a decoy. It is worth 75 cr at the locker.
 6. **Risk another trip or EXTRACT** (press twice to confirm) from the mission board.
 7. **Results:** contract complete (salvage + bonus), quota missed (salvage only), or failed (nothing).
 8. **Buy the O2 TANK+ upgrade** (600 cr, +3:00 oxygen, permanent) and start the next contract.
@@ -72,16 +75,18 @@ audio, prefabs and the scene in place, and it never overwrites the balancing ass
 
 | Action | Input |
 |---|---|
-| Grab / hold / drop / throw | **Grip**. Works on salvage, junk, tools and handrails. Release while moving your hand to throw. |
+| Grab / hold / drop / throw | **Grip**. Works on salvage, junk, tools and handrails. Release while moving your hand to throw. Throwing pushes you back the other way: barely for a scrap plate, a firm shove for the 14 kg reactor core. |
 | Float: grab and push off | You are weightless. Hold **grip** with an empty hand next to any wall, floor, ceiling, prop or yellow rail to grab it. Move your hand to pull your body the other way; **let go while moving** and you keep gliding. Grabbing a surface stops a drift. |
-| Float: swim | Look where you want to go and sweep your arms back quickly with **open hands**, like swimming. No button. Open-hand strokes never push you backward, so reaching for things is safe. Hold **grip** in open space to paddle in any direction, including backward. A hand that is carrying something cannot paddle. |
+| Float: thruster | Point an **empty hand** where you want to go and hold **trigger**. A small wrist thruster pushes you that way, up to 2.4 m/s. It hisses quietly: most things will not notice, the Listener will. |
+| Brake | **Click a thumbstick in** and hold. You slow to a stop in under a second. |
+| Float: swim | Look where you want to go and sweep your arms back with **open hands**, like swimming. No button. Strokes are stronger and easier to trigger than in 0.3.0. Open-hand strokes never push you backward, so reaching for things is safe. Hold **grip** in open space to paddle in any direction, including backward. A hand that is carrying something cannot paddle. |
 | Solid hands and walls | Your hands stop at walls instead of passing through. Put an open hand on a wall and push, or slap it, and you are shoved away. Your body bounces off the hull. |
 | Teleport (comfort) | Push a **thumbstick forward** to aim an arc, release to teleport. Works while carrying things, and the whole mission can be done this way. |
 | Drift on/off (comfort) | **DRIFT** in the suit menu. Off = you stop almost as soon as you let go, with no gliding. |
 | Snap turn | **Thumbstick left / right** (30 / 45 / 60 / 90 degrees, set in the suit menu). |
 | Use tool | **Trigger** while holding it: flashlight on/off, scanner ping, cutter flame, tranquilizer dart. |
 | Shop | The **COMPANY STORE** panel on the tug wall: tranquilizer darts (each puts the creature to sleep for about 8 seconds), a scanner range upgrade and a cutter coolant upgrade. Closed during a contract. |
-| Hand tracking (experimental) | Put the controllers down. **Close your fist** = grip, **pinch thumb and index** = trigger, **left palm toward your face + pinch** = suit menu. Teleport and snap turn need a thumbstick, so with bare hands you move by pushing off and swimming. Written without a headset to test on. |
+| Hand tracking (experimental) | Put the controllers down. **Close your fist** = grip, **pinch thumb and index** = trigger, **left palm toward your face + pinch** = suit menu. Teleport, snap turn and the brake need a thumbstick, so with bare hands you move by pushing off, swimming and the thruster (point and pinch). Written without a headset to test on. |
 | Draw / recall a tool | Grip at the **chest** (flashlight in the middle, tranquilizer launcher beside it) or **hips** (cutter on your main-hand side, scanner on the other). Gripping an empty holster pulls the tool to your hand from anywhere. Dropped tools reel themselves back after a few seconds. |
 | Press buttons | Touch with a fingertip, **or** point at a button and pull the trigger (up to 3.5 m). |
 | Suit menu | **B / Y** (or the left menu button): height +/-, snap-turn angle, left/right hand, drift on/off, unstuck, recall tools. The same panel is on the tug's rear wall. |
@@ -161,16 +166,16 @@ and performance testing on the headset.
 | Kind | Status |
 |---|---|
 | **Compilation** | All assemblies compile with no errors in 6000.6.8f1. |
-| **Automated tests, rules and content (EditMode, 55)** | Pass. Includes the shop rules, the cutter coolant upgrade and the hand-tracking gesture maths. Mission outcomes, duplicate-deposit prevention, bank-exactly-once, failure keeps old credits, restart cleanup, save/load including missing and corrupt files, oxygen upgrade, loot generation over hundreds of seeds, drone state machine, noise thresholds, cutter heat. |
-| **Automated tests, real scene (PlayMode, 34)** | Pass. New in 0.3.0: open-hand swimming at realistic stroke speeds, solid hands pushing off a wall, the shop, the tranquilizer putting the creature to sleep and it waking again, the blackout and its recovery, the jumpscare on being caught, and held items resting in the palm. Three of these drive the game through a simulated tracked controller with the real input bindings and grab interactor: the hand follows the controller, salvage can be picked up, carried and released, and the cutter can be drawn from its holster, fired and used to cut a panel open. Zero-g drift keeps momentum and is stopped by the hull, grabbing a wall pulls the body and letting go pushes off, swim strokes propel the player, the drift comfort option, the tutorial advancing on real actions and being replayable. Also: fresh launch state, settings and handedness, loot worth more than the quota, every spawn point and the locker reachable from a teleport landing spot, teleport and unstuck, locker counts each item once, cutting opens the reactor compartment and the core can be recovered, mounted salvage releases when cut, drone investigates noise and returns to patrol, drone never enters the tug/airlock/duct, drone catches an exposed player and the run fails without touching banked credits, hazard pause, oxygen warnings and failure, both extraction payouts, clean restart, oxygen upgrade persists and applies. |
+| **Automated tests, rules and content (EditMode, 59)** | Pass. New in 0.4.0: trick-shot bonus rules, the three creature prefabs and their different senses, the handshake hand pose with tools held by their handles, and the rubber duck. Includes the shop rules, the cutter coolant upgrade and the hand-tracking gesture maths. Mission outcomes, duplicate-deposit prevention, bank-exactly-once, failure keeps old credits, restart cleanup, save/load including missing and corrupt files, oxygen upgrade, loot generation over hundreds of seeds, drone state machine, noise thresholds, cutter heat. |
+| **Automated tests, real scene (PlayMode, 41)** | Pass. New in 0.4.0: one creature per contract chosen from three by the run's seed (all three turn up over 24 contracts), each creature wakes, patrols and hears with its own senses, the thruster pushes where the hand points and tops out, the brake stops you, a hand holding something does not thrust, trick shots pay only for real throws from range, throw recoil conserves momentum, and the duck is hidden every run, squeaks, and draws the creature. From 0.3.0: open-hand swimming at realistic stroke speeds, solid hands pushing off a wall, the shop, the tranquilizer putting the creature to sleep and it waking again, the blackout and its recovery, the jumpscare on being caught, and held items resting in the palm. Three of these drive the game through a simulated tracked controller with the real input bindings and grab interactor: the hand follows the controller, salvage can be picked up, carried and released, and the cutter can be drawn from its holster, fired and used to cut a panel open. Zero-g drift keeps momentum and is stopped by the hull, grabbing a wall pulls the body and letting go pushes off, swim strokes propel the player, the drift comfort option, the tutorial advancing on real actions and being replayable. Also: fresh launch state, settings and handedness, loot worth more than the quota, every spawn point and the locker reachable from a teleport landing spot, teleport and unstuck, locker counts each item once, cutting opens the reactor compartment and the core can be recovered, mounted salvage releases when cut, drone investigates noise and returns to patrol, drone never enters the tug/airlock/duct, drone catches an exposed player and the run fails without touching banked credits, hazard pause, oxygen warnings and failure, both extraction payouts, clean restart, oxygen upgrade persists and applies. |
 | **Editor simulation** | Simulator enabled; not exercised by hand. The PlayMode tests call the same public methods the VR interactions call, most of them do **not** simulate controller input (the zero-g tests move the hand transforms directly). Grabbing and tool use are covered by the simulated-controller tests; button poking and how the floating feels are unverified. |
 | **Android build** | Succeeds. `Builds/Quest/TrashAstronauts.apk` was built in batch mode; its manifest, ARM64 libraries, OpenXR loader and signature were inspected. It was not installed or launched on a device. |
-| **Headset** | Version 0.2.0 was played on a Quest by the project owner: grabbing worked but held items sat out at the fingers, and swimming did nothing. Both are fixed in 0.3.0 (the swim bug was a rest threshold that wiped out the small speed each frame of a stroke adds). Version 0.3.0 itself has not been run on a headset yet, and hand tracking has never been run on one. Earlier: version 0.1.0 was played on a Quest by the project owner: it launched and tracked, but nothing could be grabbed, so tools and cutting were unusable. That was a bug in the grab detector's setup and is fixed in 0.2.0, verified with the simulated-controller tests. Version 0.2.0 itself has not been run on a headset yet. No claims about comfort or performance. |
+| **Headset** | Version 0.4.0 has not been run on a headset. Version 0.3.0 was played on a Quest by the project owner, who reported that tools were still held oddly, that moving around was hard and that the game needed more to do; 0.4.0 is the response, but the new hand pose, thruster feel and creature balance are set by reasoning and by tests, not by trying them on. Version 0.2.0 was played on a Quest by the project owner: grabbing worked but held items sat out at the fingers, and swimming did nothing. Both are fixed in 0.3.0 (the swim bug was a rest threshold that wiped out the small speed each frame of a stroke adds). Version 0.3.0 itself has not been run on a headset yet, and hand tracking has never been run on one. Earlier: version 0.1.0 was played on a Quest by the project owner: it launched and tracked, but nothing could be grabbed, so tools and cutting were unusable. That was a bug in the grab detector's setup and is fixed in 0.2.0, verified with the simulated-controller tests. Version 0.2.0 itself has not been run on a headset yet. No claims about comfort or performance. |
 
 ## Assumptions and design decisions
 
 - **New project.** The session started with no project folder, so this is a fresh project built from Unity's bundled URP template.
-- **Weightless movement, fixed "up".** The player floats with momentum: pushing off surfaces and swimming strokes set a drift that decays slowly, capped at 3.2 m/s, and stops on contact with the hull. Teleport and a no-drift option remain for comfort. No camera roll, no camera shake, fades for forced moves.
+- **Weightless movement, fixed "up".** The player floats with momentum: pushing off surfaces and swimming strokes set a drift that decays slowly, capped at 3.6 m/s, and stops on contact with the hull. Teleport and a no-drift option remain for comfort. No camera roll, no camera shake, fades for forced moves.
 - **Menus are physical buttons**, not a canvas UI: fingertip poke or point-and-trigger.
 - **Tools are tethered** to the suit so an essential tool can never be lost or left behind a barrier.
 - **Blackouts.** At a random point in a contract the wreck loses power for 12 to 20 seconds: every ship light dies and the ambience and the creature go silent. Floor guide lights under the rails, your flashlight and the creature's eyes still show. The tug keeps its lights.
@@ -189,6 +194,8 @@ and performance testing on the headset.
 - Audio uses Unity's built-in 3D panning, no spatializer plugin.
 - Held tools are kinematic and can poke through walls; held salvage is physical and cannot.
 - The creature passes over loose junk rather than steering around it, and its long limbs can clip through door frames.
+- The three creatures share one skeleton and one patrol route; they differ in senses, speed, size and look. Their balance has not been play-tested.
+- Working hard (swimming, thrusting) uses oxygen up to 40% faster. Breathing and heartbeat audio are synthesized and may want tuning or an off switch.
 - Hand tracking is implemented but experimental: the gesture thresholds and palm alignment are untested on a headset. Thumbstick-driven continuous locomotion is out of scope.
 - Co-op is not implemented. See `Docs/MULTIPLAYER_NOTES.md` for where it would attach.
 

@@ -13,14 +13,18 @@ namespace TrashAstronauts.Player
         public Transform head;
         public float radius = 0.05f;
 
+        Vector3 m_RestLocalPosition;
+
+        void Awake() => m_RestLocalPosition = transform.localPosition;
+
         void LateUpdate()
         {
             if (hand == null || head == null) return;
             Vector3 palm = hand.interactor != null ? hand.interactor.transform.position : hand.transform.position;
             if (!hand.IsAnchored && ZeroGLocomotion.TryGetPenetration(head, palm, radius, out Vector3 correction, out _))
-                transform.position = hand.transform.position + correction;
-            else if (transform.localPosition != Vector3.zero)
-                transform.localPosition = Vector3.zero;
+                transform.position = transform.parent.TransformPoint(m_RestLocalPosition) + correction;
+            else if (transform.localPosition != m_RestLocalPosition)
+                transform.localPosition = m_RestLocalPosition;
         }
     }
 }

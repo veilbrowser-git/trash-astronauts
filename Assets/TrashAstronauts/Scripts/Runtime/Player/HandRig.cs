@@ -28,6 +28,12 @@ namespace TrashAstronauts.Player
         public InputActionReference triggerValue;
         public InputActionReference triggerButton;
         public InputActionReference menuButton;
+        public InputActionReference thumbstickClick;
+
+        [Header("Suit thruster")]
+        [Tooltip("Shown while this hand's thruster is firing.")]
+        public GameObject thrusterVisual;
+        public AudioSource thrusterAudio;
 
         [Header("Feedback")]
         [Range(0f, 1f)] public float hoverHaptic = 0.08f;
@@ -35,6 +41,11 @@ namespace TrashAstronauts.Player
 
         public PlayerContext Player { get; private set; }
         public bool IsHolding => interactor != null && interactor.hasSelection;
+        /// <summary>True while this hand's pointer is on a button (so its trigger means "press", not "thrust").</summary>
+        public bool IsPointingAtButton { get; set; }
+        /// <summary>Test seam and hand-tracking hook: forces the brake input.</summary>
+        public bool? ThumbstickClickOverride { get; set; }
+        public bool ThumbstickClickHeld => ThumbstickClickOverride ?? (thumbstickClick != null && thumbstickClick.action != null && thumbstickClick.action.enabled && thumbstickClick.action.IsPressed());
 
         /// <summary>True while this hand is holding on to the ship (wall, rail, prop). Set by ZeroGLocomotion.</summary>
         public bool IsAnchored { get; set; }
