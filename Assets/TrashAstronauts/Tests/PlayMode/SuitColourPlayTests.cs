@@ -262,6 +262,9 @@ namespace TrashAstronauts.Tests
             Assert.AreEqual(yellow + 1, bot.World.SuitColour[0]);
             AssertWearing(m_Player.avatar, GlovesOf(m_Player), yellow, "host");
             Assert.AreEqual(PlayerAvatar.SuitColors[purple], crew.Tint, "the stand-in keeps its own colour");
+            Assert.AreEqual("YELLOW", CrewLook.CrewName(m_Net, 0), "the crew list names the host's choice");
+            Assert.AreEqual("PURPLE", CrewLook.CrewName(m_Net, 1), "and the joiner's");
+            Assert.AreEqual("GREEN", CrewLook.CrewName(m_Net, 2), "an empty slot answers with its own colour");
         }
 
         [UnityTest]

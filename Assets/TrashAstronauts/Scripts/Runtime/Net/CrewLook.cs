@@ -93,6 +93,22 @@ namespace TrashAstronauts.Net
             return director != null && director.Profile != null ? SuitLook.Clamp(director.Profile.Data.suitColor) : SuitLook.Default;
         }
 
+        /// <summary>
+        /// The colour a crew slot wears in a session: this headset's saved choice for its own slot, otherwise what the
+        /// host / client session last reported for that slot (0 = slot colour). 0 with no session.
+        /// </summary>
+        public static byte ColourOf(NetSession net, int slot)
+        {
+            if (net == null) return SuitLook.Default;
+            if (slot == net.LocalSlot) return SavedColour(net.director);
+            if (net.HostSession != null) return net.HostSession.SuitColour(slot);
+            if (net.ClientSession != null) return net.ClientSession.SuitColour(slot);
+            return SuitLook.Default;
+        }
+
+        /// <summary>The colour name a crew list shows for a slot ("ORANGE", "CYAN", ...), whether chosen or the slot's own.</summary>
+        public static string CrewName(NetSession net, int slot) => PlayerAvatar.SuitColorNames[PaletteIndexFor(slot, ColourOf(net, slot))];
+
         /// <summary>The slot the local player has: its crew slot in a session, 0 alone.</summary>
         public static int LocalSlot(MissionDirector director)
         {
