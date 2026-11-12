@@ -25,7 +25,8 @@ namespace TrashAstronauts.Tests
         [TearDown]
         public void RestoreShoveState()
         {
-            CrewDowned.Check = null;
+            CrewDowned.Check = p => p.IsDowned;
+            if (m_Player != null && m_Player.IsDowned) m_Player.SetDowned(false, m_Player.DownedPosition);
             if (m_Gravity != null) Object.Destroy(m_Gravity);
             if (m_Player != null && m_Player.locomotion != null && m_Player.locomotion.zeroG != null) m_Player.locomotion.zeroG.openHandSwim = m_SwimWas;
         }
@@ -234,6 +235,27 @@ namespace TrashAstronauts.Tests
             yield return Frames(20);
             yield return Swing(shove, 1.6f);
             Assert.AreEqual(0, shove.Sent);
+        }
+
+        /// <summary>The merged hook: the revive feature's own downed state (PlayerContext.IsDowned) stops shoves, no stand-in check.</summary>
+        [UnityTest]
+        public IEnumerator Host_APlayerDownedByTheReviveFeature_NeitherShovesNorIsShoved()
+        {
+            var heard = new List<(byte sender, NetVec3 v)>();
+            yield return HostWithBotInFront(0.75f, heard);
+            var shove = m_Net.GetComponent<CrewShove>();
+            Assert.IsTrue(CrewDowned.Is(m_Player) == m_Player.IsDowned);
+            Assert.IsTrue(m_Player.SetDowned(true, m_Player.head.position));
+            Assert.IsTrue(CrewDowned.Is(m_Player), "CrewDowned reads PlayerContext.IsDowned.");
+            yield return Swing(shove, 1.6f);
+            Assert.AreEqual(0, shove.Sent);
+            Assert.AreEqual(0, heard.Count);
+            Assert.IsTrue(m_Bot.Session.SendCrewPush(0, (Forward * -1f).ToNet(), m_Player.head.position.ToNet(), CrewPushMsg.FlagShove));
+            yield return Frames(20);
+            Assert.AreEqual(0, shove.Received);
+            Assert.Less(ZeroG.Speed, 0.01f);
+            m_Player.SetDowned(false, m_Player.DownedPosition);
+            Assert.IsFalse(CrewDowned.Is(m_Player));
         }
 
         [UnityTest]

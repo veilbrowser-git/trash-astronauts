@@ -268,7 +268,7 @@ namespace TrashAstronauts.Mission
             float exertion = 0f;
             foreach (var player in m_Players)
             {
-                if (player == null || player.IsAway) continue;
+                if (player == null || player.IsAway || player.IsDowned) continue;
                 if (player.IsRemote) exertion = Mathf.Max(exertion, player.RemoteExertion);
                 else if (player.locomotion != null && player.locomotion.zeroG != null)
                     exertion = Mathf.Max(exertion, player.locomotion.zeroG.Exertion);
@@ -429,7 +429,9 @@ namespace TrashAstronauts.Mission
             if (result == null) return null;
             var stored = Session.ApplyRemoteEnd(result);
             if (stored == null) return null;
-            Session.BankInto(Profile);
+            // This headset's own share, less this player's revive penalties (the host's figures, RunEnded).
+            Session.BankInto(Profile, LocalPayoutSlot);
+            ClearCrewDowned();
             m_HaveClock = false;
 
             if (noise != null) noise.Muted = true;
@@ -465,6 +467,7 @@ namespace TrashAstronauts.Mission
             if (noise != null) noise.Muted = true;
             EndCreatures();
             if (blackout != null) blackout.EndBlackout(true);
+            ClearCrewDowned();
             BringLocalPlayerHome(false);
             return true;
         }

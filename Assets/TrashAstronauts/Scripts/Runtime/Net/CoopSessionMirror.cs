@@ -121,6 +121,10 @@ namespace TrashAstronauts.Net
         public void CatchStarted(byte victimSlot) => MessageCount++;
         public void BlackoutStarted(float seconds) => MessageCount++;
         public void BlackoutEnded(bool instant) => MessageCount++;
+        // Who is down changes nothing in the books (the penalties arrive with RunEnded).
+        public void PlayerDowned(byte slot, NetVec3 position) => MessageCount++;
+        public void PlayerRevived(byte slot, byte by) => MessageCount++;
+        public void ReviveProgress(byte slot, float progress, byte rescuerSlot) => MessageCount++;
         // The host's own hand on an item: ownership, not books (deposits and values arrive as their own messages).
         public bool LocalGrab(byte itemId) => true;
         public void LocalRelease(byte itemId) { }

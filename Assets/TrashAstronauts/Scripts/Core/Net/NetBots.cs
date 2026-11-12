@@ -92,6 +92,13 @@ namespace TrashAstronauts.Core.Net
         public bool BlackoutOn;
         public uint WireSnappedMask, WireBurntMask;
 
+        // co-op revive
+        public readonly bool[] Downed = new bool[NetProtocol.MaxPlayers];
+        public readonly NetVec3[] DownedAt = new NetVec3[NetProtocol.MaxPlayers];
+        public readonly float[] ReviveProgress = new float[NetProtocol.MaxPlayers];
+        public readonly byte[] ReviveRescuer = { NetProtocol.NoSlot, NetProtocol.NoSlot, NetProtocol.NoSlot, NetProtocol.NoSlot };
+        public readonly byte[] RevivedBy = { NetProtocol.NoSlot, NetProtocol.NoSlot, NetProtocol.NoSlot, NetProtocol.NoSlot };
+
         /// <summary>The time passed to item state changes; set it before pumping the session (tests use the hub clock).</summary>
         public double Now;
 
@@ -143,6 +150,11 @@ namespace TrashAstronauts.Core.Net
             PanelOpenMask = state.panelOpenMask;
             WireSnappedMask = state.wireSnappedMask;
             WireBurntMask = state.wireBurntMask;
+            for (int i = 0; i < NetProtocol.MaxPlayers; i++)
+            {
+                Downed[i] = state.IsDowned(i);
+                DownedAt[i] = state.DownedAt(i);
+            }
         }
 
         public void OnHostPause(bool on) { Count(NetMsg.HostPause); HostPaused = on; }
@@ -294,6 +306,29 @@ namespace TrashAstronauts.Core.Net
             Count(NetMsg.WireChanged);
             if (change == NetWireChange.Snapped) WireSnappedMask |= 1u << index;
             else WireBurntMask |= 1u << index;
+        }
+
+        public void OnPlayerDowned(byte slot, NetVec3 position)
+        {
+            Count(NetMsg.PlayerDowned);
+            Downed[slot] = true;
+            DownedAt[slot] = position;
+            ReviveProgress[slot] = 0f;
+        }
+
+        public void OnPlayerRevived(byte slot, byte by)
+        {
+            Count(NetMsg.PlayerRevived);
+            Downed[slot] = false;
+            RevivedBy[slot] = by;
+            ReviveProgress[slot] = 0f;
+        }
+
+        public void OnReviveProgress(byte slot, float progress, byte rescuerSlot)
+        {
+            Count(NetMsg.ReviveProgress);
+            ReviveProgress[slot] = progress;
+            ReviveRescuer[slot] = rescuerSlot;
         }
     }
 
@@ -519,6 +554,17 @@ namespace TrashAstronauts.Core.Net
             LastIndex = index;
             LastWireChange = change;
             if (AutoWorld && Session != null) Session.SendWireChanged(index, change, slot);
+        }
+
+        public byte LastReviveTarget = NetProtocol.NoSlot;
+        public bool LastReviveOn;
+
+        public void OnReviveHold(byte slot, byte targetSlot, bool on)
+        {
+            Calls[NetMsg.ReviveHold]++;
+            LastSlot = slot;
+            LastReviveTarget = targetSlot;
+            LastReviveOn = on;
         }
     }
 
@@ -823,6 +869,9 @@ namespace TrashAstronauts.Core.Net
 
             public void OnWireReport(byte slot, byte index, NetWireChange change) { Wire(index, change, slot); }
 
+            /// <summary>The fuzz game has no creature, so nobody is ever downed: a hold changes nothing.</summary>
+            public void OnReviveHold(byte slot, byte targetSlot, bool on) { }
+
             public bool Wire(byte index, NetWireChange change, byte by)
             {
                 if (S.phase != MissionPhase.Active || index >= Wires) return false;
@@ -964,6 +1013,10 @@ namespace TrashAstronauts.Core.Net
                 if (change == NetWireChange.Snapped) S.wireSnappedMask |= 1u << index;
                 else S.wireBurntMask |= 1u << index;
             }
+
+            public void OnPlayerDowned(byte slot, NetVec3 position) { }
+            public void OnPlayerRevived(byte slot, byte by) { }
+            public void OnReviveProgress(byte slot, float progress, byte rescuerSlot) { }
 
             // ---- what a player (or a fuzzer) does on this client
 

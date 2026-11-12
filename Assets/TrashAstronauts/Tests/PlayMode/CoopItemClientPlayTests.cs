@@ -160,6 +160,47 @@ namespace TrashAstronauts.Tests
         // ================================================================== tests
 
         /// <summary>
+        /// Revive meets everyone-grabs: a player downed while holding salvage lets go of it through the normal
+        /// ownership path (ItemReleased, then the hand-back), and while downed neither hand grabs nor reaches.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator Client_DownedWhileHolding_ReleasesThroughTheOwnershipPath_AndCannotGrabOrReach()
+        {
+            yield return ClientWithCrew(0.05);
+            var item = Loose(1)[0];
+            byte id = (byte)item.NetIndex;
+            var sync = item.GetComponent<ItemSync>();
+            Vector3 at = Spot;
+            yield return Grab(item, at);
+            yield return Until(() => !sync.Authority.Pending, 1f, "the grant");
+            Assert.AreEqual(ItemMode.Mine, sync.Authority.Mode);
+            Assert.IsTrue(item.grab.isSelected);
+
+            try
+            {
+                Assert.IsTrue(m_Player.SetDowned(true, m_Player.head.position));
+                yield return Frames(3);
+                Assert.IsFalse(item.grab.isSelected, "Downed: the hand lets go.");
+                Assert.AreEqual(1, m_Rig.Count("released " + id), "Let go through the ownership path. Sent: " + string.Join(", ", m_Rig.Sent));
+                yield return Until(() => sync.Authority.Mode == ItemMode.HostFree, 3.5f, "the hand-back");
+                Assert.IsFalse(m_Hands.Right.hand.Reach.isActiveAndEnabled, "No reach assist while downed.");
+
+                // Squeezing on the item again does nothing.
+                yield return SimHands.Grip(m_Hands.Right, false);
+                yield return HostPuts(item, at);
+                yield return SimHands.Grip(m_Hands.Right, true);
+                yield return Frames(4);
+                Assert.IsFalse(item.grab.isSelected, "No grab while downed.");
+                Assert.AreEqual(1, m_Rig.Count("grab " + id), "No new grab request.");
+                yield return SimHands.Grip(m_Hands.Right, false);
+            }
+            finally { m_Player.SetDowned(false, m_Player.DownedPosition); }
+            yield return Frames(2);
+            Assert.IsTrue(m_Hands.Right.hand.Reach.isActiveAndEnabled, "Up again: the reach assist is back.");
+            Assert.IsTrue(m_Hands.Right.hand.interactor.isActiveAndEnabled);
+        }
+
+        /// <summary>
         /// The reviewer's rubber band, thrower side, on a 150 ms link each way: this headset's throw is handed back
         /// while still flying. Here it never goes backwards along the throw (it keeps flying on its own path until
         /// the host's stream comes, then glides onto that stream drawn as far ahead as it lags), and once the lead

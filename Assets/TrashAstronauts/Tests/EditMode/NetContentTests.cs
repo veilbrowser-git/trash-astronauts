@@ -92,13 +92,20 @@ namespace TrashAstronauts.Tests
             Assert.IsEmpty(prefab.GetComponentsInChildren<AudioListener>(true));
             // Two lights only: the crew flashlight's spot and the helmet lamp's, saved switched off (RemoteToolRig hands
             // them out from one shared budget to the nearest one or two lit ones at runtime), and never casting shadows.
+            // Co-op revive adds a third, the downed-suit locator: off unless that player is down, small range.
             var lights = prefab.GetComponentsInChildren<Light>(true);
             var toolRig = prefab.GetComponent<RemoteToolRig>();
-            Assert.LessOrEqual(lights.Length, 2, "No light but the flashlight's spot and the helmet lamp's.");
+            var beacon = prefab.GetComponent<RemoteAvatar>().beacon;
+            Assert.LessOrEqual(lights.Length, 3, "No light but the flashlight's spot, the helmet lamp's and the revive locator.");
             foreach (var light in lights)
             {
                 Assert.IsFalse(light.enabled, "Saved switched off.");
                 Assert.AreEqual(LightShadows.None, light.shadows, "No shadow-casting light.");
+                if (beacon != null && light == beacon.lamp)
+                {
+                    Assert.LessOrEqual(light.range, 4f, "The revive locator is a small light.");
+                    continue;
+                }
                 Assert.IsTrue(light == toolRig.flashlightSpot || (toolRig.headLamp != null && light == toolRig.headLamp.spot), light.name + " is not budgeted.");
             }
             Assert.IsEmpty(prefab.GetComponentsInChildren<XRBaseInteractor>(true));

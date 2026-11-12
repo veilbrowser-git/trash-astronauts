@@ -187,5 +187,14 @@ namespace TrashAstronauts.Core.Net
 
         /// <summary>A client touched or burnt a web wire. Apply the state, emit the Web noise, call SendWireChanged.</summary>
         void OnWireReport(byte slot, byte index, NetWireChange change);
+
+        // ---------------------------------------------------------------- co-op revive (reliable, protocol 5)
+
+        /// <summary>
+        /// A client's hand closed on (<paramref name="on"/>) or let go of the revive beacon of the downed crew member in
+        /// <paramref name="targetSlot"/>. The host decides whether the hold counts (the rescuer is up and close to the
+        /// body), fills the ring and broadcasts SendReviveProgress / SendPlayerRevived. A client that drops stops holding.
+        /// </summary>
+        void OnReviveHold(byte slot, byte targetSlot, bool on);
     }
 }

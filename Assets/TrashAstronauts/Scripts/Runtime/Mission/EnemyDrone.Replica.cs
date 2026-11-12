@@ -160,6 +160,7 @@ namespace TrashAstronauts.Mission
             m_RepHaveToggle = false;
             m_AwaitRunEnd = false;
             m_HeldRunEnd = null;
+            m_HeldAfterScare = null;
             m_HeardToggle = false;
             LastHeardNoiseBy = PlayerId.None;
         }
@@ -236,6 +237,31 @@ namespace TrashAstronauts.Mission
             return true;
         }
 
+        /// <summary>
+        /// Something the host said that should not land in the middle of the jumpscare playing here (a crew member downed:
+        /// their suit must not slump under the creature mid-bite). True when it was held (applied, in order, once the
+        /// jumpscare is over, or after <see cref="RunEndHoldSeconds"/> at most); false when it should be applied now.
+        /// </summary>
+        public bool HoldAfterScare(Action apply)
+        {
+            if (!IsReplica || !IsScaring || apply == null) return false;
+            m_HeldAfterScare += apply;
+            return true;
+        }
+
+        /// <summary>True while something is waiting for the jumpscare here to end (<see cref="HoldAfterScare"/>).</summary>
+        public bool HoldingAfterScare => m_HeldAfterScare != null;
+        Action m_HeldAfterScare;
+
+        /// <summary>
+        /// Co-op revive: the host settled this client's own catch without ending the run (this player is downed). The
+        /// wait for a RunEnded stops, so the run is not dropped as a lost link.
+        /// </summary>
+        public void CatchSettledHere()
+        {
+            m_AwaitRunEnd = false;
+        }
+
         /// <summary>The replica's end of a catch: the run is the host's to end. A victim here stays in the dark until it does.</summary>
         void FinishReplicaCatch(PlayerId victim)
         {
@@ -254,6 +280,7 @@ namespace TrashAstronauts.Mission
         {
             m_AwaitRunEnd = false;
             m_HeldRunEnd = null;
+            m_HeldAfterScare = null;
             m_RepSedateTimer = 0f;
             // Powered down, as the host's is: nothing reads a hunt that is over.
             m_RepState = EnemyState.Dormant;
@@ -279,6 +306,13 @@ namespace TrashAstronauts.Mission
                 var apply = m_HeldRunEnd;
                 m_HeldRunEnd = null;
                 apply();
+            }
+            // Held until the jumpscare is over, however long it takes (the catch deadline guarantees it ends).
+            if (m_HeldAfterScare != null && !IsScaring)
+            {
+                var after = m_HeldAfterScare;
+                m_HeldAfterScare = null;
+                after();
             }
             if (m_AwaitRunEnd)
             {

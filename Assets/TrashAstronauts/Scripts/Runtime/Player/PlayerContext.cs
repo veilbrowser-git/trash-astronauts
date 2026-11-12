@@ -50,6 +50,47 @@ namespace TrashAstronauts.Player
         /// <summary>How hard a remote player is working (0..1), as last reported. The local rig reads its own locomotion instead.</summary>
         public float RemoteExertion { get; set; }
 
+        // ------------------------------------------------------------------ co-op revive
+
+        /// <summary>
+        /// Co-op only: caught by the spider and waiting for the crew to revive them. True on every headset, for the local
+        /// player while they are downed and for a stand-in whose player is downed. A downed player cannot move, grab, use
+        /// tools, press buttons, shove or be shoved, is not hunted, and does not count as "up" for the all-aboard rule.
+        /// Always false offline. Set only through <see cref="SetDowned"/>.
+        /// </summary>
+        public bool IsDowned { get; private set; }
+        /// <summary>Where this player was downed (their head when the spider caught them). Meaningless while up.</summary>
+        public Vector3 DownedPosition { get; private set; }
+        /// <summary>How far their revive ring is, 0..1 (the host's figure). 0 while up.</summary>
+        public float ReviveProgress { get; set; }
+        /// <summary>Who is holding their beacon right now (the host's word), or <see cref="PlayerId.None"/>.</summary>
+        public PlayerId ReviveRescuer { get; set; } = PlayerId.None;
+
+        /// <summary>This player went down (true) or was revived (false).</summary>
+        public event Action<PlayerContext, bool> DownedChanged;
+        /// <summary>Any player went down or came back up (for systems that do not hold a reference to each player).</summary>
+        public static event Action<PlayerContext, bool> AnyDownedChanged;
+
+        /// <summary>
+        /// Downs this player at <paramref name="position"/> or brings them back up. For the local rig this also locks
+        /// movement, grabbing, tools and buttons and dims the view (<see cref="DownedLock"/>); a stand-in's suit slumps
+        /// (RemoteAvatar). Returns false when nothing changed.
+        /// </summary>
+        public bool SetDowned(bool downed, Vector3 position)
+        {
+            if (IsDowned == downed && (!downed || DownedPosition == position)) return false;
+            bool changed = IsDowned != downed;
+            IsDowned = downed;
+            if (downed) DownedPosition = position;
+            ReviveProgress = 0f;
+            ReviveRescuer = PlayerId.None;
+            if (!IsRemote) DownedLock.For(this).Set(downed);
+            if (!changed) return true;
+            DownedChanged?.Invoke(this, downed);
+            AnyDownedChanged?.Invoke(this, downed);
+            return true;
+        }
+
         Vector3 m_RemoteHead;
         bool m_HasRemoteHead;
 
@@ -68,6 +109,8 @@ namespace TrashAstronauts.Player
                 IsAway = false;
                 RemoteExertion = 0f;
             }
+            // A new place in a crew (or back to single-player) starts up.
+            if (IsDowned) SetDowned(false, DownedPosition);
         }
 
         /// <summary>The newest head position received for a remote player. Ignored for the local rig.</summary>

@@ -205,6 +205,9 @@ namespace TrashAstronauts.Tests
             public void CatchStarted(byte victimSlot) => log.Add("catch " + victimSlot);
             public void BlackoutStarted(float seconds) => log.Add("blackout on");
             public void BlackoutEnded(bool instant) => log.Add("blackout off");
+            public void PlayerDowned(byte slot, NetVec3 position) => log.Add("downed " + slot);
+            public void PlayerRevived(byte slot, byte by) => log.Add("revived " + slot);
+            public void ReviveProgress(byte slot, float progress, byte rescuerSlot) => log.Add("progress " + slot);
             // Stage 3: the host player's own hand (these tests have no crew grabs: the host always gets it).
             public bool LocalGrab(byte itemId) => true;
             public void LocalRelease(byte itemId) { }
