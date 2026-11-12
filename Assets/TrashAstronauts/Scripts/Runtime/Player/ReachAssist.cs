@@ -203,7 +203,8 @@ namespace TrashAstronauts.Player
             float bestSq = float.MaxValue;
             bounds = new Bounds(item.transform.position, Vector3.zero);
             bool first = true;
-            var colliders = item.grab.colliders;
+            IList<Collider> colliders = item.grab.colliders;
+            if (colliders.Count == 0) colliders = item.GetComponentsInChildren<Collider>(); // not registered yet (edit-mode previews)
             for (int i = 0; i < colliders.Count; i++)
             {
                 var c = colliders[i];
@@ -240,7 +241,7 @@ namespace TrashAstronauts.Player
                 return float.PositiveInfinity;
 
             // Nothing solid in between: the line from the palm to just short of the grip point must be clear.
-            if (distance > 0.02f && Physics.Linecast(palm, gripPoint - dir * 0.015f, GameLayers.EnvironmentMask, QueryTriggerInteraction.Ignore))
+            if (distance > 0.02f && Physics.Linecast(palm, gripPoint - dir * 0.015f, GameLayers.RestingMask, QueryTriggerInteraction.Ignore))
                 return float.PositiveInfinity;
 
             float cost = Mathf.Max(distance, 0.01f) * (1f + 0.5f * off);
@@ -250,7 +251,7 @@ namespace TrashAstronauts.Player
             if (Vector3.Dot(dir, down) > 0.35f) cost *= 1f - belowBonus;
             // Lying on the floor (or drifted down against the deck).
             float below = Vector3.Dot(bounds.extents, new Vector3(Mathf.Abs(down.x), Mathf.Abs(down.y), Mathf.Abs(down.z)));
-            if (Physics.Raycast(bounds.center, down, below + 0.1f, GameLayers.EnvironmentMask, QueryTriggerInteraction.Ignore)) cost *= 1f - floorBonus;
+            if (Physics.Raycast(bounds.center, down, below + 0.1f, GameLayers.RestingMask, QueryTriggerInteraction.Ignore)) cost *= 1f - floorBonus;
             return cost;
         }
 
@@ -326,6 +327,15 @@ namespace TrashAstronauts.Player
             Vector3 start = length > 0.12f ? palm + dir * (0.06f / length) : palm;
             line.SetPosition(0, start);
             line.SetPosition(1, m_CandidatePoint);
+        }
+
+        /// <summary>Shows the cue (line and glow) for an item without any of the runtime checks: for edit-mode preview images only.</summary>
+        public void ShowCueForPreview(SalvageItem item)
+        {
+            if (hand == null) hand = GetComponent<HandRig>();
+            m_Candidate = item;
+            m_CandidatePoint = item != null ? NearestPoint(item, PalmPoint, out _) : Vector3.zero;
+            UpdateLine();
         }
 
         // ------------------------------------------------------------------ the pull

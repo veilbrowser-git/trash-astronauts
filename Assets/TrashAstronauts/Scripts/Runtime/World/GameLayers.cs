@@ -20,6 +20,8 @@ namespace TrashAstronauts.World
         public const int TeleportSurface = 14;
         public const int Zone = 15;
         public const int Enemy = 16;
+        /// <summary>Collision for loose things only (salvage, dropped tools): rock props the player and the creature pass through, but salvage must not hide inside.</summary>
+        public const int Rubble = 18;
 
 
         public static readonly (int index, string name)[] Names =
@@ -35,9 +37,13 @@ namespace TrashAstronauts.World
             (TeleportSurface, "TeleportSurface"),
             (Zone, "Zone"),
             (Enemy, "Enemy"),
+            (Rubble, "Rubble"),
         };
 
         public const int EnvironmentMask = 1 << Environment;
+        public const int RubbleMask = 1 << Rubble;
+        /// <summary>Everything loose things rest on and cannot pass through.</summary>
+        public const int RestingMask = EnvironmentMask | RubbleMask;
         public const int SalvageMask = 1 << Salvage;
         public const int ToolMask = 1 << Tool;
         public const int CutPointMask = 1 << CutPoint;
@@ -59,7 +65,7 @@ namespace TrashAstronauts.World
             if (s_Applied && Application.isPlaying) return;
             s_Applied = true;
 
-            int[] all = { Default, Environment, Salvage, Tool, Player, Hand, CutPoint, Button, Rail, TeleportSurface, Zone, Enemy };
+            int[] all = { Default, Environment, Salvage, Tool, Player, Hand, CutPoint, Button, Rail, TeleportSurface, Zone, Enemy, Rubble };
 
             // Start from "nothing collides" for our layers, then enable the pairs we want.
             foreach (int a in all)
@@ -82,6 +88,8 @@ namespace TrashAstronauts.World
             Allow(Tool, Default);
             Allow(Enemy, Default);
             Allow(Default, Environment);
+            Allow(Salvage, Rubble);
+            Allow(Tool, Rubble);
         }
 
         static void Allow(int a, int b) => Physics.IgnoreLayerCollision(a, b, false);

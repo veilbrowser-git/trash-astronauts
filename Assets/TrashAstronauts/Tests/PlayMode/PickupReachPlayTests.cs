@@ -746,5 +746,59 @@ namespace TrashAstronauts.Tests
             Assert.AreEqual(0, m_Right.hand.Reach.AssistedGrabs, "A direct grab, not an assisted one.");
             yield return Grip(m_Right, false);
         }
+    
+        // ------------------------------------------------------------------ where items come to rest
+
+        /// <summary>
+        /// The cave has fallen rocks along the foot of its walls. Salvage sliding along the floor into one must
+        /// stop against it, in sight, not end up inside the rock where no hand can see or reach it.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator InTheCave_SalvageSlidingIntoAFallenRock_StopsAgainstIt_NotInsideIt()
+        {
+            yield return StandInCave();
+            var cave = m_Director.maps.First(m => m.mapId == "lava_tube");
+            var gravity = cave.GetComponent<MapGravity>();
+            // The fallen rocks at the foot of the main tunnel's walls (x = +-1.35), by the hulls loose things meet.
+            var rocks = cave.GetComponentsInChildren<MeshCollider>(true)
+                .Where(c => c.name == "Rubble Hull" && gravity.Contains(c.bounds.center) && Mathf.Abs(Mathf.Abs(c.bounds.center.x) - 1.35f) < 0.2f)
+                .ToList();
+            Assert.GreaterOrEqual(rocks.Count, 3, "The main tunnel's fallen rocks should each have a hull that loose things rest against.");
+            Assert.IsTrue(rocks.All(r => r.convex && r.gameObject.layer == GameLayers.Rubble));
+            var item = Kind("scrap_hull_plate");
+            var itemCollider = item.GetComponentsInChildren<Collider>().First(c => !c.isTrigger);
+            ClearAround(item);
+            var report = new StringBuilder();
+            int inside = 0;
+            foreach (var rock in rocks)
+            {
+                Bounds b = rock.bounds;
+                Vector3 inward = new Vector3(-Mathf.Sign(b.center.x), 0f, 0f);
+                Vector3 start = new Vector3(b.center.x, 0f, b.center.z) + inward * (b.extents.x + 0.45f);
+                start.y = HalfHeight(item) + 0.01f;
+                item.Body.linearVelocity = Vector3.zero;
+                item.Body.angularVelocity = Vector3.zero;
+                item.transform.SetPositionAndRotation(start, Quaternion.identity);
+                item.Body.position = start;
+                item.Body.rotation = Quaternion.identity;
+                Physics.SyncTransforms();
+                yield return Settle(10);
+                item.Body.linearVelocity = -inward * 2.4f; // slides toward the rock and the wall behind it
+                for (int i = 0; i < 72 * 4; i++) { yield return new WaitForFixedUpdate(); yield return null; }
+
+                // How deep inside the rock (as an ellipsoid fitted to it) the item's middle is: < 1 is inside.
+                Vector3 d = item.Body.worldCenterOfMass - b.center;
+                float ellipsoid = Mathf.Sqrt(Sq(d.x / b.extents.x) + Sq(d.y / b.extents.y) + Sq(d.z / b.extents.z));
+                float penetration = Physics.ComputePenetration(itemCollider, itemCollider.transform.position, itemCollider.transform.rotation,
+                    rock, rock.transform.position, rock.transform.rotation, out _, out float depth) ? depth : 0f;
+                report.AppendLine(rock.transform.position.ToString("F2") + " size " + b.size.ToString("F2") + ": item at " + item.transform.position.ToString("F2")
+                    + ", ellipsoid distance " + ellipsoid.ToString("F2") + ", overlap " + (penetration * 100f).ToString("F1") + " cm");
+                if (ellipsoid < 0.9f || penetration > 0.01f) inside++;
+            }
+            Debug.Log("[RestingPlace] " + report);
+            Assert.AreEqual(0, inside, "Salvage slid into fallen rock and came to rest inside it:\n" + report);
+        }
+
+        static float Sq(float x) => x * x;
     }
 }
