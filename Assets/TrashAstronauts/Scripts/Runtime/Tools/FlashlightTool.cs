@@ -46,7 +46,8 @@ namespace TrashAstronauts.Tools
             float dt = Time.deltaTime;
             bool aboard = director != null && director.Phase == Core.MissionPhase.Active;
             bool inTug = !aboard;
-            if (aboard && director.Players.Count > 0 && director.Players[0] != null) inTug = director.Players[0].InSafeZone;
+            var wearer = aboard ? director.LocalPlayer : null;
+            if (wearer != null) inTug = wearer.InSafeZone;
 
             if (inTug) Charge = Mathf.MoveTowards(Charge, 1f, dt * 0.5f);                    // the tug tops it up in a couple of seconds
             else if (IsOn) Charge = Mathf.Max(0f, Charge - dt / Mathf.Max(10f, batterySeconds));

@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using TrashAstronauts.Core;
 using TrashAstronauts.Player;
@@ -36,8 +37,88 @@ namespace TrashAstronauts.Mission
         public bool IsMounted { get; private set; }
         public Vector3 SpawnPosition { get; private set; }
         public bool HasBeenCollected { get; private set; }
-        public bool IsHeld => grab != null && grab.isSelected;
+        /// <summary>In a hand: this headset's, or (in co-op) another crew member's.</summary>
+        public bool IsHeld => (grab != null && grab.isSelected) || RemoteHolder.IsValid;
         public Rigidbody Body => m_Body;
+
+        /// <summary>This run's net id: the item's index in RunStartParams.items. -1 for anything else (the tutorial's practice item).</summary>
+        public int NetIndex { get; set; } = -1;
+        /// <summary>
+        /// The crew member on another machine who is holding this, or <see cref="PlayerId.None"/>. While
+        /// set the item counts as held everywhere (the locker, the bumpers and lost-item recovery leave it
+        /// alone) and its body just follows the poses that arrive. Always None offline.
+        /// </summary>
+        public PlayerId RemoteHolder { get; private set; } = PlayerId.None;
+        /// <summary>
+        /// True on the one machine whose physics moves this body right now. Only that machine turns its
+        /// knocks into damage and gameplay noise; everywhere else the body is kinematic and follows.
+        /// Always true offline.
+        /// </summary>
+        public bool SimulatedHere { get; private set; } = true;
+        /// <summary>
+        /// Set just before a grab is cancelled from outside (the host gave the item to someone else): the
+        /// release that follows is not a real one, so no throw, no recoil and no <see cref="Released"/>.
+        /// Cleared by that release.
+        /// </summary>
+        public bool NetSuppressRelease { get; set; }
+
+        /// <summary>The last hand let go (not raised when it is passed from hand to hand, or for a suppressed release).</summary>
+        public event Action<SalvageItem> Released;
+        /// <summary>Two physics steps after a release, once the throw is known: read WasThrown, LastThrowSpeed, ReleasePosition and the body's velocity.</summary>
+        public event Action<SalvageItem> Thrown;
+
+        /// <summary>
+        /// A crew member on another machine took this in hand (or, with <see cref="PlayerId.None"/>, let
+        /// go). Taking it leaves the same traces a grab on this headset does: they are the last holder
+        /// (so a deposit, the locker's buzz and the item's knocks are theirs), any earlier throw is
+        /// forgotten, and the item counts as collected, which on a host also goes into the ledger.
+        /// </summary>
+        public void SetRemoteHolder(PlayerId holder)
+        {
+            RemoteHolder = holder;
+            // Nothing clamped to a mount or locked in the locker is in anybody's hand.
+            if (holder.IsValid && !IsMounted && !IsSecured)
+            {
+                LastHolder = holder;
+                WasThrown = false;
+                if (impact != null) impact.LastHandler = holder;
+                if (!HasBeenCollected && !isTraining)
+                {
+                    HasBeenCollected = true;
+                    // A client's director ignores this (its ledger is a mirror); a host's records it once.
+                    if (m_Director != null) m_Director.NotifySalvageCollected(this, holder);
+                }
+            }
+            RefreshBodyMode();
+        }
+
+        public void SetSimulatedHere(bool simulatedHere)
+        {
+            SimulatedHere = simulatedHere;
+            RefreshBodyMode();
+        }
+
+        /// <summary>The host's word on what this item is worth now (after a knock on someone else's machine).</summary>
+        public void SetRemoteValue(int value)
+        {
+            value = Mathf.Max(0, value);
+            m_DamagedValue = value >= FullValue ? -1 : value;
+        }
+
+        /// <summary>
+        /// The one place that decides whether the body is kinematic and whether it can be grabbed, from
+        /// everything that has a say: clamped to a mount, secured in the locker, held on another machine,
+        /// or simulated somewhere else.
+        /// </summary>
+        public void RefreshBodyMode()
+        {
+            if (m_Body == null) m_Body = GetComponent<Rigidbody>();
+            // Grab first: switching it off drops the item from a hand, and that drop restores the body's
+            // own idea of kinematic. What is decided here has to be the last word.
+            if (grab != null) grab.enabled = !IsMounted && !IsSecured;
+            m_Body.isKinematic = IsMounted || IsSecured || RemoteHolder.IsValid || !SimulatedHere;
+        }
+
         /// <summary>What it is worth now. Delicate things lose value when they are banged about.</summary>
         public int Value => m_DamagedValue >= 0 ? m_DamagedValue : FullValue;
         public int FullValue => m_BaseValue >= 0 ? m_BaseValue : (definition != null ? definition.creditValue : 0);
@@ -69,7 +150,7 @@ namespace TrashAstronauts.Mission
             if (loss <= 0) return 0;
             m_DamagedValue = now;
             DamageCount++;
-            director.Session.DamageSalvage(SalvageId, now);
+            director.ReportSalvageDamage(this, now);
             if (scanTag != null) scanTag.Show(definition.displayName + "  DAMAGED  -" + loss, now, 2.5f);
             return loss;
         }
@@ -108,9 +189,16 @@ namespace TrashAstronauts.Mission
         void OnReleased(SelectExitEventArgs args)
         {
             if (grab.isSelected) return; // passed to the other hand
+            if (NetSuppressRelease)
+            {
+                // The grab was taken back by the session, not let go: nothing was thrown.
+                NetSuppressRelease = false;
+                return;
+            }
             ReleasePosition = transform.position;
             WasThrown = false;
             var player = PlayerContext.From(args.interactorObject);
+            Released?.Invoke(this);
             // Not while the object is being torn down (scene unload, end of a run).
             if (isActiveAndEnabled && gameObject.activeInHierarchy && gameObject.scene.isLoaded) StartCoroutine(AfterRelease(player));
         }
@@ -122,6 +210,7 @@ namespace TrashAstronauts.Mission
             yield return new WaitForFixedUpdate();
             if (IsHeld || IsSecured || m_Body.isKinematic) yield break;
             RegisterThrow(m_Body.linearVelocity, player);
+            Thrown?.Invoke(this);
         }
 
         /// <summary>
@@ -147,6 +236,10 @@ namespace TrashAstronauts.Mission
             m_DamagedValue = -1;
             m_BaseValue = -1;
             DamageCount = 0;
+            NetIndex = -1;
+            RemoteHolder = PlayerId.None;
+            SimulatedHere = true;
+            NetSuppressRelease = false;
             SalvageId = salvageId;
             if (def != null) definition = def;
             SpawnPosition = transform.position;
@@ -168,21 +261,21 @@ namespace TrashAstronauts.Mission
         {
             if (!IsMounted) return;
             SetMounted(false);
-            // A gentle shove so the freed part visibly drifts out of its bracket.
-            m_Body.AddForce(mount.transform.forward * 0.25f, ForceMode.VelocityChange);
+            // A gentle shove so the freed part visibly drifts out of its bracket. Only where its physics runs.
+            if (SimulatedHere) m_Body.AddForce(mount.transform.forward * 0.25f, ForceMode.VelocityChange);
         }
 
         void SetMounted(bool mounted)
         {
             IsMounted = mounted;
-            m_Body.isKinematic = mounted;
-            if (grab != null) grab.enabled = !mounted && !IsSecured;
+            RefreshBodyMode();
         }
 
         void OnGrabbed(SelectEnterEventArgs args)
         {
             var player = PlayerContext.From(args.interactorObject);
-            LastHolder = player != null ? player.Id : PlayerId.Local;
+            var director = m_Director != null ? m_Director : MissionDirector.Active;
+            LastHolder = player != null ? player.Id : director != null ? director.LocalPlayerId : PlayerId.Local;
             WasThrown = false;
             if (impact != null) impact.LastHandler = LastHolder;
             if (scanTag != null && definition != null) scanTag.Show(definition.displayName, Value, 2.5f);
@@ -216,9 +309,9 @@ namespace TrashAstronauts.Mission
         {
             if (IsSecured) return;
             IsSecured = true;
-            if (grab != null) grab.enabled = false;
+            RemoteHolder = PlayerId.None;
+            RefreshBodyMode();
             if (highlight != null) highlight.StopPulse();
-            m_Body.isKinematic = true;
             foreach (var c in m_Colliders)
             {
                 if (c != null) c.enabled = false;

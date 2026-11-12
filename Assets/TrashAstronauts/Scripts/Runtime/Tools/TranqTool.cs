@@ -74,7 +74,7 @@ namespace TrashAstronauts.Tools
             if (Sfx.Library != null) Sfx.PlayAt(Sfx.Library.tranqFire, origin, 0.5f, 1f, 8f);
             if (HoldingHand != null) HoldingHand.Pulse(hitCreature ? 0.7f : 0.4f, hitCreature ? 0.15f : 0.06f);
             if (director.noise != null)
-                director.noise.Emit(new NoiseEvent(origin, 0.12f, NoiseKind.Impact, HoldingHand != null && HoldingHand.Player != null ? HoldingHand.Player.Id : PlayerId.Local));
+                director.noise.Emit(new NoiseEvent(origin, 0.12f, NoiseKind.Impact, HoldingHand != null && HoldingHand.Player != null ? HoldingHand.Player.Id : director.LocalPlayerId));
 
             if (tracer != null && isActiveAndEnabled)
             {

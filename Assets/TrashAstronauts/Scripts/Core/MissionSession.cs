@@ -105,6 +105,8 @@ namespace TrashAstronauts.Core
         public bool Banked { get; private set; }
 
         public IReadOnlyCollection<SalvageRecord> Items => m_Items.Values;
+        /// <summary>Ids of the panels cut open this run.</summary>
+        public IReadOnlyCollection<string> OpenPanels => m_OpenPanels;
         public bool QuotaMet => SecuredValue >= Quota;
 
         public event Action<MissionPhase> PhaseChanged;
@@ -130,13 +132,18 @@ namespace TrashAstronauts.Core
         /// <summary>Hazard pay: scales the contract bonus for this run. Set after <see cref="Begin"/>; reset by it.</summary>
         public float BonusMultiplier { get; set; } = 1f;
 
-        public bool Begin(int seed, int quota, float oxygenCapacitySeconds)
+        /// <param name="runIndex">
+        /// The run number to take instead of counting up. In co-op the host sends its own, so salvage ids
+        /// ("run&lt;N&gt;/...") match on machines that have played a different number of runs.
+        /// </param>
+        public bool Begin(int seed, int quota, float oxygenCapacitySeconds, int? runIndex = null)
         {
             if (Phase == MissionPhase.Active) return false;
 
             ClearRunState();
             BonusMultiplier = 1f;
-            RunIndex++;
+            if (runIndex.HasValue) RunIndex = runIndex.Value;
+            else RunIndex++;
             Seed = seed;
             Quota = Math.Max(0, quota);
             Oxygen.Refill(oxygenCapacitySeconds, m_LowFraction, m_CriticalFraction);
@@ -297,6 +304,110 @@ namespace TrashAstronauts.Core
         public bool ReturnToHub()
         {
             if (Phase != MissionPhase.Results) return false;
+            ClearRunState();
+            SetPhase(MissionPhase.Hub);
+            return true;
+        }
+
+        // ------------------------------------------------------------------ mirror (co-op clients)
+        //
+        // A client keeps a MissionSession that only ever follows the host's. These methods apply what the
+        // host decided; none of them judges anything, and every one of them can be applied twice (or
+        // arrive after the thing it describes is already true) without changing the result.
+
+        /// <summary>The host recorded the first pickup of an item. Returns false if nothing changed.</summary>
+        public bool ApplyRemoteCollect(string id, PlayerId by)
+        {
+            if (Phase != MissionPhase.Active) return false;
+            if (!TryGetSalvage(id, out var record) || record.State != SalvageState.InWreck) return false;
+            record.State = SalvageState.Collected;
+            record.CollectedBy = by;
+            SalvageCollected?.Invoke(record);
+            return true;
+        }
+
+        /// <summary>The host changed what an item is worth. Ignored once the item is in the locker.</summary>
+        public bool ApplyRemoteValue(string id, int value)
+        {
+            if (Phase != MissionPhase.Active) return false;
+            if (!TryGetSalvage(id, out var record) || record.State == SalvageState.Deposited) return false;
+            value = Math.Max(0, value);
+            if (record.Value == value) return false;
+            record.Value = value;
+            return true;
+        }
+
+        /// <summary>
+        /// The host secured an item in the locker for <paramref name="finalValue"/> credits, with
+        /// <paramref name="trickBonus"/> extra if it was a trick shot. Counted once per item.
+        /// </summary>
+        public bool ApplyRemoteDeposit(string id, PlayerId by, int finalValue, int trickBonus)
+        {
+            if (Phase != MissionPhase.Active) return false;
+            if (!TryGetSalvage(id, out var record) || record.State == SalvageState.Deposited) return false;
+            record.Value = Math.Max(0, finalValue);
+            record.State = SalvageState.Deposited;
+            record.DepositedBy = by;
+            DepositedValue += record.Value;
+            DepositedCount++;
+            if (trickBonus > 0)
+            {
+                record.TrickShot = true;
+                TrickBonus += trickBonus;
+                TrickShots++;
+            }
+            SalvageDeposited?.Invoke(record);
+            return true;
+        }
+
+        /// <summary>The host's clock: mission time and what is left in the shared tank. Never ends the run.</summary>
+        public bool ApplyClock(float elapsedSeconds, float oxygenRemainingSeconds)
+        {
+            if (Phase != MissionPhase.Active) return false;
+            ElapsedSeconds = Math.Max(0f, elapsedSeconds);
+            Oxygen.SetRemaining(oxygenRemainingSeconds);
+            return true;
+        }
+
+        /// <summary>
+        /// The host ended the run with this result. The mirror takes the host's figures as they are and
+        /// moves to Results; <see cref="BankInto"/> then pays this device once. Returns the stored result,
+        /// or null if the run was not active (already ended: applying it again changes nothing).
+        /// </summary>
+        public MissionResult ApplyRemoteEnd(MissionResult result)
+        {
+            if (Phase != MissionPhase.Active || result == null) return null;
+            DepositedValue = result.DepositedValue;
+            DepositedCount = result.DepositedCount;
+            TrickBonus = result.TrickBonus;
+            TrickShots = result.TrickShots;
+            ElapsedSeconds = result.ElapsedSeconds;
+            Oxygen.SetRemaining(result.OxygenRemainingSeconds);
+            Result = new MissionResult
+            {
+                Outcome = result.Outcome,
+                Quota = result.Quota,
+                DepositedValue = result.DepositedValue,
+                DepositedCount = result.DepositedCount,
+                TrickBonus = result.TrickBonus,
+                TrickShots = result.TrickShots,
+                Bonus = result.Bonus,
+                Payout = Math.Max(0, result.Payout),
+                OxygenRemainingSeconds = result.OxygenRemainingSeconds,
+                ElapsedSeconds = result.ElapsedSeconds,
+            };
+            SetPhase(MissionPhase.Results);
+            Ended?.Invoke(Result);
+            return Result;
+        }
+
+        /// <summary>
+        /// Drops a running contract and goes straight back to the hub (the link to the host was lost, or
+        /// the player left the session). There is no result and nothing can be banked.
+        /// </summary>
+        public bool AbortToHub()
+        {
+            if (Phase != MissionPhase.Active) return false;
             ClearRunState();
             SetPhase(MissionPhase.Hub);
             return true;

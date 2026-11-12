@@ -92,7 +92,7 @@ namespace TrashAstronauts.UI
         void OnPrimary(PushButton button, HandRig hand)
         {
             if (director == null) return;
-            PlayerId by = hand != null && hand.Player != null ? hand.Player.Id : PlayerId.Local;
+            PlayerId by = hand != null && hand.Player != null ? hand.Player.Id : director.LocalPlayerId;
 
             switch (director.Phase)
             {
@@ -104,7 +104,9 @@ namespace TrashAstronauts.UI
                     if (Time.unscaledTime <= m_ConfirmUntil)
                     {
                         m_ConfirmUntil = 0f;
-                        if (director.Extract(by) == null) Notice("Extraction needs you inside the tug.");
+                        // On a co-op client the press is only a request; the host answers.
+                        bool asked = director.Net != null && director.Net.IsClient;
+                        if (director.Extract(by) == null && !asked) Notice("Extraction needs you inside the tug.");
                     }
                     else
                     {
@@ -158,7 +160,7 @@ namespace TrashAstronauts.UI
                         + "Oxygen: " + OxygenTank.FormatClock(session.Oxygen.Remaining) + "\n"
                         + (director.ActiveMap != null ? "Wreck: " + director.ActiveMap.displayName + "\n" : "")
                         + "Conditions: " + ContractConditions.Title(director.Condition) + ". " + ContractConditions.Describe(director.Condition) + "\n"
-                        + (director.ActiveEnemy != null ? "Aboard: " + director.ActiveEnemy.displayName + "\n  " + director.ActiveEnemy.trait + "\n\n" : "\n")
+                        + (director.CreatureAboard && director.ActiveEnemy != null ? "Aboard: " + director.ActiveEnemy.displayName + "\n  " + director.ActiveEnemy.trait + "\n\n" : "\n")
                         + (session.QuotaMet
                             ? "QUOTA MET. Extract now for the bonus,\nor risk another trip for more."
                             : "Quota NOT met. Extracting now pays only\nfor what is already secured.")

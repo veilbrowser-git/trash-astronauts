@@ -30,6 +30,12 @@ namespace TrashAstronauts.Mission
 
         /// <summary>Raised when the tutorial's practice item is dropped in.</summary>
         public event System.Action TrainingItemDeposited;
+        /// <summary>
+        /// Raised where the deposit was decided (offline, or the host) once a contract item is secured:
+        /// the item, its trick-shot bonus (0 if none) and the slot it went into. Everything a client needs
+        /// to repeat it with <see cref="ApplyAccepted"/>.
+        /// </summary>
+        public event System.Action<SalvageItem, int, int> Accepted;
         public int TrickShotCount { get; private set; }
 
         void OnEnable()
@@ -86,6 +92,8 @@ namespace TrashAstronauts.Mission
         public void ScanZone()
         {
             if (zone == null) return;
+            // In a session only the host's locker judges what has been dropped in; clients are told.
+            if (director != null && director.Net != null && director.Net.IsClient) return;
             int count = Physics.OverlapBoxNonAlloc(zone.position, zoneSize * 0.5f, m_Hits, zone.rotation,
                 GameLayers.SalvageMask, QueryTriggerInteraction.Ignore);
             for (int i = 0; i < count; i++)
@@ -120,19 +128,9 @@ namespace TrashAstronauts.Mission
                 if (item.WasThrown && zone != null && Vector3.Distance(item.ReleasePosition, zone.position) >= config.trickShotDistance)
                     trickBonus = director.AwardTrickShot(item);
 
-                item.Secure(NextSlot());
-                string itemName = item.definition != null ? item.definition.displayName : "Salvage";
-                if (trickBonus > 0)
-                {
-                    TrickShotCount++;
-                    Flash("TRICK SHOT!  " + itemName + "\n+" + item.Value + " cr  +" + trickBonus + " bonus", 4f);
-                    if (Sfx.Library != null) Sfx.PlayAt(Sfx.Library.trickShot, transform.position, 0.8f);
-                }
-                else
-                {
-                    Flash("SECURED: " + itemName + "\n+" + item.Value + " cr", 3f);
-                }
-                Feedback(item, item.Value >= 300 || trickBonus > 0);
+                int slotIndex = m_NextSlot;
+                ApplyAccepted(item, trickBonus, slotIndex);
+                Accepted?.Invoke(item, trickBonus, slotIndex);
                 return true;
             }
 
@@ -143,13 +141,43 @@ namespace TrashAstronauts.Mission
             return false;
         }
 
-        Transform NextSlot()
+        /// <summary>
+        /// The visible half of a deposit, with no judging: locks the item into the given slot, shows the
+        /// receipt and gives the feedback. <see cref="TryAccept"/> calls it once the ledger has taken the
+        /// item; a co-op client calls it with the slot the host chose, after its mirror has the deposit.
+        /// Applying it to an item that is already secured does nothing.
+        /// </summary>
+        public void ApplyAccepted(SalvageItem item, int trickBonus, int slotIndex)
+        {
+            if (item == null || item.IsSecured) return;
+            item.Secure(SlotAt(slotIndex));
+            string itemName = item.definition != null ? item.definition.displayName : "Salvage";
+            if (trickBonus > 0)
+            {
+                TrickShotCount++;
+                Flash("TRICK SHOT!  " + itemName + "\n+" + item.Value + " cr  +" + trickBonus + " bonus", 4f);
+                if (Sfx.Library != null) Sfx.PlayAt(Sfx.Library.trickShot, transform.position, 0.8f);
+            }
+            else
+            {
+                Flash("SECURED: " + itemName + "\n+" + item.Value + " cr", 3f);
+            }
+            Feedback(item, item.Value >= 300 || trickBonus > 0);
+        }
+
+        /// <summary>The slot the next deposit will go into (they fill in order and wrap around).</summary>
+        public int NextSlotIndex => m_NextSlot;
+
+        Transform SlotAt(int slotIndex)
         {
             if (slots == null || slots.Length == 0) return transform;
-            var slot = slots[m_NextSlot % slots.Length];
-            m_NextSlot++;
+            if (slotIndex < 0) slotIndex = 0;
+            var slot = slots[slotIndex % slots.Length];
+            if (slotIndex >= m_NextSlot) m_NextSlot = slotIndex + 1;
             return slot;
         }
+
+        Transform NextSlot() => SlotAt(m_NextSlot);
 
         void Feedback(SalvageItem item, bool jackpot)
         {

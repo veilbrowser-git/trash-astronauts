@@ -24,13 +24,14 @@ namespace TrashAstronauts.Mission
             var keyboard = Keyboard.current;
             if (keyboard == null || director == null) return;
 
-            if (keyboard.f1Key.wasPressedThisFrame) director.StartMission(PlayerId.Local);
-            if (keyboard.f2Key.wasPressedThisFrame) director.Extract(PlayerId.Local);
+            var local = director.LocalPlayer;
+            if (keyboard.f1Key.wasPressedThisFrame) director.StartMission(director.LocalPlayerId);
+            if (keyboard.f2Key.wasPressedThisFrame) director.Extract(director.LocalPlayerId);
             if (keyboard.f3Key.wasPressedThisFrame) NextAnchor();
             if (keyboard.f4Key.wasPressedThisFrame) DepositNearest();
             if (keyboard.f5Key.wasPressedThisFrame) director.TickMission(60f, false);
-            if (keyboard.f6Key.wasPressedThisFrame && director.Players.Count > 0 && director.noise != null)
-                director.noise.Emit(new NoiseEvent(director.Players[0].HeadPosition, 1f, NoiseKind.Impact, PlayerId.Local));
+            if (keyboard.f6Key.wasPressedThisFrame && local != null && director.noise != null)
+                director.noise.Emit(new NoiseEvent(local.HeadPosition, 1f, NoiseKind.Impact, local.Id));
             if (keyboard.f7Key.wasPressedThisFrame && director.enemies != null)
             {
                 foreach (var enemy in director.enemies)
@@ -71,16 +72,18 @@ namespace TrashAstronauts.Mission
         void NextAnchor()
         {
             var anchors = RecoveryAnchor.All;
-            if (anchors.Count == 0 || director.Players.Count == 0) return;
+            var local = director.LocalPlayer;
+            if (anchors.Count == 0 || local == null) return;
             m_AnchorIndex = (m_AnchorIndex + 1) % anchors.Count;
-            var locomotion = director.Players[0].locomotion;
+            var locomotion = local.locomotion;
             if (locomotion != null) locomotion.TeleportTo(anchors[m_AnchorIndex].transform.position);
         }
 
         void DepositNearest()
         {
-            if (director.locker == null || director.locker.zone == null || director.Players.Count == 0) return;
-            Vector3 from = director.Players[0].HeadPosition;
+            var local = director.LocalPlayer;
+            if (director.locker == null || director.locker.zone == null || local == null) return;
+            Vector3 from = local.HeadPosition;
             SalvageItem best = null;
             float bestSqr = float.MaxValue;
             foreach (var item in director.Items)

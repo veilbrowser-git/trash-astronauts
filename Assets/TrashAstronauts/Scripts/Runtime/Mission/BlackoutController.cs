@@ -33,6 +33,8 @@ namespace TrashAstronauts.Mission
 
         public bool IsBlackout { get; private set; }
         public int BlackoutCount { get; private set; }
+        /// <summary>True while a blackout is counting down to happen on its own this contract.</summary>
+        public bool IsScheduled => m_Scheduled;
         public event Action<bool> Changed;
 
         void OnEnable()
@@ -135,7 +137,9 @@ namespace TrashAstronauts.Mission
         void Schedule()
         {
             var config = director.Config;
-            m_Scheduled = config.blackoutsEnabled;
+            // Whoever started the run says whether this contract has blackouts at all (always, offline).
+            bool thisRun = (director.CurrentRun.hazardFlags & TrashAstronauts.Core.Net.RunStartParams.HazardBlackouts) != 0;
+            m_Scheduled = config.blackoutsEnabled && thisRun;
             m_Countdown = UnityEngine.Random.Range(config.blackoutMinDelay, Mathf.Max(config.blackoutMinDelay, config.blackoutMaxDelay))
                 * ContractConditions.BlackoutDelayMultiplier(director.Condition);
         }

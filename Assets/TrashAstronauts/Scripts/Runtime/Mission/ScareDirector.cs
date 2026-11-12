@@ -62,13 +62,15 @@ namespace TrashAstronauts.Mission
 
         float Range(float a, float b) => Mathf.Lerp(a, b, (float)m_Random.NextDouble());
 
-        PlayerContext Player => director != null && director.Players.Count > 0 ? director.Players[0] : null;
+        /// <summary>Scares are private to each headset: staged for, and around, the player wearing it.</summary>
+        PlayerContext Player => director != null ? director.LocalPlayer : null;
 
         void Update()
         {
             if (director == null) return;
             var player = Player;
-            bool live = director.Phase == MissionPhase.Active && !director.HazardsPaused && player != null;
+            // With no creature aboard there is nothing to be afraid of, and nothing is staged.
+            bool live = director.Phase == MissionPhase.Active && !director.HazardsPaused && player != null && director.CreatureAboard;
             if (!live)
             {
                 if (GlimpseVisible) HideGlimpse(false);

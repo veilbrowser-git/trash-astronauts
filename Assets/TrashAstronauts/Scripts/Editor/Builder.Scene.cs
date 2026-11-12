@@ -46,12 +46,15 @@ namespace TrashAstronauts.EditorTools
         static Transform s_Level, s_Rails, s_Teleport, s_Spawns, s_Props, s_Lights, s_Signs;
         static readonly List<Light> s_WreckLights = new List<Light>();
         static readonly List<Renderer> s_WreckGlow = new List<Renderer>();
+        /// <summary>Webs strung in the wreck being built; each wreck stores its own (WreckMap.tripwires).</summary>
+        static readonly List<WebTripwire> s_Tripwires = new List<WebTripwire>();
 
         static void BuildScene()
         {
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             s_SpawnPoints.Clear();
             s_Cuttables.Clear();
+            s_Tripwires.Clear();
             s_Waypoints.Clear();
             s_BoxMeshes.Clear();
             s_WreckLights.Clear();
@@ -227,12 +230,21 @@ namespace TrashAstronauts.EditorTools
             director.maps = new[] { freighter, barge, survey };
             director.sharedCuttables = new[] { practicePanel };
             director.sharedDoors = new[] { doorA };
+            // Every web belongs to a wreck today; one strung in the tug or the airlock would go here.
+            director.sharedTripwires = new WebTripwire[0];
             director.blackout = blackout;
 
             blackout.lights = freighter.lights;
             blackout.glowStrips = freighter.glowStrips;
             blackout.globalAmbience = new[] { ambience };
             blackout.ambience = new[] { ambience, reactorHum };
+
+            // The fingerprint co-op peers compare before they agree to play together (version 0 = content only).
+            var netIds = director.NetIds;
+            foreach (var problem in netIds.Validate()) Debug.LogError("[Builder] Net ids: " + problem);
+            Debug.Log("[Builder] Net content hash 0x" + netIds.ContentHash(0).ToString("x8") + " (" + netIds.Doors.Count + " doors, "
+                + netIds.Panels.Count + " panels, " + netIds.Points.Count + " spawn points, " + netIds.Wires.Count + " webs, "
+                + netIds.Maps.Count + " wrecks, " + netIds.Definitions.Count + " salvage definitions, " + netIds.CreatureCount + " creatures)");
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, ScenePath);

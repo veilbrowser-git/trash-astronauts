@@ -186,6 +186,8 @@ namespace TrashAstronauts.UI
         static string DescribeThreat(MissionDirector director, bool blinkOn)
         {
             if (director.Session.Phase != MissionPhase.Active || director.enemies == null) return "";
+            // A contract with nothing aboard has no threat line (the creature is parked, not hiding).
+            if (!director.CreatureAboard) return "";
             EnemyDrone worst = null;
             foreach (var enemy in director.enemies)
             {

@@ -85,8 +85,8 @@ namespace TrashAstronauts.Mission
 
             if (CutCount < TotalCuts) return;
 
-            PlayerId playerId = by != null ? by.Id : PlayerId.Local;
             var director = MissionDirector.Active;
+            PlayerId playerId = by != null ? by.Id : director != null ? director.LocalPlayerId : PlayerId.Local;
             if (director != null) director.RequestOpenPanel(this, playerId);
             else ApplyOpened();
         }
