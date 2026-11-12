@@ -48,7 +48,7 @@ namespace TrashAstronauts.EditorTools
             public AvatarRigInfo rig;
             public readonly Dictionary<string, Mesh> meshes = new Dictionary<string, Mesh>();
             public readonly Dictionary<string, string> materials = new Dictionary<string, string>();
-            public Material suit, accent, visor;
+            public Material suit, accent, visor, fabric;
 
             public bool Has(string part) => meshes.ContainsKey(part);
         }
@@ -69,6 +69,8 @@ namespace TrashAstronauts.EditorTools
             var helmetRenderers = new List<Renderer>();
             var bodyRenderers = new List<Renderer>();
             var accentRenderers = new List<Renderer>();
+            var fabricRenderers = new List<Renderer>();
+            s_FabricRenderers = fabricRenderers;
 
             if (model != null && model.rig != null)
             {
@@ -139,6 +141,8 @@ namespace TrashAstronauts.EditorTools
             avatar.helmetRenderers = helmetRenderers.ToArray();
             avatar.bodyRenderers = bodyRenderers.ToArray();
             avatar.accentRenderers = accentRenderers.ToArray();
+            avatar.fabricRenderers = fabricRenderers.ToArray();
+            s_FabricRenderers = null;
             avatar.SetHelmetVisible(helmetVisible);
             avatar.SetBodyVisible(true);
             avatar.SetTint(PlayerAvatar.CrewColors[0]);
@@ -168,15 +172,46 @@ namespace TrashAstronauts.EditorTools
             }
         }
 
+        /// <summary>Collects the renderers with a fabric submesh while one suit is being built.</summary>
+        static List<Renderer> s_FabricRenderers;
+
         static void AvatarRenderer(AvatarModel model, GameObject go, string part, List<Renderer> group, List<Renderer> accents)
         {
-            go.AddComponent<MeshFilter>().sharedMesh = model.meshes[part];
+            var mesh = model.meshes[part];
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
             var renderer = go.AddComponent<MeshRenderer>();
             string material = model.materials[part];
             renderer.sharedMaterial = material == "accent" ? model.accent : material == "visor" ? model.visor : model.suit;
+            if (material == "suit" && mesh.subMeshCount == 2 && model.fabric != null)
+            {
+                // Submesh 1 is the white fabric and helmet shell: washed with a chosen suit colour (PlayerAvatar.SetSuitColor).
+                renderer.sharedMaterials = new[] { model.suit, model.fabric };
+                if (s_FabricRenderers != null) s_FabricRenderers.Add(renderer);
+            }
             Cheap(renderer);
             group.Add(renderer);
             if (material == "accent") accents.Add(renderer);
+        }
+
+        /// <summary>
+        /// Atlas regions (build_player.py REGION, u0 u1 v0 v1) painted as white suit fabric or the white helmet shell: the
+        /// parts a chosen suit colour washes. Steel, rubber, boots, hoses, the pack and the hard cases stay as painted.
+        /// </summary>
+        static readonly Rect[] k_FabricRegions =
+        {
+            Rect.MinMaxRect(0.0f, 0.5f, 0.5f, 1.0f),     // torso
+            Rect.MinMaxRect(0.5f, 0.5f, 1.0f, 1.0f),     // leg
+            Rect.MinMaxRect(0.0f, 0.25f, 0.5f, 0.5f),    // helmet
+            Rect.MinMaxRect(0.5f, 0.25f, 0.75f, 0.5f),   // upperarm
+            Rect.MinMaxRect(0.75f, 0.25f, 1.0f, 0.5f),   // forearm
+            Rect.MinMaxRect(0.75f, 0.125f, 0.875f, 0.25f), // shoulder
+        };
+
+        /// <summary>True when a triangle's UV centre lies in a fabric region of the suit atlas.</summary>
+        public static bool IsFabricUv(Vector2 uv)
+        {
+            foreach (var r in k_FabricRegions) if (r.Contains(uv)) return true;
+            return false;
         }
 
         /// <summary>Reads the Blender export and turns it into mesh, texture and material assets. Null if it is not there.</summary>
@@ -236,11 +271,14 @@ namespace TrashAstronauts.EditorTools
             // The crew-colour pieces share the atlas (their cloth is painted near white) and are tinted per player.
             model.accent = Lit("AvatarAccent", PlayerAvatar.CrewColors[0], info.smoothness, atlas);
             model.visor = AvatarVisorMaterial(atlas);
+            // Same atlas, white: the fabric submesh of each suit part, washed per player through a property block.
+            model.fabric = Lit("AvatarFabric", Color.white, info.smoothness, atlas);
 
             foreach (var part in info.parts)
             {
                 if (part.vertexCount <= 0 || part.indexCount <= 0) continue;
                 var p = part;
+                bool splitFabric = string.IsNullOrEmpty(part.material) || part.material == "suit";
                 string key = "Avatar_" + AvatarModelId + "_" + part.name;
                 if (changed) s_PropMeshes.Remove(key); // the model file is newer than the cached mesh
                 model.meshes[part.name] = SaveMesh(key, () =>
@@ -258,11 +296,36 @@ namespace TrashAstronauts.EditorTools
                     }
                     var tris = new int[p.indexCount];
                     Array.Copy(indices, p.indexStart, tris, 0, p.indexCount);
+                    // Suit parts: hardware first (submesh 0, never tinted), fabric second (submesh 1, washed per player).
+                    var hard = new List<int>(tris.Length);
+                    var cloth = new List<int>(tris.Length);
+                    for (int t = 0; t + 2 < tris.Length; t += 3)
+                    {
+                        Vector2 centre = (uv[tris[t]] + uv[tris[t + 1]] + uv[tris[t + 2]]) / 3f;
+                        var into = splitFabric && IsFabricUv(centre) ? cloth : hard;
+                        into.Add(tris[t]); into.Add(tris[t + 1]); into.Add(tris[t + 2]);
+                    }
                     var m = new Mesh();
                     m.SetVertices(verts);
                     m.SetNormals(norms);
                     m.SetUVs(0, uv);
-                    m.SetTriangles(tris, 0);
+                    if (cloth.Count > 0 && hard.Count > 0)
+                    {
+                        m.subMeshCount = 2;
+                        m.SetTriangles(hard, 0);
+                        m.SetTriangles(cloth, 1);
+                    }
+                    else if (cloth.Count > 0)
+                    {
+                        // All fabric: an empty hardware submesh keeps "index 1 = fabric" true for every suit part.
+                        m.subMeshCount = 2;
+                        m.SetTriangles(new int[0], 0);
+                        m.SetTriangles(cloth, 1);
+                    }
+                    else
+                    {
+                        m.SetTriangles(tris, 0);
+                    }
                     m.RecalculateBounds();
                     return m;
                 });
@@ -276,7 +339,7 @@ namespace TrashAstronauts.EditorTools
         /// <summary>False once any asset the cached model points at has been deleted (for example the Generated folder was cleared).</summary>
         static bool AvatarModelAlive(AvatarModel model)
         {
-            if (model == null || model.suit == null || model.accent == null || model.visor == null) return false;
+            if (model == null || model.suit == null || model.accent == null || model.visor == null || model.fabric == null) return false;
             foreach (var mesh in model.meshes.Values)
             {
                 if (mesh == null) return false;

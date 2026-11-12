@@ -183,6 +183,7 @@ namespace TrashAstronauts.EditorTools
             }
 
             CoopShots();
+            SuitColourShots();
 
             Shot("08_top_down", new Vector3(-1f, 46f, 22f), new Vector3(-1f, 0f, 22.01f), true);
             Shot("18_flight_deck", new Vector3(-0.8f, 1.6f, -3.3f), new Vector3(0.3f, 1.3f, -6.2f));
@@ -326,6 +327,69 @@ namespace TrashAstronauts.EditorTools
             }
             Shot("54_remote_crew_in_tug", new Vector3(-1.3f, 1.6f, 0.7f), new Vector3(-0.1f, 1.3f, -2.0f), false, 70f);
             foreach (var go in crew) Object.DestroyImmediate(go);
+        }
+
+        /// <summary>
+        /// The SUIT LOCKER (default and with a colour picked), where it hangs in the supply bay, and the twelve suit colours
+        /// on crew stand-ins (RemoteCrew prefab, suit and gloves dressed through CrewLook) in a lineup away from the level.
+        /// </summary>
+        static void SuitColourShots()
+        {
+            var locker = Object.FindAnyObjectByType<TrashAstronauts.UI.SuitLockerPanel>();
+            if (locker != null)
+            {
+                locker.ShowChoice(0, 0);
+                Shot("60_suit_locker", new Vector3(-4.96f, 1.62f, -4.05f), new Vector3(-4.96f, 1.6f, -3.12f), false, 62f);
+                Shot("61_suit_locker_in_bay", new Vector3(-2.35f, 1.65f, -5.3f), new Vector3(-4.9f, 1.3f, -3.3f), false, 75f);
+                locker.ShowChoice(0, 7); // CYAN
+                Shot("62_suit_locker_cyan", new Vector3(-4.96f, 1.62f, -4.05f), new Vector3(-4.96f, 1.6f, -3.12f), false, 62f);
+                locker.ShowChoice(0, 0);
+            }
+
+            var remotePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(Builder.PrefabDir + "/" + Builder.RemoteCrewPrefabName + ".prefab");
+            if (remotePrefab == null) return;
+            var made = new System.Collections.Generic.List<GameObject>();
+            int count = TrashAstronauts.Player.PlayerAvatar.SuitColors.Length;
+            for (int i = 0; i <= count; i++)
+            {
+                // i = 0: slot 1 with the default (its crew colour, no wash); then palette colours 1..12.
+                var go = Object.Instantiate(remotePrefab);
+                go.hideFlags = HideFlags.HideAndDontSave;
+                made.Add(go);
+                var remote = go.GetComponent<TrashAstronauts.Net.RemoteAvatar>();
+                remote.Setup(new TrashAstronauts.Core.PlayerId(1), 0);
+                Vector3 head = new Vector3(-6.5f + i * 1.0f, 1.62f, -80f);
+                Quaternion face = Quaternion.Euler(4f, 180f, 0f);
+                var s = TrashAstronauts.Core.Net.AvatarSnapshot.Default;
+                Vector3 right = face * Vector3.right, fwd = face * Vector3.forward;
+                s.headPosition = TrashAstronauts.Net.NetUnity.ToNet(head);
+                s.headRotation = TrashAstronauts.Net.NetUnity.ToNet(face);
+                s.leftHandPosition = TrashAstronauts.Net.NetUnity.ToNet(head - right * 0.27f + fwd * 0.28f + Vector3.down * 0.42f);
+                s.rightHandPosition = TrashAstronauts.Net.NetUnity.ToNet(head + right * 0.27f + fwd * 0.28f + Vector3.down * 0.42f);
+                s.leftHandRotation = TrashAstronauts.Net.NetUnity.ToNet(face * Quaternion.Euler(-60f, 0f, 0f));
+                s.rightHandRotation = TrashAstronauts.Net.NetUnity.ToNet(face * Quaternion.Euler(-60f, 0f, 0f));
+                remote.Apply(in s);
+                remote.leftGlove.Apply(0.1f, 0.2f);
+                remote.rightGlove.Apply(0.1f, 0.2f);
+                TrashAstronauts.Net.CrewLook.ApplyLook(remote, 1, i);
+                remote.suit.SnapToHead();
+                remote.suit.Pose(0f);
+            }
+            var lights = new System.Collections.Generic.List<GameObject>();
+            foreach (var at in new[] { new Vector3(-3f, 3f, -83f), new Vector3(3f, 3f, -83f), new Vector3(0f, 1.2f, -84f), new Vector3(0f, 3f, -78f) })
+            {
+                var l = new GameObject("Lineup Light") { hideFlags = HideFlags.HideAndDontSave };
+                lights.Add(l);
+                var light = l.AddComponent<Light>();
+                light.type = LightType.Point;
+                light.range = 12f;
+                light.intensity = 4f;
+                l.transform.position = at;
+            }
+            Shot("63_suit_colours_lineup", new Vector3(0f, 1.3f, -88.2f), new Vector3(0f, 1.0f, -80f), false, 58f);
+            Shot("64_suit_colours_close", new Vector3(-4.0f, 1.35f, -82.4f), new Vector3(-4.0f, 1.05f, -80f), false, 55f);
+            foreach (var go in made) Object.DestroyImmediate(go);
+            foreach (var go in lights) Object.DestroyImmediate(go);
         }
 
         static void Shot(string name, Vector3 from, Vector3 lookAt, bool topDown = false, float fieldOfView = 80f)

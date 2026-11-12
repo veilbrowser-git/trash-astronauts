@@ -5,7 +5,7 @@ namespace TrashAstronauts.Core.Net
     /// <summary>Numbers every peer must agree on. Changing any wire format means bumping <see cref="Version"/>.</summary>
     public static class NetProtocol
     {
-        public const byte Version = 1;
+        public const byte Version = 2; // 2: suit colour in the settings byte and the Welcome roster
         /// <summary>The host's UDP port. Clients bind an ephemeral port.</summary>
         public const ushort HostPort = 47800;
         public const int MaxDatagram = 1200;
@@ -292,7 +292,7 @@ namespace TrashAstronauts.Core.Net
         Away = 2,
         /// <summary>The player is no longer Away.</summary>
         Back = 3,
-        /// <summary>Only the handedness changed.</summary>
+        /// <summary>Only the settings changed: handedness or suit colour.</summary>
         Settings = 4,
     }
 
@@ -466,13 +466,15 @@ namespace TrashAstronauts.Core.Net
         public uint clientNonce;
         /// <summary>0 = right, 1 = left (SaveData.handedness).</summary>
         public byte handedness;
+        /// <summary>0 = slot colour, 1..12 = suit palette (<see cref="SuitLook"/>); shares the handedness byte.</summary>
+        public byte suitColour;
 
         public void WriteDatagram(ref NetWriter w)
         {
             Connectionless.WriteFrame(ref w, protocol, NetMsg.Hello);
             w.U32(contentHash);
             w.U32(clientNonce);
-            w.U8(handedness);
+            w.U8(SuitLook.Pack(handedness, suitColour));
         }
 
         public static bool Read(ref NetReader r, byte protocol, out HelloMsg m)
@@ -480,7 +482,9 @@ namespace TrashAstronauts.Core.Net
             m = new HelloMsg { protocol = protocol };
             m.contentHash = r.U32();
             m.clientNonce = r.U32();
-            m.handedness = (byte)(r.U8() & 1);
+            byte look = r.U8();
+            m.handedness = SuitLook.HandednessOf(look);
+            m.suitColour = SuitLook.ColourOf(look);
             return !r.Failed;
         }
     }
@@ -859,9 +863,9 @@ namespace TrashAstronauts.Core.Net
     public struct WelcomeMsg
     {
         public const int MaxSize = NetProtocol.MaxPlayers + 1 + WorldStateMsg.MaxSize;
-        const uint k_Present = 1, k_LeftHanded = 2, k_Away = 4;
+        const uint k_Present = 1, k_LeftHanded = 2, k_Away = 4, k_WireBits = 0xF7; // bit 3 is spare
 
-        /// <summary>One byte per slot: bit 0 present, bit 1 left-handed, bit 2 away.</summary>
+        /// <summary>One byte per slot: bit 0 present, bit 1 left-handed, bit 2 away, bits 4..7 suit colour (<see cref="SuitLook"/>).</summary>
         public uint roster;
         public MissionPhase phase;
         public WorldStateMsg world;
@@ -869,11 +873,15 @@ namespace TrashAstronauts.Core.Net
         public bool IsPresent(int slot) => slot >= 0 && slot < NetProtocol.MaxPlayers && ((roster >> (slot * 8)) & k_Present) != 0;
         public byte Handedness(int slot) => slot >= 0 && slot < NetProtocol.MaxPlayers && ((roster >> (slot * 8)) & k_LeftHanded) != 0 ? (byte)1 : (byte)0;
         public bool IsAway(int slot) => slot >= 0 && slot < NetProtocol.MaxPlayers && ((roster >> (slot * 8)) & k_Away) != 0;
+        /// <summary>0 = slot colour, 1..12 = suit palette.</summary>
+        public byte SuitColour(int slot) => slot >= 0 && slot < NetProtocol.MaxPlayers && IsPresent(slot) ? SuitLook.Clamp((int)((roster >> (slot * 8 + 4)) & 15u)) : SuitLook.Default;
 
-        public void SetSlot(int slot, bool present, byte handedness, bool away)
+        public void SetSlot(int slot, bool present, byte handedness, bool away) => SetSlot(slot, present, handedness, away, SuitLook.Default);
+
+        public void SetSlot(int slot, bool present, byte handedness, bool away, byte suitColour)
         {
             if (slot < 0 || slot >= NetProtocol.MaxPlayers) return;
-            uint bits = present ? k_Present | (handedness != 0 ? k_LeftHanded : 0u) | (away ? k_Away : 0u) : 0u;
+            uint bits = present ? k_Present | (handedness != 0 ? k_LeftHanded : 0u) | (away ? k_Away : 0u) | ((uint)SuitLook.Clamp(suitColour) << 4) : 0u;
             roster = (roster & ~(0xFFu << (slot * 8))) | (bits << (slot * 8));
         }
 
@@ -889,7 +897,7 @@ namespace TrashAstronauts.Core.Net
 
         public void Write(ref NetWriter w)
         {
-            for (int i = 0; i < NetProtocol.MaxPlayers; i++) w.U8((byte)((roster >> (i * 8)) & 7u));
+            for (int i = 0; i < NetProtocol.MaxPlayers; i++) w.U8((byte)((roster >> (i * 8)) & k_WireBits));
             w.U8((byte)phase);
             world.Write(ref w);
         }
@@ -897,7 +905,7 @@ namespace TrashAstronauts.Core.Net
         public static bool Read(ref NetReader r, ref WelcomeMsg m)
         {
             m.roster = 0u;
-            for (int i = 0; i < NetProtocol.MaxPlayers; i++) m.roster |= (uint)(r.U8() & 7) << (i * 8);
+            for (int i = 0; i < NetProtocol.MaxPlayers; i++) m.roster |= (r.U8() & k_WireBits) << (i * 8);
             byte phase = r.U8();
             if (phase > (byte)MissionPhase.Results) r.Fail();
             m.phase = (MissionPhase)phase;
@@ -905,19 +913,21 @@ namespace TrashAstronauts.Core.Net
         }
     }
 
-    /// <summary>Host -> all: a slot joined, left, went Away, came back, or changed handedness.</summary>
+    /// <summary>Host -> all: a slot joined, left, went Away, came back, or changed handedness or suit colour.</summary>
     public struct RosterChangedMsg
     {
         public const int MaxSize = 3;
         public byte slot;
         public RosterChange change;
         public byte handedness;
+        /// <summary>0 = slot colour, 1..12 = suit palette; shares the handedness byte.</summary>
+        public byte suitColour;
 
         public void Write(ref NetWriter w)
         {
             w.U8(slot);
             w.U8((byte)change);
-            w.U8(handedness);
+            w.U8(SuitLook.Pack(handedness, suitColour));
         }
 
         public static bool Read(ref NetReader r, out RosterChangedMsg m)
@@ -925,22 +935,27 @@ namespace TrashAstronauts.Core.Net
             m = new RosterChangedMsg();
             m.slot = r.U8();
             byte change = r.U8();
-            m.handedness = (byte)(r.U8() & 1);
+            byte look = r.U8();
+            m.handedness = SuitLook.HandednessOf(look);
+            m.suitColour = SuitLook.ColourOf(look);
             if (m.slot >= NetProtocol.MaxPlayers || change > (byte)RosterChange.Settings) r.Fail();
             m.change = (RosterChange)change;
             return !r.Failed;
         }
     }
 
-    /// <summary>Client -> host: my handedness changed.</summary>
+    /// <summary>Client -> host: my handedness or suit colour changed.</summary>
     public struct SettingsChangedMsg
     {
         public const int MaxSize = 1;
         public byte handedness;
-        public void Write(ref NetWriter w) { w.U8(handedness); }
+        /// <summary>0 = slot colour, 1..12 = suit palette; shares the handedness byte.</summary>
+        public byte suitColour;
+        public void Write(ref NetWriter w) { w.U8(SuitLook.Pack(handedness, suitColour)); }
         public static bool Read(ref NetReader r, out SettingsChangedMsg m)
         {
-            m = new SettingsChangedMsg { handedness = (byte)(r.U8() & 1) };
+            byte look = r.U8();
+            m = new SettingsChangedMsg { handedness = SuitLook.HandednessOf(look), suitColour = SuitLook.ColourOf(look) };
             return !r.Failed;
         }
     }

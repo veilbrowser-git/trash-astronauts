@@ -34,6 +34,11 @@ namespace TrashAstronauts.Core
         public int contractsCompleted;
         /// <summary>The biggest payout from a single contract.</summary>
         public int bestHaul;
+        /// <summary>
+        /// Suit colour picked in the SUIT LOCKER: 0 = wear my crew slot's colour (the default, and what saves from before
+        /// suit colours load as), 1..12 = PlayerAvatar.SuitColors[suitColor - 1]. Shared with the network (Net.SuitLook).
+        /// </summary>
+        public int suitColor;
 
         public Handedness Handedness
         {
@@ -57,6 +62,7 @@ namespace TrashAstronauts.Core
             if (float.IsNaN(seatedHeightOffset) || float.IsInfinity(seatedHeightOffset)) seatedHeightOffset = 0f;
             seatedHeightOffset = Mathf.Clamp(seatedHeightOffset, MinHeightOffset, MaxHeightOffset);
             tranqDarts = Mathf.Clamp(tranqDarts, 0, 99);
+            suitColor = Net.SuitLook.Clamp(suitColor);
             runsStarted = Mathf.Max(0, runsStarted);
             contractsCompleted = Mathf.Max(0, contractsCompleted);
         }
