@@ -75,7 +75,15 @@ namespace TrashAstronauts.World
         void OnButtonPressed(PushButton button, HandRig hand)
         {
             if (locked) return;
-            SetOpen(!m_TargetOpen, false, hand != null && hand.Player != null ? hand.Player.Id : PlayerId.Local);
+            var director = MissionDirector.Active;
+            if (director != null && director.Net != null && director.Net.IsClient)
+            {
+                // Ask the host for the state this player wants (never "toggle": two presses must not cancel out).
+                director.Net.RequestDoor(this, !m_TargetOpen);
+                return;
+            }
+            SetOpen(!m_TargetOpen, false, hand != null && hand.Player != null ? hand.Player.Id
+                : director != null ? director.LocalPlayerId : PlayerId.Local);
         }
 
         public void ResetForRun() => SetOpen(startsOpen, true);
@@ -115,6 +123,23 @@ namespace TrashAstronauts.World
                     director.noise.Emit(new NoiseEvent(transform.position, director.Config.noise.doorLoudness, NoiseKind.Door, by));
             }
 
+            RefreshLabel();
+            if (changed) Changed?.Invoke(this);
+        }
+
+        /// <summary>
+        /// Follows a door state decided on another machine (the host's): the leaf slides and the door
+        /// sounds, but there is no doorway check and no gameplay noise. Whoever decided it did both.
+        /// Applying the state it already has does nothing.
+        /// </summary>
+        public void ApplyReplicated(bool open)
+        {
+            Cache();
+            m_PendingClose = false;
+            bool changed = m_TargetOpen != open;
+            m_TargetOpen = open;
+            if (changed && Sfx.Library != null)
+                Sfx.PlayAt(airlock ? Sfx.Library.airlockHiss : Sfx.Library.doorMove, transform.position, 0.9f);
             RefreshLabel();
             if (changed) Changed?.Invoke(this);
         }

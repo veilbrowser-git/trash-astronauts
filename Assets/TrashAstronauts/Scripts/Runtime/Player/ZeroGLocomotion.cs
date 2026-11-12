@@ -215,8 +215,13 @@ namespace TrashAstronauts.Player
                     m_ThrusterNoiseTimer = 0.9f;
                     var director = TrashAstronauts.Mission.MissionDirector.Active;
                     if (director != null && director.noise != null)
+                    {
+                        // Attributed to whoever wears this rig (its co-op slot), not to "player zero".
+                        var wearer = leftHand != null && leftHand.Player != null ? leftHand.Player
+                            : rightHand != null ? rightHand.Player : null;
                         director.noise.Emit(new TrashAstronauts.Core.NoiseEvent(transform.position + Vector3.up * 1.2f, thrusterLoudness,
-                            TrashAstronauts.Core.NoiseKind.Thruster, TrashAstronauts.Core.PlayerId.Local));
+                            TrashAstronauts.Core.NoiseKind.Thruster, wearer != null ? wearer.Id : director.LocalPlayerId));
+                    }
                 }
             }
             else m_ThrusterNoiseTimer = 0f;

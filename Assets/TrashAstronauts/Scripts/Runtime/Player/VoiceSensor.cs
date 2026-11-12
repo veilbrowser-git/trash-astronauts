@@ -149,7 +149,7 @@ namespace TrashAstronauts.Player
             var director = MissionDirector.Active;
             if (director == null || director.Phase != MissionPhase.Active || director.HazardsPaused || director.noise == null) return;
             Vector3 at = head != null ? head.position : transform.position;
-            director.noise.Emit(new NoiseEvent(at, loudness * loudnessScale, NoiseKind.Voice, player != null ? player.Id : PlayerId.Local));
+            director.noise.Emit(new NoiseEvent(at, loudness * loudnessScale, NoiseKind.Voice, player != null ? player.Id : director.LocalPlayerId));
             EmitCount++;
             LastHeardTime = Time.unscaledTime;
         }

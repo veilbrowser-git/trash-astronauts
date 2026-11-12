@@ -1,6 +1,7 @@
 using System.Linq;
 using NUnit.Framework;
 using TrashAstronauts.Core;
+using TrashAstronauts.Core.Net;
 using TrashAstronauts.Mission;
 using TrashAstronauts.Player;
 using TrashAstronauts.Tools;
@@ -250,6 +251,130 @@ public void Creature_IsARealSpider_EightLegsEightEyesFangsAndFur()
             Assert.IsTrue(director.spawnPoints.Any(p => p.allowed.Allows(SalvageCategory.ReactorComponent) && p.behindPanel != null),
                 "The reactor component must sit behind a cuttable panel.");
             Assert.IsTrue(director.spawnPoints.Any(p => p.mount != null), "There should be at least one mounted salvage point.");
+        }
+
+        // ------------------------------------------------------------------ co-op: stable ids and wire field widths
+
+        static T[] InScene<T>(UnityEngine.SceneManagement.Scene scene) where T : Component
+        {
+            return scene.GetRootGameObjects().SelectMany(g => g.GetComponentsInChildren<T>(true)).ToArray();
+        }
+
+        [Test]
+        public void NetIds_AreUniqueAcrossTheWholeScene_AndEveryObjectHasANumber()
+        {
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            var director = InScene<MissionDirector>(scene).Single();
+            var ids = director.NetIds;
+            CollectionAssert.IsEmpty(ids.Validate(), "Net id problems: " + string.Join("; ", ids.Validate()));
+
+            // Scene-wide, all three wrecks at once (objects of wrecks that are not docked are inactive but still there).
+            var doors = InScene<TrashAstronauts.World.SlidingDoor>(scene);
+            var panels = InScene<Cuttable>(scene);
+            var wires = InScene<WebTripwire>(scene);
+            var points = InScene<SalvageSpawnPoint>(scene);
+            Assert.AreEqual(doors.Length, doors.Select(d => d.doorId).Distinct().Count(), "Door ids must be unique across every wreck.");
+            Assert.AreEqual(panels.Length, panels.Select(p => p.panelId).Distinct().Count(), "Panel ids must be unique across every wreck.");
+            Assert.AreEqual(wires.Length, wires.Select(w => w.wireId).Distinct().Count(), "Web ids must be unique across every wreck.");
+            Assert.AreEqual(points.Length, points.Select(p => p.pointId).Distinct().Count(), "Spawn point ids must be unique across every wreck.");
+            Assert.IsTrue(doors.All(d => !string.IsNullOrEmpty(d.doorId)) && panels.All(p => !string.IsNullOrEmpty(p.panelId))
+                && wires.All(w => !string.IsNullOrEmpty(w.wireId)) && points.All(p => !string.IsNullOrEmpty(p.pointId)));
+
+            // Nothing in the scene is left without a number, and a number leads back to the same object.
+            Assert.AreEqual(doors.Length, ids.Doors.Count, "A door is not reachable from the director's lists.");
+            Assert.AreEqual(panels.Length, ids.Panels.Count, "A cut panel is not reachable from the director's lists.");
+            Assert.AreEqual(wires.Length, ids.Wires.Count, "A web is not in any wreck's tripwire list.");
+            Assert.AreEqual(points.Length, ids.Points.Count, "A spawn point is not in any wreck's list.");
+            foreach (var door in doors) Assert.AreSame(door, director.DoorAt(ids.Doors.IndexOf(door.doorId)), door.doorId);
+            foreach (var panel in panels)
+            {
+                int index = ids.Panels.IndexOf(panel.panelId);
+                Assert.AreSame(panel, director.PanelAt(index), panel.panelId);
+                Assert.AreEqual(panel.cutPoints.Length, ids.CutPointCount(index), panel.panelId);
+                Assert.IsTrue(panel.cutPoints.All(p => p != null), panel.panelId + " has an empty cut point slot.");
+            }
+            foreach (var wire in wires) Assert.AreSame(wire, director.WireAt(ids.Wires.IndexOf(wire.wireId)), wire.wireId);
+            foreach (var point in points) Assert.AreSame(point, director.PointAt(ids.Points.IndexOf(point.pointId)), point.pointId);
+            Assert.IsNull(director.DoorAt(-1));
+            Assert.IsNull(director.DoorAt(ids.Doors.Count));
+
+            // Numbers follow the sorted ids, wrecks keep the director's order.
+            CollectionAssert.AreEqual(doors.Select(d => d.doorId).OrderBy(s => s, System.StringComparer.Ordinal).ToList(), ids.Doors.Ids);
+            CollectionAssert.AreEqual(wires.Select(w => w.wireId).OrderBy(s => s, System.StringComparer.Ordinal).ToList(), ids.Wires.Ids);
+            CollectionAssert.AreEqual(director.maps.Select(m => m.mapId).ToList(), ids.Maps.Ids);
+            Assert.AreEqual(director.maps.Length, director.maps.Select(m => m.mapId).Distinct().Count(), "Map ids must be unique.");
+
+            // Each wreck owns its webs; none is shared and none is listed twice.
+            Assert.IsNotNull(director.sharedTripwires);
+            foreach (var map in director.maps)
+            {
+                Assert.IsNotNull(map.tripwires, map.displayName);
+                Assert.GreaterOrEqual(map.tripwires.Length, 2, map.displayName + " should have webs.");
+                foreach (var wire in map.tripwires) Assert.IsTrue(wire != null && wire.transform.IsChildOf(map.transform), map.displayName + " lists a web that is not its own.");
+            }
+            Assert.AreEqual(wires.Length, director.maps.Sum(m => m.tripwires.Length) + director.sharedTripwires.Length);
+        }
+
+        [Test]
+        public void NetCounts_FitTheirWireFields()
+        {
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            var director = InScene<MissionDirector>(scene).Single();
+            var ids = director.NetIds;
+            var defs = AssetDatabase.FindAssets("t:SalvageDefinition")
+                .Select(g => AssetDatabase.LoadAssetAtPath<SalvageDefinition>(AssetDatabase.GUIDToAssetPath(g))).ToList();
+
+            Assert.LessOrEqual(ids.Doors.Count, NetIdTable.MaxDoors, "Door states travel as a 16-bit mask.");
+            Assert.LessOrEqual(ids.Panels.Count, NetIdTable.MaxPanels, "Open panels travel as a 16-bit mask.");
+            Assert.LessOrEqual(ids.Wires.Count, NetIdTable.MaxWires, "Web states travel as 32-bit masks.");
+            Assert.LessOrEqual(ids.CreatureCount, NetIdTable.MaxCreatures);
+            Assert.AreEqual(director.enemies.Length, ids.CreatureCount);
+            Assert.LessOrEqual(ids.Points.Count, NetIdTable.MaxPoints, "A spawn point index is one byte.");
+            Assert.LessOrEqual(ids.Definitions.Count, NetIdTable.MaxDefinitions, "A salvage definition index is one byte.");
+            Assert.LessOrEqual(ids.Maps.Count, NetIdTable.MaxMaps);
+            Assert.AreEqual(defs.Count, ids.Definitions.Count, "Every salvage definition must be in the director's catalog.");
+            foreach (var def in defs) Assert.GreaterOrEqual(ids.Definitions.IndexOf(def.id), 0, def.id);
+
+            // A run can never have more items than a one-byte id can name: one per spawn point, plus the bonus item.
+            foreach (var map in director.maps)
+                Assert.LessOrEqual(map.spawnPoints.Length + 1, NetIdTable.MaxItems, map.displayName + " could spawn more items than the item id field holds.");
+
+            // Item values travel as 16 bits, including the richest contract condition.
+            float richest = System.Enum.GetValues(typeof(ContractCondition)).Cast<ContractCondition>().Max(c => ContractConditions.ValueMultiplier(c));
+            foreach (var def in defs)
+                Assert.LessOrEqual(Mathf.RoundToInt(def.creditValue * richest), NetIdTable.MaxItemValue, def.id + " is worth more than the value field holds.");
+
+            // The run index in a salvage id travels as 16 bits; conditions as one byte.
+            Assert.LessOrEqual(System.Enum.GetValues(typeof(ContractCondition)).Cast<int>().Max(), 255);
+        }
+
+        [Test]
+        public void NetContentHash_IsTheSameEveryTimeTheSceneIsLoaded_AndDoesNotDependOnObjectOrder()
+        {
+            const int protocol = 1;
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            var director = InScene<MissionDirector>(scene).Single();
+            uint first = director.NetIds.ContentHash(protocol);
+            string summary = director.NetIds.Doors.Count + "/" + director.NetIds.Panels.Count + "/" + director.NetIds.Points.Count + "/" + director.NetIds.Wires.Count;
+            Assert.AreNotEqual(first, director.NetIds.ContentHash(protocol + 1), "Another protocol version is another fingerprint.");
+
+            // The same content gathered a different way (straight from the hierarchy, in reverse) gives the same fingerprint.
+            var byHand = new NetIdTable(
+                InScene<TrashAstronauts.World.SlidingDoor>(scene).Reverse().Select(d => d.doorId),
+                InScene<Cuttable>(scene).Reverse().Select(p => new System.Collections.Generic.KeyValuePair<string, int>(p.panelId, p.cutPoints.Length)),
+                InScene<SalvageSpawnPoint>(scene).Reverse().Select(p => p.pointId),
+                InScene<WebTripwire>(scene).Reverse().Select(w => w.wireId),
+                director.maps.Select(m => m.mapId),
+                AssetDatabase.FindAssets("t:SalvageDefinition").Select(g => AssetDatabase.LoadAssetAtPath<SalvageDefinition>(AssetDatabase.GUIDToAssetPath(g)).id),
+                director.enemies.Length);
+            Assert.AreEqual(first, byHand.ContentHash(protocol));
+
+            // And again from a freshly loaded scene.
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            var reloaded = InScene<MissionDirector>(scene).Single();
+            Assert.AreNotSame(director, reloaded);
+            Assert.AreEqual(first, reloaded.NetIds.ContentHash(protocol), "Content " + summary);
         }
     }
 }

@@ -32,9 +32,50 @@ namespace TrashAstronauts.Player
         public SuitTool[] tools;
 
         public PlayerId Id => new PlayerId(m_PlayerIndex);
-        public Vector3 HeadPosition => head != null ? head.position : transform.position;
+        /// <summary>
+        /// Where this player's head is for the rules (safe zone, the creature's senses, extraction). For a
+        /// remote player this is the newest position received, not the smoothed one the avatar is drawn at.
+        /// </summary>
+        public Vector3 HeadPosition => IsRemote && m_HasRemoteHead ? m_RemoteHead : head != null ? head.position : transform.position;
         /// <summary>Written by the mission director each frame.</summary>
         public bool InSafeZone { get; set; } = true;
+
+        /// <summary>True for another crew member's stand-in: no input, haptics, tools or save profile behind it.</summary>
+        public bool IsRemote { get; private set; }
+        /// <summary>
+        /// Headset off, app paused or link silent. An away player is not hunted, does not use oxygen and is
+        /// not waited for at extraction. Always false offline.
+        /// </summary>
+        public bool IsAway { get; set; }
+        /// <summary>How hard a remote player is working (0..1), as last reported. The local rig reads its own locomotion instead.</summary>
+        public float RemoteExertion { get; set; }
+
+        Vector3 m_RemoteHead;
+        bool m_HasRemoteHead;
+
+        /// <summary>
+        /// Gives this player its place in the crew. Offline the one rig keeps <see cref="PlayerId.Local"/>.
+        /// In a session the host assigns slots; call this on a stand-in before its first Start so the
+        /// director registers it as remote.
+        /// </summary>
+        public void AssignId(PlayerId id, bool remote)
+        {
+            m_PlayerIndex = id.Value;
+            IsRemote = remote;
+            if (!remote)
+            {
+                m_HasRemoteHead = false;
+                IsAway = false;
+                RemoteExertion = 0f;
+            }
+        }
+
+        /// <summary>The newest head position received for a remote player. Ignored for the local rig.</summary>
+        public void SetRemoteHead(Vector3 position)
+        {
+            m_RemoteHead = position;
+            m_HasRemoteHead = true;
+        }
         public Handedness Handedness { get; private set; } = Handedness.Right;
 
         public HandRig DominantHand => Handedness == Handedness.Left ? leftHand : rightHand;

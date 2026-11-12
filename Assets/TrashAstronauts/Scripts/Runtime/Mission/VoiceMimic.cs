@@ -40,8 +40,9 @@ namespace TrashAstronauts.Mission
             get
             {
                 var director = drone != null && drone.director != null ? drone.director : MissionDirector.Active;
-                if (director == null || director.Players.Count == 0 || director.Players[0] == null) return null;
-                return director.Players[0].voice;
+                // It only ever hears, and repeats, the player wearing this headset.
+                var local = director != null ? director.LocalPlayer : null;
+                return local != null ? local.voice : null;
             }
         }
 

@@ -48,6 +48,17 @@ namespace TrashAstronauts.Core
             return IsDepleted;
         }
 
+        /// <summary>
+        /// Sets the supply directly (a client mirroring the host's tank). Raises <see cref="LevelChanged"/>
+        /// if that crosses a warning threshold, in either direction. Setting the same value twice is harmless.
+        /// </summary>
+        public void SetRemaining(float seconds)
+        {
+            if (float.IsNaN(seconds)) return;
+            Remaining = Math.Max(0f, Math.Min(Capacity, seconds));
+            UpdateLevel();
+        }
+
         void UpdateLevel()
         {
             OxygenWarningLevel next;

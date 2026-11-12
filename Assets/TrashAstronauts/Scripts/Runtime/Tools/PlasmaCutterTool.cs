@@ -145,7 +145,7 @@ namespace TrashAstronauts.Tools
                 m_NoiseTimer = tuning.cuttingNoiseInterval;
                 director.noise.Emit(new NoiseEvent(tipPosition,
                     IsCutting ? tuning.cuttingLoudness : tuning.cutterIdleLoudness,
-                    NoiseKind.Cutting, player != null ? player.Id : PlayerId.Local));
+                    NoiseKind.Cutting, player != null ? player.Id : director.LocalPlayerId));
             }
         }
 

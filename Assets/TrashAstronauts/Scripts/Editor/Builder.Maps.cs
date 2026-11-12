@@ -256,6 +256,7 @@ namespace TrashAstronauts.EditorTools
             wire.endA = endA.transform;
             wire.endB = endB.transform;
             wire.visual = visual.gameObject;
+            s_Tripwires.Add(wire);
         }
 
         static Mesh s_SpiderlingMesh;
@@ -296,6 +297,7 @@ namespace TrashAstronauts.EditorTools
             s_Loose = Empty(root, "Loose Props", Vector3.zero).transform;
             s_SpawnPoints.Clear();
             s_Cuttables.Clear();
+            s_Tripwires.Clear();
             s_Waypoints.Clear();
             s_WreckLights.Clear();
             s_WreckGlow.Clear();
@@ -311,6 +313,7 @@ namespace TrashAstronauts.EditorTools
         {
             map.spawnPoints = s_SpawnPoints.ToArray();
             map.cuttables = s_Cuttables.ToArray();
+            map.tripwires = s_Tripwires.ToArray();
             map.doors = doors;
             map.creatureDoors = doors;
             map.dock = dock;
@@ -432,6 +435,7 @@ namespace TrashAstronauts.EditorTools
             map.blurb = "One long spine corridor with rooms off each side.";
             map.spawnPoints = s_SpawnPoints.ToArray();
             map.cuttables = s_Cuttables.Where(c => c != practice).ToArray();
+            map.tripwires = s_Tripwires.ToArray();
             map.doors = new[] { reactorDoor };
             map.creatureDoors = new[] { reactorDoor };
             map.dock = dock;

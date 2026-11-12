@@ -68,7 +68,7 @@ namespace TrashAstronauts.UI
         PlayerContext PlayerFor(HandRig hand)
         {
             if (hand != null && hand.Player != null) return hand.Player;
-            return director != null && director.Players.Count > 0 ? director.Players[0] : null;
+            return director != null ? director.LocalPlayer : null;
         }
 
         void OnHeightUp(PushButton b, HandRig hand) => ChangeHeight(heightStep);

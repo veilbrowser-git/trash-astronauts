@@ -105,8 +105,10 @@ namespace TrashAstronauts.UI
 
         void HookPlayer()
         {
-            if (m_Player != null || director == null || director.Players.Count == 0) return;
-            m_Player = director.Players[0];
+            if (m_Player != null || director == null) return;
+            var local = director.LocalPlayer;
+            if (local == null) return;
+            m_Player = local;
             m_ZeroG = m_Player.locomotion != null ? m_Player.locomotion.zeroG : null;
             if (m_ZeroG != null)
             {

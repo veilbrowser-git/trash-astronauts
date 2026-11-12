@@ -60,7 +60,7 @@ namespace TrashAstronauts.World
             var director = MissionDirector.Active;
             if (director != null && director.noise != null)
                 director.noise.Emit(new NoiseEvent(transform.position, loudness, NoiseKind.Impact,
-                    hand != null && hand.Player != null ? hand.Player.Id : PlayerId.Local));
+                    hand != null && hand.Player != null ? hand.Player.Id : director.LocalPlayerId));
             return true;
         }
 
