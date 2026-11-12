@@ -10,13 +10,15 @@ janitor finds you.
 
 ## Download
 
-**[Download TrashAstronauts.apk](https://github.com/veilbrowser-git/trash-astronauts/raw/builds/TrashAstronauts.apk)** (version 0.12.0, about 58 MB, Meta Quest 3 / 3S)
+**[Download TrashAstronauts.apk](https://github.com/veilbrowser-git/trash-astronauts/raw/builds/TrashAstronauts.apk)** (version 0.12.1, about 58 MB, Meta Quest 3 / 3S)
 
 That one file is the whole game. To install it:
 
 1. Turn on **Developer Mode** for your headset in the Meta Horizon phone app (required for any app that is not from the Meta store).
 2. Connect the headset to a computer by USB and install the APK with [Meta Quest Developer Hub](https://developers.meta.com/horizon/documentation/unity/ts-mqdh/), SideQuest, or `adb install -r TrashAstronauts.apk`.
 3. In the headset, open the app library and look under **Unknown Sources**.
+
+Version 0.12.1 fixes two problems a review found in 0.12.0. The pickup pull no longer steals your grip: with your palm on a rail or wall you grab the rail, and a squeeze during a swim stroke stays a stroke. Thrown salvage no longer jumps or slides backwards when the host takes it over; it keeps flying forward on every headset. No new features.
 
 Version 0.12.0 finishes the co-op basics. **Every player can grab, carry, throw, catch and deposit salvage**: the item is in your hand the moment you grab it, and when one player lets go another can take it. **Picking things up is easier** everywhere: the grab reaches a little past your fingertips, and an open empty hand pointed at salvage within about a metre highlights it; squeeze and it comes to your palm. A **helmet lamp** is for sale in the company store (250 cr): a wide soft light with its own battery, switched from the wrist or by tapping the side of your helmet, and visible to your crew. A flashlight that could relight during the jumpscare when caught right as a chase began now stays dark as intended; the jumpscare is otherwise unchanged. Everything from 0.11.x is included (online play, shared contracts, the co-op spider, voice chat, visible tools, suit colours). The new parts have been tested with simulated players and controllers only.
 
@@ -63,7 +65,7 @@ Version 0.4.0 put one of three different creatures aboard at random each contrac
 Version 0.3.0 moved the grab point into the palm, made swimming work with open hands, made hands and walls solid, quieted the creature and gave it a jumpscare, and added a shop, a tranquilizer, random blackouts, a map art pass and experimental hand tracking. Versions 0.2.0 and 0.3.0 were played on a Quest by the project owner.
 
 > **Verification status, read this first.** The project compiles, the scene and all assets are
-> generated, 635 automated tests pass in the Unity editor on macOS, and a Quest APK builds
+> generated, 641 automated tests pass in the Unity editor on macOS, and a Quest APK builds
 > (`Builds/Quest/TrashAstronauts.apk`). It has **not** been installed or run on a headset. Comfort,
 > hand/controller alignment, text legibility in the headset, haptic strength and frame rate are all
 > **unverified on hardware**. See [What was and was not tested](#what-was-and-was-not-tested).
