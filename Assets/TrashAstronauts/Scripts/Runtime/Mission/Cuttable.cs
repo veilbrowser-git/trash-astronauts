@@ -32,6 +32,16 @@ namespace TrashAstronauts.Mission
 
         public bool IsOpen { get; private set; }
         public event Action<Cuttable> Opened;
+        /// <summary>
+        /// One weld of a contract panel finished here (panel, index in <see cref="cutPoints"/>, who), by this
+        /// machine's cutter or by <see cref="ApplyRemotePointCut"/>. Not raised for training panels or for the
+        /// welds that <see cref="ApplyOpened()"/> burns through on its own. A co-op host tells the crew.
+        /// </summary>
+        public event Action<Cuttable, int, PlayerId> PointCut;
+        /// <summary>The velocity change the plate was given when it last came off (what a co-op host sends).</summary>
+        public Vector3 LastPlateImpulse { get; private set; }
+        /// <summary>The angular velocity change the plate was given when it last came off.</summary>
+        public Vector3 LastPlateTorque { get; private set; }
 
         public int CutCount
         {
@@ -83,16 +93,60 @@ namespace TrashAstronauts.Mission
             if (by != null) by.DominantHand?.Pulse(0.7f, 0.08f);
             RefreshLabel();
 
-            if (CutCount < TotalCuts) return;
-
             var director = MissionDirector.Active;
             PlayerId playerId = by != null ? by.Id : director != null ? director.LocalPlayerId : PlayerId.Local;
+            if (!isTraining)
+            {
+                int index = System.Array.IndexOf(cutPoints, point);
+                PointCut?.Invoke(this, index, playerId);
+                if (director != null && director.Net != null && director.Net.IsClient)
+                {
+                    // The burn shows at once here; the host books the weld and opens the panel for everyone.
+                    director.Net.ReportPointCut(this, index);
+                    return;
+                }
+            }
+
+            if (CutCount < TotalCuts) return;
+
             if (director != null) director.RequestOpenPanel(this, playerId);
             else ApplyOpened();
         }
 
+        /// <summary>
+        /// A weld finished on another machine (the host's word). Burns it through here with no judging.
+        /// Returns false if it was already through, out of range, or the panel is open.
+        /// </summary>
+        public bool ApplyRemotePointCut(int index, PlayerId by)
+        {
+            if (IsOpen || cutPoints == null || index < 0 || index >= cutPoints.Length) return false;
+            var point = cutPoints[index];
+            if (point == null || point.IsCut) return false;
+            point.ForceCut();
+            RefreshLabel();
+            if (!isTraining) PointCut?.Invoke(this, index, by);
+            return true;
+        }
+
         /// <summary>Presentation of the opened state. Only the mission director (or a training panel) calls this.</summary>
         public void ApplyOpened()
+        {
+            if (IsOpen) return;
+            // The plate's push is rolled here, in the same order as always; a co-op client is sent the host's.
+            Vector3 impulse = Vector3.zero, torque = Vector3.zero;
+            if (plate != null)
+            {
+                impulse = transform.forward * 0.6f + UnityEngine.Random.insideUnitSphere * 0.15f;
+                torque = UnityEngine.Random.insideUnitSphere * 0.4f;
+            }
+            ApplyOpened(impulse, torque);
+        }
+
+        /// <summary>
+        /// The opened state with a given push for the plate (velocity change and angular velocity change),
+        /// so the plate leaves the same way on every machine. Applying it to an open panel does nothing.
+        /// </summary>
+        public void ApplyOpened(Vector3 plateImpulse, Vector3 plateTorque)
         {
             if (IsOpen) return;
             IsOpen = true;
@@ -115,8 +169,10 @@ namespace TrashAstronauts.Mission
                 GameLayers.SetLayerRecursively(plate.gameObject, GameLayers.Salvage);
                 plate.isKinematic = false;
                 plate.useGravity = false;
-                plate.AddForce(transform.forward * 0.6f + UnityEngine.Random.insideUnitSphere * 0.15f, ForceMode.VelocityChange);
-                plate.AddTorque(UnityEngine.Random.insideUnitSphere * 0.4f, ForceMode.VelocityChange);
+                plate.AddForce(plateImpulse, ForceMode.VelocityChange);
+                plate.AddTorque(plateTorque, ForceMode.VelocityChange);
+                LastPlateImpulse = plateImpulse;
+                LastPlateTorque = plateTorque;
             }
 
             if (Sfx.Library != null) Sfx.PlayAt(Sfx.Library.panelBreak, transform.position, 1f);
