@@ -48,6 +48,17 @@ namespace TrashAstronauts.Net
         /// <summary>The host's own grabs the session refused (someone else had it), cancelled without a release.</summary>
         public int LocalGrabsRefused { get; private set; }
 
+        /// <summary>
+        /// Seconds a datagram takes from a crew member to the host (half the session's measured round trip). Null or
+        /// NaN: <see cref="DefaultOneWaySeconds"/>. NetSession sets it.
+        /// </summary>
+        public Func<byte, double> OneWayLatency;
+        public const double DefaultOneWaySeconds = 0.05;
+        /// <summary>How long the host's copy of a handed-back flying item takes to catch up with where it really is.</summary>
+        public const float CatchUpSeconds = 0.3f;
+        /// <summary>Hand-backs taken over with a catch-up (no snap) so far.</summary>
+        public int CatchUps { get; private set; }
+
         public CoopItemHost(MissionDirector director, ICoopBroadcast broadcast)
         {
             m_Director = director ?? throw new ArgumentNullException(nameof(director));
@@ -152,10 +163,27 @@ namespace TrashAstronauts.Net
             }
             // The host's own hand just took it out of a client's flight (LocalGrab): it is already where the hand has it.
             bool inHand = item.grab != null && item.grab.isSelected;
+            Vector3 velocity = ToUnity(returned.linearVelocity);
+            Vector3 catchUp = Vector3.zero;
             if (returned.hasPose && !inHand)
             {
                 Vector3 position = ToUnity(returned.position);
                 Quaternion rotation = ToUnity(returned.rotation);
+                // A flight handed back while still moving: the pose is as old as the trip here, and the copy shown here
+                // was drawn further behind still. Take over from where it is drawn and catch up with where it really is
+                // now (the pose advanced by the trip) over a moment, so nobody sees it jump or go backwards.
+                Vector3 drawn = item.transform.position;
+                double oneWay = OneWayLatency != null ? OneWayLatency(returned.fromSlot) : double.NaN;
+                if (double.IsNaN(oneWay) || oneWay < 0 || oneWay > 1.0) oneWay = DefaultOneWaySeconds;
+                Vector3 now = position + velocity * (float)oneWay;
+                Vector3 gap = now - drawn;
+                bool flying = returned.cause == ItemReturnCause.Handoff && velocity.magnitude > 0.2f;
+                if (flying && gap.magnitude < 3f && Vector3.Dot(gap, velocity) > -0.05f)
+                {
+                    position = drawn;
+                    catchUp = gap / CatchUpSeconds;
+                    CatchUps++;
+                }
                 item.transform.SetPositionAndRotation(position, rotation);
                 item.Body.position = position;
                 item.Body.rotation = rotation;
@@ -163,8 +191,9 @@ namespace TrashAstronauts.Net
             item.SetSimulatedHere(true);
             if (!inHand && !item.Body.isKinematic)
             {
-                item.Body.linearVelocity = ToUnity(returned.linearVelocity);
+                item.Body.linearVelocity = velocity + catchUp;
                 item.Body.angularVelocity = ToUnity(returned.angularVelocity);
+                if (catchUp != Vector3.zero) HandbackCatchUp.Begin(item.Body, catchUp, CatchUpSeconds);
             }
         }
 

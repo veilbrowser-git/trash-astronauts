@@ -42,6 +42,8 @@ namespace TrashAstronauts.Core.Net
         public const double ConnectTimeoutSeconds = 5.0;
         /// <summary>An item owned by a client but not held is taken back by the host after this long without a handoff.</summary>
         public const double ItemBackstopSeconds = 3.0;
+        /// <summary>A released item whose flight is not handed back within this long is taken back (longer than the 3 s flight window).</summary>
+        public const double ItemFlightBackstopSeconds = 4.5;
 
         public const int MaxNoisePerSecond = 8;
         public const int MaxItemPosesPerDatagram = 12;

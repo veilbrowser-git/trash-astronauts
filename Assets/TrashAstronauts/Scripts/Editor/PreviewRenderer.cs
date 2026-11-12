@@ -342,11 +342,14 @@ namespace TrashAstronauts.EditorTools
                 if (p.wave)
                 {
                     s.flags |= TrashAstronauts.Core.Net.AvatarFlags.HeadLampOn;
-                    s.leftTool = TrashAstronauts.Net.AvatarSampler.Flashlight;
+                    // The flashlight is in the raised (waving) hand, where the close-up sees it.
+                    s.rightTool = TrashAstronauts.Net.AvatarSampler.Flashlight;
+                    s.rightGripCurl = 1f;
+                    s.rightIndexCurl = 1f;
                 }
                 remote.Apply(in s);
                 remote.leftGlove.Apply(s.leftIndexCurl, s.leftGripCurl);
-                remote.rightGlove.Apply(0f, 0f);
+                remote.rightGlove.Apply(p.wave ? 1f : 0f, p.wave ? 1f : 0f);
                 // The waving one is talking (voice chat's helmet light); the other wears a chosen suit colour .
                 if (p.wave)
                 {

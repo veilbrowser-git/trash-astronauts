@@ -49,6 +49,7 @@ namespace TrashAstronauts.Tests
         public void TearDown()
         {
             Time.captureDeltaTime = 0f;
+            CoopItemReplica.LinkLatency = 0.05;
             if (m_Hands != null) m_Hands.Dispose();
             m_Hands = null;
             if (m_Rig != null) m_Rig.Dispose();
@@ -157,6 +158,94 @@ namespace TrashAstronauts.Tests
         }
 
         // ================================================================== tests
+
+        /// <summary>
+        /// The reviewer's rubber band, thrower side, on a 150 ms link each way: this headset's throw is handed back
+        /// while still flying. Here it never goes backwards along the throw (it keeps flying on its own path until
+        /// the host's stream comes, then glides onto that stream drawn as far ahead as it lags), and once the lead
+        /// has faded it is plain playback of the host's stream.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator Client_AThrowHandedBackOverA150MsLink_NeverGoesBackwards_AndSettlesOntoTheHostsStream()
+        {
+            const double oneWay = 0.15;
+            yield return ClientWithCrew(oneWay);
+            CoopItemReplica.LinkLatency = oneWay; // what NetSession sets from the measured round trip
+            var item = Loose(1)[0];
+            byte id = (byte)item.NetIndex;
+            var sync = item.GetComponent<ItemSync>();
+            Vector3 at = Spot + new Vector3(0f, 0.25f, 0.3f);
+            yield return Grab(item, at);
+            yield return Until(() => !sync.Authority.Pending, 1f, "the grant");
+            Assert.IsTrue(CoopFlightSpace.TryOpenDirection(item, item.transform.position, 2.4f, out Vector3 dir), "Need 2.4 m of open space from " + at.ToString("F2"));
+            Vector3 v = dir * 0.8f;
+
+            // Let go, the hand drawn back out of the way, and the item flying on along dir.
+            SimHands.SetGrip(m_Hands.Right, false);
+            yield return Until(() => !item.IsHeld, 1f, "the release");
+            SimHands.Place(m_Hands.Right, at - dir * 0.4f + Vector3.down * 0.2f);
+            Assert.IsTrue(item.SimulatedHere && !item.Body.isKinematic, "Flown here.");
+            // (Over the next few physics steps, so XRI's throw on detach from a still hand does not undo it.)
+            for (int i = 0; i < 4; i++)
+            {
+                item.Body.linearVelocity = v;
+                item.Body.angularVelocity = Vector3.zero;
+                yield return new WaitForFixedUpdate();
+            }
+            Assert.AreEqual(0, m_Rig.Count("handoff " + id), "Not handed back yet: it is flying.");
+            Vector3 start = item.transform.position;
+            yield return Seconds(0.6f);
+            Assert.Greater(Vector3.Dot(item.Body.linearVelocity, dir), 0.6f, "Still flying along " + dir.ToString("F2") + " before the hand-back: "
+                + item.Body.linearVelocity.ToString("F2") + " at " + item.transform.position.ToString("F2") + " from " + start.ToString("F2")
+                + ", simulated here " + item.SimulatedHere + ", kinematic " + item.Body.isKinematic + ", sent " + string.Join(", ", m_Rig.Sent));
+            // Skip ahead to the end of the hand-back window (3 s), mid-flight.
+            var clock = m_Director.ItemClient.Clock;
+            m_Director.ItemClient.Clock = () => Time.unscaledTimeAsDouble + ItemAuthority.HandbackMaxSeconds;
+            try
+            {
+                var replica = CoopItemReplica.For(item);
+                int moving = replica.MovingHandbacks;
+                float along = Vector3.Dot(item.transform.position - start, dir), worstBack = 0f;
+                double arrivedAt = -1, returnedHere = -1;
+                Vector3 handedPos = Vector3.zero, handedV = Vector3.zero;
+                Func<double, Vector3> host = t => handedPos + handedV * (float)(t - arrivedAt + oneWay);
+                float worstOff = 0f;
+                double loopStart = m_Rig.Now;
+                while (true)
+                {
+                    double now = m_Rig.Now;
+                    if (arrivedAt < 0 && m_Rig.Scripted.Returns.Count > 0)
+                    {
+                        // The host has it: from here it simulates it, from the pose advanced by the trip, and streams it.
+                        var back = m_Rig.Scripted.Returns[m_Rig.Scripted.Returns.Count - 1];
+                        Assert.AreEqual(ItemReturnCause.Handoff, back.cause);
+                        handedPos = ToUnity(back.position);
+                        handedV = ToUnity(back.linearVelocity);
+                        arrivedAt = now;
+                    }
+                    if (arrivedAt >= 0) m_Rig.Host.QueueItemPose(id, ToNet(host(now)), NetQuat.Identity, false, false);
+                    yield return null;
+                    float x = Vector3.Dot(item.transform.position - start, dir);
+                    if (x < along) worstBack = Mathf.Max(worstBack, along - x);
+                    along = Mathf.Max(along, x);
+                    if (returnedHere < 0 && !item.SimulatedHere) returnedHere = m_Rig.Now;
+                    if (returnedHere >= 0 && m_Rig.Now - returnedHere > 0.3) worstOff = Mathf.Max(worstOff, Vector3.Distance(item.transform.position, host(m_Rig.Now)));
+                    if (returnedHere >= 0 && m_Rig.Now - returnedHere > 1.6) break;
+                    Assert.Less(m_Rig.Now - loopStart, 3.0, "the host taking it back");
+                }
+                Assert.AreEqual(1, m_Rig.Count("handoff " + id));
+                Assert.Greater(Vector3.Dot(handedV, dir), 0.6f, "Handed back mid-flight, with its velocity: " + handedV.ToString("F2"));
+                Assert.AreEqual(moving + 1, replica.MovingHandbacks, "Handed back moving: the forward glide.");
+                Assert.LessOrEqual(worstBack, 0.003f, "Never drawn going backwards along its throw (worst step back " + worstBack.ToString("F4") + " m).");
+                Assert.Less(worstOff, 0.3f, "Never far from where the host really has it.");
+                // The lead has faded: plain playback of the host's stream, as far behind as the link and the delay.
+                Vector3 playback = host(m_Rig.Now - oneWay - CoopItemReplica.Delay);
+                Assert.Less(Vector3.Distance(item.transform.position, playback), 0.05f, "Settled onto the host's stream: off by "
+                    + (item.transform.position - playback).ToString("F3"));
+                Assert.IsTrue(item.Body.isKinematic);
+            }
+            finally { m_Director.ItemClient.Clock = clock; }
+        }
 
         [UnityTest]
         public IEnumerator Client_With150msLatency_AGrabIsInTheHandTheSameFrame_TheGrantLandsWithoutAJump_AndItsPoseIsStreamed()
@@ -332,9 +421,9 @@ namespace TrashAstronauts.Tests
             Assert.IsTrue(item.SimulatedHere, "Flown here.");
             Assert.IsFalse(item.Body.isKinematic);
             int posesInFlight = m_Rig.PosesQueued;
-            yield return Until(() => m_Rig.Count("handoff " + id) == 1, 2f, "the handoff");
+            yield return Until(() => m_Rig.Count("handoff " + id) == 1, 3.5f, "the handoff");
             float handedAt = Time.unscaledTime;
-            Assert.LessOrEqual(handedAt - releasedAt, (float)ItemAuthority.HandbackMaxSeconds + 0.15f, "Flown here for at most 1.5 s.");
+            Assert.LessOrEqual(handedAt - releasedAt, (float)ItemAuthority.HandbackMaxSeconds + 0.15f, "Flown here for at most 3 s.");
             Assert.Greater(m_Rig.PosesQueued, posesInFlight, "Its flight was streamed.");
             yield return Until(() => !item.SimulatedHere, 1f, "the host taking it back");
             Assert.IsTrue(m_Rig.Events.Contains(ItemAuthorityEvent.Returned));
@@ -411,7 +500,7 @@ namespace TrashAstronauts.Tests
             // The reverse: this player lets go (no throw); the hand-back follows; B grabs it and carries it.
             yield return SimHands.Grip(m_Hands.Right, false);
             Assert.AreEqual(1, m_Rig.Count("released " + id));
-            yield return Until(() => sync.Authority.Mode == ItemMode.HostFree, 2f, "the hand-back");
+            yield return Until(() => sync.Authority.Mode == ItemMode.HostFree, 3.5f, "the hand-back (slow for 0.3 s, or at most 3 s)");
             Assert.AreEqual(1, m_Rig.Count("handoff " + id));
             Vector3 dropped = item.transform.position;
             yield return Until(() => B.Item(id).Mode == ItemMode.HostFree, 1f, "B sees it free");

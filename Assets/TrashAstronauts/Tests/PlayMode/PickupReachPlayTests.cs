@@ -577,6 +577,122 @@ namespace TrashAstronauts.Tests
             yield return Grip(m_Right, false, 4);
         }
 
+        /// <summary>Floats an item weightless in the ship at <paramref name="at"/>, still.</summary>
+        IEnumerator FloatAt(SalvageItem item, Vector3 at)
+        {
+            item.Body.linearVelocity = Vector3.zero;
+            item.Body.angularVelocity = Vector3.zero;
+            item.transform.position = at;
+            item.Body.position = at;
+            Physics.SyncTransforms();
+            yield return Settle(2);
+            item.Body.linearVelocity = Vector3.zero;
+            item.Body.angularVelocity = Vector3.zero;
+        }
+
+        /// <summary>
+        /// The palm within ZeroGLocomotion's grab reach of a surface (0.15 m: inside its 0.22 m, outside the assist's
+        /// old 0.1 m touch) with an item 0.7 m ahead: the squeeze is a hold on the surface, never the item.
+        /// </summary>
+        IEnumerator SqueezeBeside(GameObject surface, Vector3 palm, SalvageItem item)
+        {
+            var zeroG = m_Player.locomotion.zeroG;
+            Physics.SyncTransforms();
+            Assert.Greater(zeroG.grabReach, 0.15f, "The test needs the palm inside the zero-g grab reach.");
+            yield return MoveTo(m_Right, palm, Vector3.forward);
+            yield return FloatAt(item, palm + Vector3.forward * 0.7f);
+            yield return Settle(14); // steady
+            Assert.IsTrue(m_Right.hand.Reach.IsSteady);
+            Assert.IsNull(m_Right.hand.Reach.Candidate, "Within grab reach of " + surface.name + ", an item 0.7 m away is not offered." + Report(m_Right, item));
+            Assert.IsFalse(m_Right.hand.Reach.ClaimsGrip);
+            int assisted = m_Right.hand.Reach.AssistedGrabs;
+            yield return Grip(m_Right, true, 6);
+            Assert.IsTrue(zeroG.IsHandAnchored(m_Right.hand), "The squeeze holds on to " + surface.name + "." + Report(m_Right, item));
+            Assert.AreEqual(assisted, m_Right.hand.Reach.AssistedGrabs, "The assist did not take the squeeze.");
+            Assert.IsFalse(item.IsHeld || m_Right.hand.Reach.IsPulling, "The item stays where it floats." + Report(m_Right, item));
+            yield return Grip(m_Right, false, 4);
+            Assert.IsFalse(zeroG.IsHandAnchored(m_Right.hand));
+
+            // Bring the item within the yield distance: then it is the item that is taken.
+            yield return FloatAt(item, palm + Vector3.forward * 0.3f);
+            yield return Settle(14);
+            Assert.AreSame(item, m_Right.hand.Reach.Candidate, "An item right at the hand is still offered beside " + surface.name + "." + Report(m_Right, item));
+            yield return Grip(m_Right, true, 40);
+            Assert.IsTrue(item.IsHeld, "...and taken." + Report(m_Right, item));
+            Assert.IsFalse(zeroG.IsHandAnchored(m_Right.hand));
+            yield return Grip(m_Right, false, 4);
+        }
+
+        [UnityTest]
+        public IEnumerator ReachAssist_NeverStealsARailGrab_WithinTheZeroGGrabReach()
+        {
+            yield return StandInShip();
+            var item = Kind("elec_nav_board");
+            ClearAround(item);
+            Vector3 palm = At(0.25f, 1.0f, 0.4f);
+            // A grab rail 0.15 m above the palm (surface to palm), running across.
+            var rail = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            rail.name = "a rail";
+            rail.layer = GameLayers.Rail;
+            rail.transform.SetPositionAndRotation(palm + Vector3.up * 0.17f, Quaternion.Euler(0f, 0f, 90f));
+            rail.transform.localScale = new Vector3(0.04f, 0.3f, 0.04f);
+            try { yield return SqueezeBeside(rail, palm, item); }
+            finally { Object.Destroy(rail); }
+        }
+
+        [UnityTest]
+        public IEnumerator ReachAssist_NeverStealsAWallGrab_WithinTheZeroGGrabReach()
+        {
+            yield return StandInShip();
+            var item = Kind("elec_nav_board");
+            ClearAround(item);
+            Vector3 palm = At(0.25f, 1.0f, 0.4f);
+            // A wall 0.15 m to the right of the palm, running along the reach.
+            var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            wall.name = "a wall";
+            wall.layer = GameLayers.Environment;
+            wall.transform.position = palm + Vector3.right * 0.17f + Vector3.forward * 0.3f;
+            wall.transform.localScale = new Vector3(0.04f, 0.6f, 1.2f);
+            try { yield return SqueezeBeside(wall, palm, item); }
+            finally { Object.Destroy(wall); }
+        }
+
+        [UnityTest]
+        public IEnumerator ReachAssist_ASwimStrokeSweepingPastAnItem_PaddlesAndNeverSnatchesIt()
+        {
+            yield return StandInShip();
+            var zeroG = m_Player.locomotion.zeroG;
+            var item = Kind("elec_nav_board");
+            ClearAround(item);
+            zeroG.Stop();
+            Vector3 open = At(0.25f, 1.1f, 0.5f);
+            yield return MoveTo(m_Right, open, Vector3.forward);
+            yield return FloatAt(item, open + Vector3.forward * 0.6f);
+            yield return Settle(14);
+            Assert.AreSame(item, m_Right.hand.Reach.Candidate, "Held still and pointing, the item is offered." + Report(m_Right, item));
+            Assert.IsTrue(m_Right.hand.Reach.ClaimsGrip);
+
+            // A stroke: the hand sweeps back at about 2 m/s and closes on the way, the item still in front of it.
+            int assisted = m_Right.hand.Reach.AssistedGrabs;
+            int sweeps = m_Right.hand.Reach.SweepsIgnored;
+            float before = zeroG.SwimSpeedGained;
+            Vector3 hand = open;
+            for (int i = 0; i < 16; i++)
+            {
+                hand += Vector3.back * 0.03f;
+                Place(m_Right, hand, Vector3.forward);
+                if (i == 5) SetGrip(m_Right, true);
+                if (i == 3) Assert.IsFalse(m_Right.hand.Reach.ClaimsGrip, "A sweeping hand does not claim the squeeze.");
+                yield return new WaitForFixedUpdate();
+                yield return null;
+            }
+            Assert.AreEqual(assisted, m_Right.hand.Reach.AssistedGrabs, "The stroke went past the item without taking it." + Report(m_Right, item));
+            Assert.IsFalse(item.IsHeld || m_Right.hand.Reach.IsPulling, "Nothing is pulled." + Report(m_Right, item));
+            Assert.Greater(m_Right.hand.Reach.SweepsIgnored, sweeps, "The squeeze happened with the item shown, and was left to the stroke.");
+            Assert.Greater(zeroG.SwimSpeedGained, before + 0.05f, "The gripped stroke paddles the player along.");
+            yield return Grip(m_Right, false, 4);
+        }
+
         [UnityTest]
         public IEnumerator ReachAssist_IsOff_WhileTheHandHoldsATool()
         {

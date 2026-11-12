@@ -57,7 +57,7 @@ namespace TrashAstronauts.Core.Net
     {
         public const float HandbackSpeed = 0.25f;
         public const double HandbackSlowSeconds = 0.3;
-        public const double HandbackMaxSeconds = 1.5;
+        public const double HandbackMaxSeconds = 3.0; // most throws hit something or are caught before this; a later hand-back means fewer corrections
         public const double BlendSeconds = 0.2;
 
         readonly byte m_ItemId;

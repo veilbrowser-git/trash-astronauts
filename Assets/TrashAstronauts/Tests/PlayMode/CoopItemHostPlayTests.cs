@@ -443,7 +443,7 @@ namespace TrashAstronauts.Tests
             Vector3 last = items[0].transform.position + new Vector3(0.3f, 0.2f, 0f);
             yield return BotCarries(a, first, items[0].transform.position, last, 0.3f);
             Assert.IsTrue(m_Rig.BotRelease(a, first, last, last));
-            yield return Until(() => m_Rig.Count("returned " + first + " Backstop") == 1, 4.5f, "the 3 s backstop");
+            yield return Until(() => m_Rig.Count("returned " + first + " Backstop") == 1, 6f, "the 4.5 s backstop");
             Assert.IsTrue(items[0].SimulatedHere);
             Assert.IsFalse(items[0].IsHeld);
             Assert.IsFalse(items[0].Body.isKinematic);
@@ -465,6 +465,72 @@ namespace TrashAstronauts.Tests
             yield return Until(() => !b.Item(second).Pending, 2f, "the answer");
             Assert.AreNotEqual(ItemMode.Mine, b.Item(second).Mode);
             Assert.IsFalse(items[1].IsHeld);
+        }
+
+        /// <summary>
+        /// The reviewer's rubber band, host side, on a 150 ms link each way: a crew member's throw is handed back
+        /// while still flying. The host never draws it going backwards along its throw (it takes over from where
+        /// it was drawn and catches up with where it really is: the handed-back pose advanced by the trip), and
+        /// after the catch-up it flies on the thrower's path, with the thrower's velocity.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator AThrowHandedBackOverA150MsLink_NeverGoesBackwardsOnTheHost_AndCarriesOnAlongItsPath()
+        {
+            yield return HostWithCrew(1);
+            const double oneWay = 0.15;
+            m_Rig.Hub.Latency = oneWay;
+            m_Rig.Items.OneWayLatency = _ => oneWay;
+            var a = m_Rig.Bots[0];
+            var item = Loose(1)[0];
+            byte id = (byte)item.NetIndex;
+            Vector3 start = m_Player.HeadPosition + new Vector3(0f, 0.2f, 0.9f);
+            PlaceItem(item, start);
+            Assert.IsTrue(CoopFlightSpace.TryOpenDirection(item, start, 2.6f, out Vector3 dir), "Need 2.6 m of open space from " + start.ToString("F2"));
+            Vector3 v = dir * 0.8f;
+            yield return Frames(2);
+            yield return BotTakes(a, item);
+
+            // A's flight: released and thrown here, streamed as it flies on A's machine (the truth).
+            Assert.IsTrue(m_Rig.BotRelease(a, id, start, start));
+            m_Rig.BotThrown(a, id, v);
+            double t0 = m_Rig.Now;
+            Func<double, Vector3> truth = t => start + v * (float)(t - t0);
+            float along = float.NegativeInfinity, worstBack = 0f;
+            int catchUps = m_Rig.Items.CatchUps;
+            bool handed = false;
+            double handedAt = 0, returnedAt = -1;
+            while (true)
+            {
+                double now = m_Rig.Now;
+                if (!handed)
+                {
+                    m_Rig.BotPose(a, id, truth(now));
+                    if (now - t0 >= 1.0)
+                    {
+                        Assert.IsTrue(m_Rig.BotHandoff(a, id, truth(now), v), "A's hand-back timer runs out mid-flight.");
+                        handed = true;
+                        handedAt = now;
+                    }
+                }
+                if (returnedAt < 0 && m_Rig.Count("returned " + id + " Handoff") == 1) returnedAt = now;
+                yield return null;
+                if (m_Rig.Now - t0 > 0.3)
+                {
+                    float x = Vector3.Dot(item.transform.position - start, dir);
+                    if (x < along) worstBack = Mathf.Max(worstBack, along - x);
+                    along = Mathf.Max(along, x);
+                }
+                if (returnedAt >= 0 && m_Rig.Now - returnedAt > 0.8) break;
+                Assert.Less(m_Rig.Now - t0, 4.0, "the hand-back reaching the host");
+            }
+            Assert.Greater(returnedAt - handedAt, oneWay - 0.02, "The hand-back really took the trip.");
+            Assert.AreEqual(catchUps + 1, m_Rig.Items.CatchUps, "Taken over where it was drawn, catching up.");
+            Assert.LessOrEqual(worstBack, 0.003f, "Never drawn going backwards along its throw (worst step back " + worstBack.ToString("F4") + " m).");
+            Assert.IsTrue(item.SimulatedHere);
+            Assert.IsFalse(item.Body.isKinematic);
+            Vector3 off = item.transform.position - truth(m_Rig.Now);
+            Assert.Less(off.magnitude, 0.08f, "After the catch-up it is on the thrower's path: " + off.ToString("F3"));
+            Assert.Less(Vector3.Distance(item.Body.linearVelocity, v), 0.08f, "...flying with the thrower's velocity: " + item.Body.linearVelocity.ToString("F3"));
         }
 
         [UnityTest]

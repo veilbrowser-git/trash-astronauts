@@ -103,6 +103,8 @@ namespace TrashAstronauts.Core.Net
         public bool HostSilent { get; private set; }
         /// <summary>Reliable messages waiting to be acknowledged by the host.</summary>
         public int Backlog => m_Channel.Backlog;
+        /// <summary>Smoothed round trip to the host in seconds (NaN before the first sample).</summary>
+        public double RoundTripSeconds => m_Channel.RoundTripSeconds;
         public double Now => m_Now;
 
         /// <summary>The session takes ownership of <paramref name="transport"/> (bound to an ephemeral port) and disposes it in <see cref="Dispose"/>.</summary>
@@ -516,6 +518,7 @@ namespace TrashAstronauts.Core.Net
                 seq = m_Channel.NextSendSequence(),
                 timeMs = DatagramHeader.ToMs(m_Now),
             };
+            m_Channel.NoteSent(header.seq, m_Now);
             m_Channel.GetAck(out header.ack, out header.ackBits);
             header.Write(ref w);
             return header.seq;
@@ -631,6 +634,7 @@ namespace TrashAstronauts.Core.Net
                 m_World.OnHostSilent(false);
             }
             m_Channel.OnAck(header.ack, header.ackBits);
+            m_Channel.NoteAck(header.ack, m_Now);
 
             // Pass 2: reliable messages first. The host queued them before it sampled this datagram's streams
             // (ItemOwner with a new epoch comes before the first pose that carries that epoch).

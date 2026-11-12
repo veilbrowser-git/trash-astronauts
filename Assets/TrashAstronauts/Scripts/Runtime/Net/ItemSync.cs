@@ -214,8 +214,10 @@ namespace TrashAstronauts.Net
                 case ItemMode.HostFree:
                     if (m_Item.SimulatedHere)
                     {
+                        // Read the flight before the body goes kinematic: a hand-back mid-throw keeps it moving here.
+                        Vector3 velocity = m_Item.Body != null && !m_Item.Body.isKinematic ? m_Item.Body.linearVelocity : Vector3.zero;
                         m_Item.SetSimulatedHere(false);
-                        if (wasSimulated) CoopItemReplica.For(m_Item).Seed(transform.position, transform.rotation, Authority.Epoch);
+                        if (wasSimulated) CoopItemReplica.For(m_Item).Seed(transform.position, transform.rotation, Authority.Epoch, CoopItemReplica.BlendSeconds, velocity);
                     }
                     var holder = Authority.Mode == ItemMode.RemoteHeld ? new PlayerId(Authority.OwnerSlot) : PlayerId.None;
                     if (m_Item.RemoteHolder != holder) m_Item.SetRemoteHolder(holder);
