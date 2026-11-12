@@ -1074,7 +1074,12 @@ namespace TrashAstronauts.EditorTools
             var grabGo = Empty(go.transform, "Grab Interactor", new Vector3(0, -0.035f, -0.075f), null, GameLayers.Hand);
             var sphere = grabGo.AddComponent<SphereCollider>();
             sphere.isTrigger = true;
-            sphere.radius = 0.09f;
+            // The grab volume (XRI centres it on the attach point below, offset by sphere.center in that space):
+            // 11 cm, shifted forward and toward the palm side so it reaches a little past the fingertips and
+            // under the palm, where a reaching hand actually meets things. The old 9 cm sphere on the attach
+            // point stopped short of the fingertips, so a hand that visibly touched salvage could miss it.
+            sphere.radius = 0.11f;
+            sphere.center = new Vector3(s * 0.012f, -0.01f, 0.025f);
             // Tool handles go a little further forward, in the curl of the fingers.
             var attach = Empty(grabGo.transform, "Attach", new Vector3(0, 0, 0.03f), null, GameLayers.Hand);
             var interactor = grabGo.AddComponent<XRDirectInteractor>();
@@ -1089,6 +1094,10 @@ namespace TrashAstronauts.EditorTools
             interactor.physicsLayerMask = GameLayers.GrabbableMask;
             interactor.physicsTriggerInteraction = QueryTriggerInteraction.Collide;
             interactor.attachTransform = attach.transform;
+            // When the volume touches several things, the squeeze takes the one nearest the palm.
+            var nearest = grabGo.AddComponent<NearestGrabFilter>();
+            nearest.grabVolume = sphere;
+            interactor.startingTargetFilter = nearest;
 
             // Glove: the EVA glove modelled in Blender (build_hands.py), its finger segments following grip and
             // trigger. If the model files are missing, the old padded stand-in glove made of boxes is built instead.
@@ -1147,6 +1156,18 @@ namespace TrashAstronauts.EditorTools
             var buttons = go.AddComponent<HandButtonInteractor>();
             buttons.hand = hand;
             buttons.pointerLine = MakeLine(go.transform, "Pointer Line", 0.004f);
+
+            // Reach assist: an item on the floor or just out of reach glows, a faint line runs to it from the
+            // palm, and a squeeze brings it into the hand.
+            var reach = go.AddComponent<ReachAssist>();
+            reach.hand = hand;
+            reach.line = MakeLine(go.transform, "Reach Line", 0.003f);
+            reach.line.sharedMaterial = M("ReachLine");
+            var fade = new Gradient();
+            fade.SetKeys(new[] { new GradientColorKey(new Color(0.55f, 0.95f, 1f), 0f), new GradientColorKey(new Color(0.55f, 0.95f, 1f), 1f) },
+                new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(0.28f, 0.35f), new GradientAlphaKey(0.4f, 1f) });
+            reach.line.colorGradient = fade;
+            reach.line.widthCurve = new AnimationCurve(new Keyframe(0f, 0.6f), new Keyframe(1f, 1f));
             return hand;
         }
 

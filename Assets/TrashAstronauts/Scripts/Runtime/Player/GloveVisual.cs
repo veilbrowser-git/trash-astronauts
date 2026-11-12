@@ -114,6 +114,8 @@ namespace TrashAstronauts.Player
             if (hand == null) return;
             if (!m_Listening) OnEnable(); // hand assigned after enable (built at runtime)
             bool holding = hand.IsHolding;
+            // An item still travelling in from the reach assist is fitted once it has arrived in the palm.
+            if (holding && !m_HoldFitted && hand.Reach != null && hand.Reach.IsPulling) m_FitAt = Time.unscaledTime + graspDelay;
             if (holding && !m_HoldFitted && Time.unscaledTime >= m_FitAt)
             {
                 FitTo(m_HoldTarget != null ? m_HoldTarget.GetComponentsInChildren<Collider>() : null, false);
