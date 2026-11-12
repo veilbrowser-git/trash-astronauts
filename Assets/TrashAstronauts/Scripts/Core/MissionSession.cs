@@ -71,6 +71,30 @@ namespace TrashAstronauts.Core
 
         public bool IsFailure => Outcome == MissionOutcome.FailedOxygen || Outcome == MissionOutcome.FailedCaught;
         public bool QuotaMet => DepositedValue + TrickBonus >= Quota;
+
+        /// <summary>Co-op revive: how many times each crew slot was downed this contract (null offline and for a crew nobody was downed in).</summary>
+        public int[] CrewDowns;
+        /// <summary>Co-op revive: bit n = slot n was still downed when the crew extracted (brought home by the company).</summary>
+        public int LeftBehindMask;
+
+        public int DownsOf(int slot) => CrewDowns != null && slot >= 0 && slot < CrewDowns.Length ? CrewDowns[slot] : 0;
+        public bool WasLeftBehind(int slot) => slot >= 0 && slot < 31 && (LeftBehindMask & (1 << slot)) != 0;
+        public bool AnyRevivePenalty
+        {
+            get
+            {
+                if (LeftBehindMask != 0) return true;
+                if (CrewDowns == null) return false;
+                foreach (int d in CrewDowns) if (d > 0) return true;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// What crew slot <paramref name="slot"/> banks: the crew payout less that player's own revive penalties
+        /// (<see cref="ReviveRules"/>). A negative slot (single-player) is the payout itself.
+        /// </summary>
+        public int PayoutFor(int slot) => slot < 0 ? Payout : ReviveRules.PayoutFor(Payout, DownsOf(slot), WasLeftBehind(slot));
     }
 
     /// <summary>
@@ -292,12 +316,19 @@ namespace TrashAstronauts.Core
         /// Adds this run's payout to the profile exactly once. Returns the credits added (0 if already banked,
         /// not finished, or failed).
         /// </summary>
-        public int BankInto(ProfileService profile)
+        public int BankInto(ProfileService profile) => BankInto(profile, -1);
+
+        /// <summary>
+        /// As <see cref="BankInto(ProfileService)"/>, for crew slot <paramref name="slot"/>: that player's own share
+        /// after their revive penalties (<see cref="MissionResult.PayoutFor"/>). -1 = the whole payout (single-player).
+        /// </summary>
+        public int BankInto(ProfileService profile, int slot)
         {
             if (Phase != MissionPhase.Results || Result == null || Banked || profile == null) return 0;
             Banked = true;
-            profile.RecordRunFinished(Result.Payout, !Result.IsFailure);
-            return Result.Payout;
+            int payout = Result.PayoutFor(slot);
+            profile.RecordRunFinished(payout, !Result.IsFailure);
+            return payout;
         }
 
         /// <summary>Leaves the results screen and returns to the hub with no run state.</summary>
@@ -395,6 +426,8 @@ namespace TrashAstronauts.Core
                 Payout = Math.Max(0, result.Payout),
                 OxygenRemainingSeconds = result.OxygenRemainingSeconds,
                 ElapsedSeconds = result.ElapsedSeconds,
+                CrewDowns = result.CrewDowns != null ? (int[])result.CrewDowns.Clone() : null,
+                LeftBehindMask = result.LeftBehindMask,
             };
             SetPhase(MissionPhase.Results);
             Ended?.Invoke(Result);

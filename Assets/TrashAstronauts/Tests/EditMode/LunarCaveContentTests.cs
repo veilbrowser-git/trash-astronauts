@@ -70,8 +70,9 @@ namespace TrashAstronauts.Tests
                 + renderers.Length + " in all including text";
             Debug.Log("[LunarCave] Budget: " + summary);
             Assert.LessOrEqual(triangles, 120000, summary);
-            Assert.LessOrEqual(scenery.Length, 80, summary);
-            Assert.LessOrEqual(interactive, 100, summary); // mostly handrail bars; a guard against regressions
+            // Raised with the bigger-maps update (the tube is 1.5x in plan, so 2.25x the 10 m rock patches): was 80 and 100.
+            Assert.LessOrEqual(scenery.Length, 130, summary);
+            Assert.LessOrEqual(interactive, 140, summary); // mostly handrail bars; a guard against regressions
             Assert.IsTrue(renderers.All(r => r.shadowCastingMode == UnityEngine.Rendering.ShadowCastingMode.Off || IsText(r)), "No realtime shadows on Quest.");
 
             // The rock is generated: warped, smooth-shaded, with a tiling rock texture and its normal map.

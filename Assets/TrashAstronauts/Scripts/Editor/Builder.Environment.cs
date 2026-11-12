@@ -511,10 +511,8 @@ namespace TrashAstronauts.EditorTools
             // --- pipe runs, cables and brackets high on full-height walls that face a floor
             var pipeMat = styleId == "Barge" ? M("Rust_Pipe") : styleId == "Survey" ? M("PaintWhite") : M("Pipe");
             int wallIndex = 0;
-            foreach (var r in renderers)
+            foreach (var bw in WallRuns(renderers.Where(r => r.name == "Segment" && r.sharedMaterial == wall).Select(r => r.bounds)))
             {
-                if (r.name != "Segment" || r.sharedMaterial != wall) continue;
-                var bw = r.bounds;
                 if (bw.min.y > 0.05f) continue;
                 float hgt = bw.max.y;
                 if (hgt < 2.2f) continue;
@@ -627,6 +625,39 @@ namespace TrashAstronauts.EditorTools
             int labelCount = labels.Count;
             Debug.Log("[Builder] Dressed " + styleId + ": " + labelCount + " labels" + ": " + lamps + " fixtures, " + parts.Count + " renderers, "
                 + parts.Sum(kv => kv.Value.Sum(ci => ci.mesh.triangles.Length / 3)) + " triangles.");
+        }
+
+        /// <summary>
+        /// Full-height wall pieces joined back into the runs they were cut from (Wall builds long walls in
+        /// pieces for lighting), so a pipe run follows the whole wall and only elbows into it at its ends.
+        /// </summary>
+        static List<Bounds> WallRuns(IEnumerable<Bounds> pieces)
+        {
+            var runs = new List<Bounds>();
+            var groups = pieces.GroupBy(b =>
+            {
+                bool alongX = b.size.x > b.size.z;
+                return (alongX, Mathf.RoundToInt((alongX ? b.center.z : b.center.x) * 100f), Mathf.RoundToInt(b.min.y * 100f), Mathf.RoundToInt(b.max.y * 100f));
+            });
+            foreach (var g in groups)
+            {
+                bool alongX = g.Key.alongX;
+                Bounds? current = null;
+                foreach (var b in g.OrderBy(b => alongX ? b.min.x : b.min.z))
+                {
+                    if (current.HasValue && (alongX ? b.min.x - current.Value.max.x : b.min.z - current.Value.max.z) < 0.02f)
+                    {
+                        var merged = current.Value;
+                        merged.Encapsulate(b);
+                        current = merged;
+                        continue;
+                    }
+                    if (current.HasValue) runs.Add(current.Value);
+                    current = b;
+                }
+                if (current.HasValue) runs.Add(current.Value);
+            }
+            return runs;
         }
 
         // ------------------------------------------------------------------ dust in the air

@@ -15,9 +15,29 @@ namespace TrashAstronauts.Core.Net
     /// real slot over the one written by a client, allows at most 60 frames a second per client, and drops a
     /// malformed message (and so the whole datagram) without throwing. Only sent while a player is talking, and
     /// only when that player has both MIC and VOICE CHAT on.
+    ///
+    /// Two additions (protocol 5), both in this same message:
+    /// - The creature's voice: slot <see cref="CreatureSlot"/> marks frames the HOST sends of the Mimic speaking (a
+    ///   crew member's phrase, already lowered and slowed on the host). Only a host may send it: a client that writes
+    ///   it is refused (NetSessionHost.HandleVoice), and a client plays it from the creature, never from a helmet.
+    /// - "My voice is off": one frame of <see cref="OffNoticeLength"/> byte (a real frame is always 123), sent a few
+    ///   times by a client the moment it switches MIC or VOICE CHAT off, so the host forgets anything of its voice
+    ///   the Mimic was keeping. It carries no audio; receivers never play it.
     /// </summary>
     public struct VoiceMsg
     {
+        /// <summary>Pseudo-sender for the creature's voice (host to clients only). Not a crew slot.</summary>
+        public const byte CreatureSlot = 7;
+        /// <summary>Length of the "my voice is off" notice frame (no encoded frame is ever this short).</summary>
+        public const int OffNoticeLength = 1;
+        /// <summary>The notice frame's one byte.</summary>
+        public static readonly byte[] OffNotice = { 0x0F };
+
+        /// <summary>True for the "my voice is off" notice instead of an audio frame.</summary>
+        public static bool IsOffNotice(int frameLength) => frameLength == OffNoticeLength;
+        /// <summary>True for a sender this message may carry: a crew slot, or the creature (which only a host sends).</summary>
+        public static bool ValidSender(byte slot) => slot < NetProtocol.MaxPlayers || slot == CreatureSlot;
+
         public const int MaxFrames = 2;
         public const int MaxFrameBytes = 160;
         public const int MaxSize = 4 + MaxFrames * (1 + MaxFrameBytes);
@@ -74,7 +94,7 @@ namespace TrashAstronauts.Core.Net
             m.slot = r.U8();
             m.sequence = r.U16();
             int n = r.U8();
-            if (r.Failed || m.slot >= NetProtocol.MaxPlayers || n < 1 || n > MaxFrames) { r.Fail(); return false; }
+            if (r.Failed || !ValidSender(m.slot) || n < 1 || n > MaxFrames) { r.Fail(); return false; }
             if (m.data == null || m.data.Length < MaxFrames * MaxFrameBytes) m.data = new byte[MaxFrames * MaxFrameBytes];
             m.length0 = m.length1 = 0;
             for (int i = 0; i < n; i++)

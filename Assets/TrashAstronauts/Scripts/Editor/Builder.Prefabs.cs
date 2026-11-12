@@ -70,6 +70,9 @@ namespace TrashAstronauts.EditorTools
             if (!Mathf.Approximately(s_Config.playerMass, RealPhysics.PlayerBodyMass)) s_Config.playerMass = RealPhysics.PlayerBodyMass;
             if (s_Config.enemy.chaseSpeed < 3f) s_Config.enemy.chaseSpeed = 3f;
             if (s_Config.enemy.chaseLoseSightSeconds < 5f) s_Config.enemy.chaseLoseSightSeconds = 5f;
+            // The bigger-maps update (1.5x floor plans): the tank grows with a run's oxygen use (see MissionConfig).
+            if (Mathf.Approximately(s_Config.baseOxygenSeconds, 600f)) s_Config.baseOxygenSeconds = 800f;
+            if (Mathf.Approximately(s_Config.oxygenUpgradeBonusSeconds, 180f)) s_Config.oxygenUpgradeBonusSeconds = 240f;
             EditorUtility.SetDirty(s_Config);
             AssetDatabase.SaveAssets();
         }
@@ -750,7 +753,7 @@ namespace TrashAstronauts.EditorTools
         {
             var root = Empty(parent, name, localPos, localRot, GameLayers.Default);
             root.transform.localScale = Vector3.one * scale;
-            // Seven summary lines above five rows of buttons (the last row is VOICE CHAT alone, centred).
+            // Seven summary lines above five rows of buttons (the last row is VOICE CHAT and CREW SHOVES).
             Prim(root.transform, "Back", PrimitiveType.Cube, new Vector3(0, -0.035f, 0.012f), new Vector3(0.56f, 0.69f, 0.02f), M("Screen"));
             var summary = Text(root.transform, "Summary", "SUIT SETTINGS", new Vector3(0, 0.185f, -0.002f), Quaternion.identity, 0.18f, new Vector2(0.52f, 0.2f), new Color(0.75f, 0.95f, 1f));
 
@@ -765,7 +768,8 @@ namespace TrashAstronauts.EditorTools
             panel.voice = Button(root.transform, "Voice", new Vector3(0.13f, -0.15f, 0), Quaternion.identity, size, "MIC: ON", M("ButtonBlue"), 0.22f);
             panel.unstuck = Button(root.transform, "Unstuck", new Vector3(-0.13f, -0.235f, 0), Quaternion.identity, size, "UNSTUCK", M("ButtonAmber"), 0.22f);
             panel.recallTools = Button(root.transform, "Recall Tools", new Vector3(0.13f, -0.235f, 0), Quaternion.identity, size, "RECALL TOOLS", M("ButtonAmber"), 0.2f);
-            panel.voiceChat = Button(root.transform, "Voice Chat", new Vector3(0f, -0.32f, 0), Quaternion.identity, size, "VOICE CHAT: ON", M("ButtonBlue"), 0.18f);
+            panel.voiceChat = Button(root.transform, "Voice Chat", new Vector3(-0.13f, -0.32f, 0), Quaternion.identity, size, "VOICE CHAT: ON", M("ButtonBlue"), 0.18f);
+            panel.crewShoves = Button(root.transform, "Crew Shoves", new Vector3(0.13f, -0.32f, 0), Quaternion.identity, size, "CREW SHOVES: ON", M("ButtonBlue"), 0.17f);
             return panel;
         }
 
@@ -838,6 +842,11 @@ namespace TrashAstronauts.EditorTools
             flashQuad.GetComponent<MeshRenderer>().enabled = false;
             visor.cracks = crackRenderers.ToArray();
             visor.flash = flashQuad.GetComponent<MeshRenderer>();
+            // Co-op revive: the dimmed view while downed (DownedLock switches it on), between the fade and the visor.
+            var downed = Prim(camGo.transform, DownedLock.VignetteName, PrimitiveType.Quad, new Vector3(0, 0, 0.2f), new Vector3(1.15f, 1.15f, 1f), M("DownedVignette"));
+            var downedRenderer = downed.GetComponent<MeshRenderer>();
+            downedRenderer.enabled = false;
+            downedRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
             var fader = camGo.AddComponent<ScreenFader>();
             fader.quad = fadeQuad.GetComponent<MeshRenderer>();
@@ -954,6 +963,9 @@ namespace TrashAstronauts.EditorTools
             display.noiseBar = noiseScale.transform;
             display.noiseBarRenderer = noiseFill.GetComponent<MeshRenderer>();
             display.voiceText = Text(wrist.transform, "Voice", "NOISE: quiet", new Vector3(0, -0.063f, -0.001f), Quaternion.identity, 0.055f, new Vector2(0.12f, 0.012f), new Color(0.6f, 1f, 0.7f));
+            // Co-op revive, on a strip above the readout: DOWNED - CREW MUST REVIVE YOU, or CREW 2 DOWN 12 m (empty otherwise).
+            Prim(wrist.transform, "Crew Back", PrimitiveType.Cube, new Vector3(0, 0.064f, 0.004f), new Vector3(0.125f, 0.032f, 0.006f), M("Screen"));
+            display.crewText = Text(wrist.transform, "Crew", "", new Vector3(0, 0.064f, -0.001f), Quaternion.identity, 0.06f, new Vector2(0.12f, 0.03f), new Color(1f, 0.62f, 0.45f));
             context.wristDisplay = wrist.transform;
             BuildHeadLamp(context, camGo.transform, wrist.transform); // helmet lamp + LAMP wrist button (Builder.HeadLamp.cs)
 

@@ -46,6 +46,16 @@ namespace TrashAstronauts.Core
         /// suit colours load as), 1..12 = PlayerAvatar.SuitColors[suitColor - 1]. Shared with the network (Net.SuitLook).
         /// </summary>
         public int suitColor;
+        /// <summary>
+        /// CREW SHOVES (co-op): this player's hands can shove crew mates and crew mates can shove this player. Off: neither
+        /// (a shove still thuds, without moving anybody). Saves from before it existed load as on.
+        /// </summary>
+        public bool crewShoves = true;
+        /// <summary>
+        /// Credits earned at the SALVAGE CLAW in the tug since the last contract ended (completed or failed); the claw
+        /// stops paying at SalvageClawConfig.ShiftCap. Saved so restarting the game does not reset the shift.
+        /// </summary>
+        public int clawShiftCredits;
 
         public Handedness Handedness
         {
@@ -72,6 +82,7 @@ namespace TrashAstronauts.Core
             suitColor = Net.SuitLook.Clamp(suitColor);
             runsStarted = Mathf.Max(0, runsStarted);
             contractsCompleted = Mathf.Max(0, contractsCompleted);
+            clawShiftCredits = Mathf.Clamp(clawShiftCredits, 0, 1000000);
         }
 
         static float NearestSnapOption(float value)

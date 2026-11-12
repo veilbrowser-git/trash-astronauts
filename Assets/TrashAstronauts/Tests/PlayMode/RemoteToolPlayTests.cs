@@ -171,8 +171,10 @@ namespace TrashAstronauts.Tests
             foreach (var t in crew.GetComponentsInChildren<Transform>(true))
                 Assert.IsTrue(t.gameObject.layer != GameLayers.Tool && t.gameObject.layer != GameLayers.Salvage && t.gameObject.layer != GameLayers.CutPoint, t.name);
             Assert.AreEqual(0, crew.GetComponentsInChildren<Light>(true).Count(l => l.enabled), "No light is on before anything is lit.");
-            Assert.AreEqual(2, crew.GetComponentsInChildren<Light>(true).Length, "Two lights on a stand-in: the flashlight's spot and the helmet lamp's, from one budget (the cutter has a glow instead).");
-            Assert.IsTrue(crew.GetComponentsInChildren<Light>(true).All(l => l == rig.flashlightSpot || l == rig.headLamp.spot));
+            // Co-op revive: the downed-suit locator is the one light outside the budget (off unless that player is down).
+            var budgeted = crew.GetComponentsInChildren<Light>(true).Where(l => crew.beacon == null || l != crew.beacon.lamp).ToArray();
+            Assert.AreEqual(2, budgeted.Length, "Two lights on a stand-in: the flashlight's spot and the helmet lamp's, from one budget (the cutter has a glow instead).");
+            Assert.IsTrue(budgeted.All(l => l == rig.flashlightSpot || l == rig.headLamp.spot));
             Assert.AreEqual(LightShadows.None, rig.flashlightSpot.shadows);
             int renderers = 0, alwaysOn = 0;
             for (byte id = 1; id <= 4; id++)

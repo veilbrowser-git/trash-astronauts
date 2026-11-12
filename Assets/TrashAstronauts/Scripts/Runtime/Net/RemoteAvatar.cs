@@ -16,6 +16,7 @@ namespace TrashAstronauts.Net
     /// normally two samples to blend between. The rules (safe zone, extraction, the creature's senses) use the
     /// newest sample instead, through <see cref="PlayerContext.HeadPosition"/>.
     /// </summary>
+    [DefaultExecutionOrder(100)] // after PlayerAvatar.LateUpdate: a downed suit is re-posed and laid down here
     public sealed class RemoteAvatar : MonoBehaviour
     {
         public PlayerContext context;
@@ -31,6 +32,33 @@ namespace TrashAstronauts.Net
         public float bodyDrop = 0.85f;
         [Tooltip("Visual-only copies of the four suit tools (in hand or holstered) and their effects.")]
         public RemoteToolRig tools;
+        [Tooltip("Co-op revive: the glowing handle on the chest pack, shown while this player is downed.")]
+        public ReviveBeacon beacon;
+        [Tooltip("Where the beacon sits on the torso (torso space: the neck is the origin, +z is the chest).")]
+        public Vector3 beaconOffset = new Vector3(0f, -0.22f, 0.27f);
+        /// <summary>A downed suit in zero-g curls this far forward about its head (degrees): limp, not standing.</summary>
+        public const float ZeroGCurlDegrees = 32f;
+
+        /// <summary>A downed suit in a gravity map lies this high (its back) off the floor, its chest over where its head was caught.</summary>
+        public const float LyingPivotHeight = 0.16f;
+        /// <summary>How far along the lying body (from the feet) its chest is; the body is laid so its chest is over the catch point.</summary>
+        public const float LyingChestFromFeet = 1.1f;
+
+        bool m_Downed;
+        bool m_Lying;
+        Vector3 m_DownedAt;
+        Vector3 m_Floor;
+        float m_DownedYaw;
+        PlayerContext m_Hooked;
+
+        /// <summary>True while this suit is shown downed (slumped in zero-g, lying on the floor under gravity).</summary>
+        public bool ShownDowned => m_Downed;
+        /// <summary>True while the downed suit is lying on a floor (a gravity map) rather than hanging limp.</summary>
+        public bool Lying => m_Downed && m_Lying;
+        /// <summary>Where the revive beacon is now (the chest of the suit, standing or lying).</summary>
+        public Vector3 BeaconPosition => beacon != null ? beacon.transform.position
+            : suit != null && suit.torso != null ? suit.torso.TransformPoint(beaconOffset)
+            : head != null ? head.position + Vector3.down * 0.45f : transform.position;
 
         /// <summary>A head that moves further than this between two consecutive samples teleported: snap, do not glide.</summary>
         public const float TeleportDistance = 1f;
@@ -92,6 +120,156 @@ namespace TrashAstronauts.Net
             }
         }
 
+        void OnEnable()
+        {
+            if (context != null && m_Hooked == null)
+            {
+                m_Hooked = context;
+                context.DownedChanged += OnDownedChanged;
+                if (context.IsDowned) OnDownedChanged(context, true);
+            }
+        }
+
+        void OnDisable()
+        {
+            if (m_Hooked != null) m_Hooked.DownedChanged -= OnDownedChanged;
+            m_Hooked = null;
+        }
+
+        void OnDownedChanged(PlayerContext player, bool downed)
+        {
+            if (downed)
+            {
+                m_Downed = true;
+                m_DownedAt = player.DownedPosition;
+                Vector3 forward = head != null ? head.forward : transform.forward;
+                forward.y = 0f;
+                m_DownedYaw = forward.sqrMagnitude > 1e-4f ? Mathf.Atan2(forward.x, forward.z) * Mathf.Rad2Deg : 0f;
+                m_Lying = Mission.MapGravity.GravityAt(m_DownedAt) != Vector3.zero;
+                m_Floor = m_DownedAt + Vector3.down * 1.5f;
+                if (m_Lying && Physics.Raycast(m_DownedAt + Vector3.up * 0.2f, Vector3.down, out RaycastHit hit, 4f, World.GameLayers.EnvironmentMask, QueryTriggerInteraction.Ignore))
+                    m_Floor = hit.point;
+                if (tools != null) tools.Apply(AvatarSnapshot.Default); // nothing in the gloves, every tool holstered
+                SetThrusters(false);
+                if (!HasPose)
+                {
+                    // Downed before any sample (a late joiner): show the suit where it lies.
+                    HasPose = true;
+                    SetShown(true);
+                }
+                if (suit != null) suit.SnapToHead();
+                PoseDowned();
+            }
+            else
+            {
+                m_Downed = false;
+                // Up again where they lay: the next sample stands the suit up, square under the head.
+                m_SnapPending = true;
+                if (m_Buffer != null && m_Buffer.TryGetNewest(out AvatarSnapshot newest, out double _)) Apply(in newest);
+            }
+            if (beacon != null) beacon.Show(downed);
+        }
+
+        void SetThrusters(bool on)
+        {
+            if (leftHand != null && leftHand.thrusterVisual != null) leftHand.thrusterVisual.SetActive(on);
+            if (rightHand != null && rightHand.thrusterVisual != null) rightHand.thrusterVisual.SetActive(on);
+        }
+
+        /// <summary>Takes up the player's downed state now (previews in the editor, where OnEnable does not run) and poses it.</summary>
+        public void ApplyDownedState()
+        {
+            if (context != null && context.IsDowned != m_Downed) OnDownedChanged(context, context.IsDowned);
+            LateUpdate();
+        }
+
+        void LateUpdate()
+        {
+            if (m_Downed) PoseDowned();
+            if (beacon != null && suit != null && suit.torso != null)
+            {
+                beacon.transform.SetPositionAndRotation(suit.torso.TransformPoint(beaconOffset), suit.torso.rotation);
+                if (m_Downed && context != null) beacon.SetProgress(context.ReviveProgress);
+            }
+        }
+
+        /// <summary>
+        /// The downed pose, every frame (the stream is ignored while down). Zero-g: the suit hangs limp where its head was
+        /// caught, head dropped forward, arms loose. Gravity: the same limp suit laid on its back on the floor, chest over
+        /// the catch point. The head (with the voice and the talk light on it) goes wherever the helmet goes.
+        /// </summary>
+        void PoseDowned()
+        {
+            if (head == null) return;
+            Quaternion yaw = Quaternion.Euler(0f, m_DownedYaw, 0f);
+            Vector3 headPosition = m_Lying ? m_Floor + Vector3.up * 1.5f : m_DownedAt;
+            Quaternion headRotation = yaw * (m_Lying ? Quaternion.Euler(12f, 0f, 0f) : Quaternion.Euler(38f, 0f, 9f));
+            head.SetPositionAndRotation(headPosition, headRotation);
+            PoseLimpHand(leftHand, headPosition + yaw * new Vector3(-0.23f, -0.74f, 0.16f), yaw);
+            PoseLimpHand(rightHand, headPosition + yaw * new Vector3(0.23f, -0.76f, 0.12f), yaw);
+            if (suit != null) suit.Pose(0f);
+
+            Vector3 chest = suit != null && suit.torso != null ? suit.torso.TransformPoint(beaconOffset) : headPosition + Vector3.down * 0.45f;
+            Quaternion bodyRotation = yaw;
+            if (!m_Lying)
+            {
+                // Hanging limp: the whole body curls forward under the dropped head (the head stays where it was caught).
+                Quaternion curl = Quaternion.AngleAxis(-ZeroGCurlDegrees, yaw * Vector3.right);
+                Vector3 none = Vector3.zero;
+                if (suit != null)
+                {
+                    Lay(suit.torso, curl, headPosition, none);
+                    Lay(suit.legs, curl, headPosition, none);
+                    Lay(suit.leftUpperArm, curl, headPosition, none);
+                    Lay(suit.leftForearm, curl, headPosition, none);
+                    Lay(suit.rightUpperArm, curl, headPosition, none);
+                    Lay(suit.rightForearm, curl, headPosition, none);
+                }
+                Lay(leftHand != null ? leftHand.transform : null, curl, headPosition, none);
+                Lay(rightHand != null ? rightHand.transform : null, curl, headPosition, none);
+                chest = curl * (chest - headPosition) + headPosition;
+                bodyRotation = curl * yaw;
+            }
+            else
+            {
+                // Laid on its back: everything turns about the feet, then slides so the chest is over the catch point.
+                Vector3 forward = yaw * Vector3.forward;
+                Quaternion down = Quaternion.FromToRotation(Vector3.up, -forward);
+                Vector3 pivot = m_Floor + Vector3.up * LyingPivotHeight;
+                Vector3 shift = forward * LyingChestFromFeet;
+                if (suit != null)
+                {
+                    Lay(suit.helmet, down, pivot, shift);
+                    Lay(suit.torso, down, pivot, shift);
+                    Lay(suit.legs, down, pivot, shift);
+                    Lay(suit.leftUpperArm, down, pivot, shift);
+                    Lay(suit.leftForearm, down, pivot, shift);
+                    Lay(suit.rightUpperArm, down, pivot, shift);
+                    Lay(suit.rightForearm, down, pivot, shift);
+                }
+                Lay(head, down, pivot, shift);
+                Lay(leftHand != null ? leftHand.transform : null, down, pivot, shift);
+                Lay(rightHand != null ? rightHand.transform : null, down, pivot, shift);
+                chest = down * (chest - pivot) + pivot + shift;
+                bodyRotation = down * yaw;
+            }
+            if (body != null) body.transform.SetPositionAndRotation(chest, bodyRotation);
+        }
+
+        static void Lay(Transform t, Quaternion rotation, Vector3 pivot, Vector3 shift)
+        {
+            if (t == null) return;
+            t.SetPositionAndRotation(rotation * (t.position - pivot) + pivot + shift, rotation * t.rotation);
+        }
+
+        static void PoseLimpHand(HandRig hand, Vector3 position, Quaternion yaw)
+        {
+            if (hand == null) return;
+            hand.transform.SetPositionAndRotation(position, yaw * Quaternion.Euler(75f, 0f, 0f));
+            hand.TriggerOverride = 0.2f;
+            hand.GripOverride = 0.35f;
+        }
+
         void Start()
         {
             // Made by a NetSession: weld progress starts flowing between this headset and the crew.
@@ -102,6 +280,8 @@ namespace TrashAstronauts.Net
         /// <summary>Draws the player as they were at <paramref name="renderTime"/> (host clock). Does nothing before the first sample.</summary>
         public void Render(double renderTime)
         {
+            // A downed player's own movements are not drawn: the suit lies (or hangs) where they were caught.
+            if (m_Downed) return;
             if (m_Buffer == null || !m_Buffer.Sample(renderTime, out AvatarSnapshot sample)) return;
             Apply(in sample);
         }

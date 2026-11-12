@@ -47,7 +47,8 @@ namespace TrashAstronauts.Net
     /// Proximity voice chat rides on the same session (VoiceChat, attached when a session starts): while a crew
     /// member talks, their compressed voice goes to the others through the host (and Unity's Relay when online).
     /// Nothing is sent while nobody talks, with MIC or VOICE CHAT off, or outside a crew; nothing is recorded or
-    /// stored, and recorded Mimic phrases and profile data are never sent.
+    /// stored, and profile data are never sent. With a Mimic aboard the host keeps a few crew phrases in memory and
+    /// sends its altered playback as the creature's voice (Net/Voice/MimicCrewVoice.cs).
     /// </summary>
     [DefaultExecutionOrder(300)] // LateUpdate after XRI, hand tracking, the gloves and the suit have posed the rig
     public sealed class NetSession : MonoBehaviour, IMissionNet
@@ -767,7 +768,10 @@ namespace TrashAstronauts.Net
             };
             DisposeContract();
             m_Rules = new CoopHostRules(director, new HostBroadcast(this)) { Clock = () => Now };
-            // Co-op contracts carry the shared spider (never the Mimic) and its blackouts; webs stay unstrung.
+            // Co-op revive: a crew member kept on only for a jumpscare is no longer in the crew (cannot be downed or revive).
+            m_Rules.Revive.IsPresent = slot => IsPresent(slot);
+            m_Rules.Revive.Clock = () => Now;
+            // Co-op contracts carry the shared spider (any species, the Mimic too) and its blackouts; webs stay unstrung.
             m_Rules.CreatureEnabled = true;
             // Everyone grabs: the host's arbitration of crew grabs, releases, throws and hand-backs.
             m_Items = new CoopItemHost(director, new HostBroadcast(this));
@@ -805,6 +809,7 @@ namespace TrashAstronauts.Net
             };
             DisposeContract();
             m_Apply = new CoopClientApply(director);
+            m_Apply.Revive.Requests = new ClientReviveRequests(this);
             m_Client = new NetSessionClient(transport, new SceneClientWorld(this, m_Apply), config);
             m_Online = online;
             CoopItemReplica.Delay = InterpolationDelay;
@@ -1222,9 +1227,27 @@ namespace TrashAstronauts.Net
             public void CatchStarted(byte victimSlot) => Host?.SendCatchStarted(victimSlot);
             public void BlackoutStarted(float seconds) => Host?.SendBlackoutStarted(seconds);
             public void BlackoutEnded(bool instant) => Host?.SendBlackoutEnded(instant);
+            public void PlayerDowned(byte slot, NetVec3 position) => Host?.SendPlayerDowned(slot, position);
+            public void PlayerRevived(byte slot, byte by) => Host?.SendPlayerRevived(slot, by);
+            public void ReviveProgress(byte slot, float progress, byte rescuerSlot) => Host?.SendReviveProgress(slot, progress, rescuerSlot);
             /// <summary>The host player's own hand: arbitrated with the crew's grabs; clients see ItemOwner.</summary>
             public bool LocalGrab(byte itemId) => Host == null || Host.LocalGrab(itemId);
             public void LocalRelease(byte itemId) => Host?.LocalRelease(itemId);
+        }
+
+        /// <summary>A client's hand on or off a crew mate's revive beacon: to NetSessionClient.SendReviveHold, at once.</summary>
+        sealed class ClientReviveRequests : ICoopReviveRequests
+        {
+            readonly NetSession m_Net;
+            public ClientReviveRequests(NetSession net) { m_Net = net; }
+
+            public void ReviveHold(byte slot, bool on)
+            {
+                var c = m_Net.m_Client;
+                if (c == null || !c.Welcomed) return;
+                c.SendReviveHold(slot, on);
+                m_Net.FlushClient();
+            }
         }
 
         /// <summary>A client's item requests, each to the NetSessionClient method of the same name; input-like ones go out at once.</summary>

@@ -132,7 +132,7 @@ namespace TrashAstronauts.Tests
         }
 
         IEnumerator StandInShip() => StandIn("freighter", new Vector3(0f, 0f, 9.2f));
-        IEnumerator StandInCave() => StandIn("lava_tube", new Vector3(0f, 0f, 24f));
+        IEnumerator StandInCave() => StandIn("lava_tube", MapPoints.Wreck(0f, 0f, 24f));
 
         bool InCave => MapGravity.GravityAt(m_Floor + Vector3.up * 0.3f) != Vector3.zero;
 
@@ -942,9 +942,10 @@ namespace TrashAstronauts.Tests
             yield return StandInCave();
             var cave = m_Director.maps.First(m => m.mapId == "lava_tube");
             var gravity = cave.GetComponent<MapGravity>();
-            // The fallen rocks at the foot of the main tunnel's walls (x = +-1.35), by the hulls loose things meet.
+            // The fallen rocks at the foot of the main tunnel's walls (x = +-1.35 in the first layout), by the hulls loose things meet.
+            float footX = MapPoints.Wreck(1.35f, 0f, 24f).x;
             var rocks = cave.GetComponentsInChildren<MeshCollider>(true)
-                .Where(c => c.name == "Rubble Hull" && gravity.Contains(c.bounds.center) && Mathf.Abs(Mathf.Abs(c.bounds.center.x) - 1.35f) < 0.2f)
+                .Where(c => c.name == "Rubble Hull" && gravity.Contains(c.bounds.center) && Mathf.Abs(Mathf.Abs(c.bounds.center.x) - footX) < 0.2f)
                 .ToList();
             Assert.GreaterOrEqual(rocks.Count, 3, "The main tunnel's fallen rocks should each have a hull that loose things rest against.");
             Assert.IsTrue(rocks.All(r => r.convex && r.gameObject.layer == GameLayers.Rubble));

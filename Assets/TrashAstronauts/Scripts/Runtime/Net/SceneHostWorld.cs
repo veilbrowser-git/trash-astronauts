@@ -40,7 +40,12 @@ namespace TrashAstronauts.Net
 
         public void OnPlayerJoined(byte slot, byte handedness) => m_Net.AddCrew(slot, handedness, false);
 
-        public void OnPlayerLeft(byte slot, PlayerLeaveReason reason) => m_Net.RemoveCrew(slot);
+        public void OnPlayerLeft(byte slot, PlayerLeaveReason reason)
+        {
+            // A downed player who leaves is removed like any other; a rescuer who leaves stops reviving.
+            if (m_Rules != null) m_Rules.HostPlayerLeft(slot);
+            m_Net.RemoveCrew(slot);
+        }
 
         public void OnPlayerAway(byte slot, bool away)
         {
@@ -108,5 +113,12 @@ namespace TrashAstronauts.Net
         }
 
         public void OnWireReport(byte slot, byte index, NetWireChange change) { /* Stage 4: webs are never armed in a co-op contract. */ }
+
+        // ------------------------------------------------------------------ co-op revive
+
+        public void OnReviveHold(byte slot, byte targetSlot, bool on)
+        {
+            if (m_Rules != null) m_Rules.HostReviveHold(slot, targetSlot, on);
+        }
     }
 }

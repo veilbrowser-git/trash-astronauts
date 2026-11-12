@@ -335,6 +335,7 @@ namespace TrashAstronauts.Core.Net
             m_ClockFresh = false;
             m_HostPoseCount = 0;
             ClearCutProgress();
+            ClearCrewPush();
             for (int i = 1; i < m_Peers.Length; i++)
             {
                 m_Peers[i].avatarFresh = false;
@@ -694,6 +695,7 @@ namespace TrashAstronauts.Core.Net
                 case NetMsg.Noise: return NoiseMsg.Read(ref r, out _);
                 case NetMsg.Voice: return VoiceMsg.Read(ref r, ref m_VoiceRead);
                 case CutProgressMsg.Id: return CutProgressMsg.Read(ref r, out _);
+                case CrewPushMsg.Id: return CrewPushMsg.Read(ref r, out _);
                 default: return false;
             }
         }
@@ -775,6 +777,7 @@ namespace TrashAstronauts.Core.Net
                     return true;
                 }
                 case CutProgressMsg.Id: return HandleCutProgress(peer, ref r);
+                case CrewPushMsg.Id: return HandleCrewPush(peer, ref r);
                 default:
                     return false;
             }
@@ -789,6 +792,7 @@ namespace TrashAstronauts.Core.Net
             from.voiceStamp = m_Now;
             if (elapsed > 0) from.voiceTokens = Math.Min(VoiceMsg.BurstFrames, from.voiceTokens + elapsed * VoiceMsg.MaxFramesPerSecond);
             if (from.away || from.voiceTokens < m_VoiceRead.count) { m_Stats.rejected++; return; }
+            if (m_VoiceRead.slot == VoiceMsg.CreatureSlot) { m_Stats.rejected++; return; } // co-op Mimic: only the host speaks as the creature
             from.voiceTokens -= m_VoiceRead.count;
             m_VoiceRead.slot = from.slot; // never trust the slot a client wrote
 
@@ -932,6 +936,13 @@ namespace TrashAstronauts.Core.Net
                 {
                     if (!WireReportMsg.Read(ref r, out WireReportMsg m)) { m_Stats.malformed++; return; }
                     m_World.OnWireReport(slot, m.index, m.change);
+                    break;
+                }
+                case NetMsg.ReviveHold:
+                {
+                    if (!ReviveHoldMsg.Read(ref r, out ReviveHoldMsg m)) { m_Stats.malformed++; return; }
+                    if (m.slot == slot) { m_Stats.rejected++; return; } // nobody revives themselves
+                    m_World.OnReviveHold(slot, m.slot, m.on);
                     break;
                 }
                 default:
@@ -1395,6 +1406,30 @@ namespace TrashAstronauts.Core.Net
             Broadcast(NetMsg.BlackoutEnded, ref w);
         }
 
+        /// <summary>Co-op revive: this crew member is downed where they were caught.</summary>
+        public void SendPlayerDowned(byte slot, NetVec3 position)
+        {
+            var w = new NetWriter(m_Small);
+            new PlayerDownedMsg { slot = slot, position = position }.Write(ref w);
+            Broadcast(NetMsg.PlayerDowned, ref w);
+        }
+
+        /// <summary>Co-op revive: this crew member is up again (by = the rescuer, 255 = nobody named).</summary>
+        public void SendPlayerRevived(byte slot, byte by)
+        {
+            var w = new NetWriter(m_Small);
+            new PlayerRevivedMsg { slot = slot, by = by }.Write(ref w);
+            Broadcast(NetMsg.PlayerRevived, ref w);
+        }
+
+        /// <summary>Co-op revive: how far this downed crew member's ring is and who holds it. Throttled by the game (about 5 a second while it moves).</summary>
+        public void SendReviveProgress(byte slot, float progress, byte rescuerSlot)
+        {
+            var w = new NetWriter(m_Small);
+            new ReviveProgressMsg { slot = slot, progress = progress, rescuerSlot = rescuerSlot }.Write(ref w);
+            Broadcast(NetMsg.ReviveProgress, ref w);
+        }
+
         public void SendWireChanged(byte index, NetWireChange change, byte by)
         {
             var w = new NetWriter(m_Small);
@@ -1516,6 +1551,7 @@ namespace TrashAstronauts.Core.Net
                 Tap?.Invoke(true, to.slot, NetMsg.ItemPoses, m_Send, start, w.Position - start, m_Now);
             }
             WriteCutProgress(to, ref w);
+            WriteCrewPush(to, ref w);
         }
 
         void WriteAvatar(Peer to, byte slot, in AvatarSnapshot avatar, ref NetWriter w)

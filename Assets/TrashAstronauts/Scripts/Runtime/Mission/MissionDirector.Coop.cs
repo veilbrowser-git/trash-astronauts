@@ -29,8 +29,8 @@ namespace TrashAstronauts.Mission
         public bool CoopRideAlong { get; set; }
 
         /// <summary>
-        /// Co-op stage 4 switch (host): while true, a ride-along contract carries the creature again (never the
-        /// Mimic) and its blackouts; webs stay unstrung. False (the default) keeps the creature ashore. Only read
+        /// Co-op stage 4 switch (host): while true, a ride-along contract carries the creature again (any species,
+        /// the Mimic included) and its blackouts; webs stay unstrung. False (the default) keeps the creature ashore. Only read
         /// while <see cref="CoopRideAlong"/> is set; <see cref="CoopHostRules.CreatureEnabled"/> sets it.
         /// </summary>
         public bool CoopCreatureEnabled { get; set; }
@@ -41,28 +41,11 @@ namespace TrashAstronauts.Mission
             if (CoopCreatureEnabled)
             {
                 run.wireArmedMask = 0u;
-                if (run.creatureIndex != RunStartParams.NoCreature && IsMimic(run.creatureIndex))
-                    run.creatureIndex = (byte)NonMimicCreature(run.seed);
                 return;
             }
             run.creatureIndex = RunStartParams.NoCreature;
             run.hazardFlags = 0;
             run.wireArmedMask = 0u;
-        }
-
-        bool IsMimic(int index) => enemies != null && index >= 0 && index < enemies.Length && enemies[index] != null
-            && enemies[index].GetComponent<VoiceMimic>() != null;
-
-        /// <summary>A creature for a session that is not the Mimic, the same one on every call for a seed; NoCreature if there is none.</summary>
-        int NonMimicCreature(int seed)
-        {
-            if (enemies == null) return RunStartParams.NoCreature;
-            var candidates = new System.Collections.Generic.List<int>();
-            for (int i = 0; i < enemies.Length; i++)
-            {
-                if (enemies[i] != null && !IsMimic(i)) candidates.Add(i);
-            }
-            return candidates.Count > 0 ? candidates[new System.Random(seed ^ 0x5f3759df).Next(candidates.Count)] : RunStartParams.NoCreature;
         }
 
         // ------------------------------------------------------------------ presence (client)
@@ -268,7 +251,7 @@ namespace TrashAstronauts.Mission
             float exertion = 0f;
             foreach (var player in m_Players)
             {
-                if (player == null || player.IsAway) continue;
+                if (player == null || player.IsAway || player.IsDowned) continue;
                 if (player.IsRemote) exertion = Mathf.Max(exertion, player.RemoteExertion);
                 else if (player.locomotion != null && player.locomotion.zeroG != null)
                     exertion = Mathf.Max(exertion, player.locomotion.zeroG.Exertion);
@@ -429,7 +412,9 @@ namespace TrashAstronauts.Mission
             if (result == null) return null;
             var stored = Session.ApplyRemoteEnd(result);
             if (stored == null) return null;
-            Session.BankInto(Profile);
+            // This headset's own share, less this player's revive penalties (the host's figures, RunEnded).
+            Session.BankInto(Profile, LocalPayoutSlot);
+            ClearCrewDowned();
             m_HaveClock = false;
 
             if (noise != null) noise.Muted = true;
@@ -465,6 +450,7 @@ namespace TrashAstronauts.Mission
             if (noise != null) noise.Muted = true;
             EndCreatures();
             if (blackout != null) blackout.EndBlackout(true);
+            ClearCrewDowned();
             BringLocalPlayerHome(false);
             return true;
         }

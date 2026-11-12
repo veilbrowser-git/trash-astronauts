@@ -1,0 +1,3 @@
+# Salvage claw
+
+Between contracts, step up to the SALVAGE CLAW console under the observation window in the supply bay: grip the stick to swing the huge hull arm (pull back to raise it, push to lower it), hold EXTEND or RETRACT to change its reach, and pull the trigger (or press CLAW) to close the claw on cargo drifting past outside. Carry what you catch to the INTAKE hatch beside the window and it pays into your own save: 10 cr for scrap, 14 for a crate, 24 for a long container (grab it by the striped middle) and 60 for the rare gold-striped strongbox, up to 150 cr per shift until you fly another contract. The claw is local to each headset, sends nothing over the network, and is locked while a contract is running.

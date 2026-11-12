@@ -143,6 +143,10 @@ namespace TrashAstronauts.Tests
             public void CatchStarted(byte victimSlot) => log.Add("catch " + victimSlot);
             public void BlackoutStarted(float seconds) { blackouts.Add(seconds); log.Add("blackout on"); }
             public void BlackoutEnded(bool instant) => log.Add("blackout off " + instant);
+            public readonly List<(byte slot, float progress, byte rescuer)> progress = new List<(byte, float, byte)>();
+            public void PlayerDowned(byte slot, NetVec3 position) => log.Add("downed " + slot);
+            public void PlayerRevived(byte slot, byte by) => log.Add("revived " + slot + " by " + by);
+            public void ReviveProgress(byte slot, float progress, byte rescuerSlot) { this.progress.Add((slot, progress, rescuerSlot)); log.Add("progress " + slot); }
             public bool LocalGrab(byte itemId) => true;
             public void LocalRelease(byte itemId) { }
         }
@@ -217,7 +221,7 @@ namespace TrashAstronauts.Tests
         // ================================================================== host half
 
         [UnityTest]
-        public IEnumerator Host_TheCreatureSwitch_BringsItAndTheBlackoutsAboard_NeverTheMimic_AndOffIsTheRideAlong()
+        public IEnumerator Host_TheCreatureSwitch_BringsItAndTheBlackoutsAboard_AnySpeciesTheMimicToo_AndOffIsTheRideAlong()
         {
             var rec = Host(false);
             yield return null;
@@ -230,7 +234,7 @@ namespace TrashAstronauts.Tests
             Assert.AreEqual(0, run.hazardFlags);
             Assert.AreEqual(0u, run.wireArmedMask);
 
-            // On: a creature every time, never the Mimic, blackouts on, no webs.
+            // On: a creature every time, any species (the Mimic too, since it hears the whole crew), blackouts on, no webs.
             m_Rules.CreatureEnabled = true;
             MissionDirector.CreatureOverride = null;
             var picks = new HashSet<int>();
@@ -243,14 +247,13 @@ namespace TrashAstronauts.Tests
                 Assert.AreEqual(0u, run.wireArmedMask);
             }
             CollectionAssert.DoesNotContain(picks, (int)RunStartParams.NoCreature);
-            CollectionAssert.DoesNotContain(picks, mimic);
-            Assert.AreEqual(m_Director.enemies.Length - 1, picks.Count);
-            // Even asked for by name, the Mimic stays ashore.
+            CollectionAssert.Contains(picks, mimic);
+            Assert.AreEqual(m_Director.enemies.Length, picks.Count);
+            // Asked for by name, the Mimic comes aboard.
             MissionDirector.CreatureOverride = mimic;
             MissionDirector.SeedOverride = 7;
             run = m_Director.BuildRunParams();
-            Assert.AreNotEqual(mimic, (int)run.creatureIndex);
-            Assert.AreNotEqual(RunStartParams.NoCreature, run.creatureIndex);
+            Assert.AreEqual(mimic, (int)run.creatureIndex);
             Assert.AreEqual(run.ComputePlanHash(), run.planHash);
 
             // The contract it starts has it awake on the host, simulated here, with a blackout to come.
@@ -271,12 +274,14 @@ namespace TrashAstronauts.Tests
         }
 
         [UnityTest]
-        public IEnumerator Host_ItHuntsAndCatchesACrewMembersStandIn_WhileTheHostIsSafeInTheTug_AndTheRunEndsWithTheJumpscare()
+        public IEnumerator Host_ItHuntsAndCatchesACrewMembersStandIn_WhileTheHostIsSafeInTheTug_AndTheJumpscareEndsWithThemDowned()
         {
             var rec = Host();
             Assert.IsTrue(m_Director.StartMission(m_Director.LocalPlayerId));
             yield return Frames(2);
-            var crew = AddRemotePlayer(1, MapPoints.Freighter(0f, 0f, 19.6f));
+            // In the spine corridor, with the creature set down 3 m beyond the crew member and about 1.6 m past its
+            // nearest waypoint, so its route starts back toward them (as it did before the bigger-maps update).
+            var crew = AddRemotePlayer(1, MapPoints.Freighter(0f, 0f, 17.7f));
             yield return Frames(3);
             Assert.IsTrue(m_Player.InSafeZone, "The host watches from the tug.");
             Assert.IsFalse(crew.InSafeZone);
@@ -303,7 +308,7 @@ namespace TrashAstronauts.Tests
                     Assert.AreEqual(1, s.targetSlot, "The stream names the quarry.");
                 }
             }
-            Assert.IsTrue(chasedTheCrew, "It should have chased the crew member.");
+            Assert.IsTrue(chasedTheCrew, "It should have chased the crew member (states: " + string.Join(", ", brainChanges) + "; it ended at " + creature.transform.position + ", the crew at " + crew.HeadPosition + ").");
             Assert.IsTrue(creature.IsScaring, "It should have caught the crew member's stand-in.");
             float caughtAt = Time.unscaledTime;
             Assert.AreEqual(new PlayerId(1), creature.CatchVictim);
@@ -334,19 +339,21 @@ namespace TrashAstronauts.Tests
             Assert.IsFalse(creature.Stagger(1f));
             Assert.IsFalse(creature.Tranquilize(5f));
 
+            // Co-op revive: the host is still up, so when the jumpscare is over the crew member is downed, not the run.
             float endedAt = -1f;
             for (float waited = 0f; waited < 10f; waited += Time.unscaledDeltaTime)
             {
-                if (m_Director.Phase != MissionPhase.Active) { endedAt = Time.unscaledTime; break; }
+                if (crew.IsDowned || m_Director.Phase != MissionPhase.Active) { endedAt = Time.unscaledTime; break; }
                 Assert.AreEqual(ui, Sfx.UiPlayCount, "Nothing in the host's ears while someone else is caught.");
                 Assert.AreEqual(0f, m_Player.fader.Alpha);
                 yield return null;
             }
-            Assert.AreEqual(MissionPhase.Results, m_Director.Phase);
-            Assert.AreEqual(MissionOutcome.FailedCaught, m_Director.Session.Result.Outcome);
-            Assert.That(endedAt - caughtAt, Is.InRange(creature.ScareTotalSeconds - 0.05f, creature.ScareTotalSeconds + 0.75f), "The run ends when the jumpscare does.");
-            Assert.AreEqual(1, rec.Count("runended FailedCaught"));
-            Assert.Less(rec.log.IndexOf("catch 1"), rec.log.IndexOf("runended FailedCaught"));
+            Assert.IsTrue(crew.IsDowned, "Caught with the host still up: downed.");
+            Assert.AreEqual(MissionPhase.Active, m_Director.Phase, "The contract goes on.");
+            Assert.That(endedAt - caughtAt, Is.InRange(creature.ScareTotalSeconds - 0.05f, creature.ScareTotalSeconds + 0.75f), "Downed when the jumpscare ends.");
+            Assert.AreEqual(1, rec.Count("downed 1"));
+            Assert.AreEqual(0, rec.Count("runended"));
+            Assert.Less(rec.log.IndexOf("catch 1"), rec.log.IndexOf("downed 1"));
             Assert.AreEqual(0, rec.Count("blackout"));
             Assert.IsFalse(m_Director.blackout.IsBlackout);
             Object.Destroy(crew.gameObject);

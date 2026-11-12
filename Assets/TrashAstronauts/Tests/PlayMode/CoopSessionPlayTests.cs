@@ -96,7 +96,7 @@ namespace TrashAstronauts.Tests
             Assert.AreEqual(run.items.Length, bot.World.Run.items.Length);
             Assert.AreNotEqual(RunStartParams.NoCreature, run.creatureIndex, "The shared spider is aboard a co-op contract.");
             Assert.IsTrue(m_Director.CreatureAboard);
-            Assert.IsNull(m_Director.ActiveEnemy.GetComponent<VoiceMimic>(), "Never the Mimic in co-op.");
+            Assert.AreSame(m_Director.enemies[run.creatureIndex], m_Director.ActiveEnemy, "The species the host picked is the one aboard.");
             Assert.AreEqual(0u, run.wireArmedMask, "No webs in co-op yet.");
             Assert.AreEqual(run.creatureIndex, bot.World.Run.creatureIndex);
 
@@ -389,7 +389,7 @@ namespace TrashAstronauts.Tests
         }
 
         [UnityTest]
-        public IEnumerator Spider_CatchesTheBotsSuit_CatchStartedNamesIt_AndRunEndedReachesItAfterASilenceDuringTheScare()
+        public IEnumerator Spider_CatchesTheBotsSuit_CatchStartedNamesIt_AndPlayerDownedReachesItAfterASilenceDuringTheScare()
         {
             Bot bot = null;
             yield return HostWithBot(b => bot = b);
@@ -402,17 +402,19 @@ namespace TrashAstronauts.Tests
 
             // The bot's headset goes quiet through the scare (a lost link, a sleeping headset).
             bot.Frozen = true;
-            yield return PacedUntil(() => m_Director.Phase != MissionPhase.Active, creature.ScareTotalSeconds + 3f);
-            Assert.AreEqual(MissionPhase.Results, m_Director.Phase, "The host ended the run.");
-            Assert.AreEqual(MissionOutcome.FailedCaught, m_Director.Session.Result.Outcome);
+            yield return PacedUntil(() => m_Net.Crew(1).context.IsDowned || m_Director.Phase != MissionPhase.Active, creature.ScareTotalSeconds + 3f);
+            // Co-op revive: the host is still up, so the bot is downed where it was caught and the contract goes on.
+            Assert.AreEqual(MissionPhase.Active, m_Director.Phase, "The host did not end the run.");
+            Assert.IsTrue(m_Net.Crew(1).context.IsDowned, "The bot's suit is downed.");
             Assert.IsNotNull(m_Net.Crew(1), "The bot's suit is still in the crew (its slot is held).");
-            Assert.AreEqual(0, bot.World.Calls[NetMsg.RunEnded]);
+            Assert.AreEqual(0, bot.World.Calls[NetMsg.PlayerDowned]);
 
-            // It comes back: the reliable stream delivers the end of the run.
+            // It comes back: the reliable stream delivers the news.
             bot.Frozen = false;
-            yield return Until(() => bot.World.Calls[NetMsg.RunEnded] > 0);
-            Assert.AreEqual(1, bot.World.Calls[NetMsg.RunEnded]);
-            Assert.AreEqual(MissionOutcome.FailedCaught, bot.World.Result.outcome, "Being caught fails the contract for everyone.");
+            yield return Until(() => bot.World.Calls[NetMsg.PlayerDowned] > 0);
+            Assert.AreEqual(1, bot.World.Calls[NetMsg.PlayerDowned]);
+            Assert.IsTrue(bot.World.Downed[1], "The bot hears that it is downed.");
+            Assert.AreEqual(0, bot.World.Calls[NetMsg.RunEnded], "Being caught with a crew mate still up does not end the contract.");
             m_Net.Leave();
         }
 

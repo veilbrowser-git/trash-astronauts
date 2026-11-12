@@ -8,9 +8,12 @@ namespace TrashAstronauts.Core.Net
         /// <summary>
         /// 2: proximity voice chat (the Voice stream message) in one line of builds, suit colour (in the settings
         /// byte and the Welcome roster) in another. 3: both. 4: everyone grabs (item ownership in use) and the
-        /// helmet lamp's HeadLampOn avatar bit (an older build masks it off). Each version refuses every other.
+        /// helmet lamp's HeadLampOn avatar bit (an older build masks it off). 6 (0.13.0): the co-op revive (PlayerDowned,
+        /// PlayerRevived, ReviveProgress, ReviveHold, the downed crew in WorldState, downs and left-behind in RunEnded),
+        /// crew shoves (CrewPush) and the Mimic in co-op (the creature's voice as Voice slot 7, and the one-byte "voice
+        /// off" notice; see VoiceMsg). (5 was only ever used by unreleased branch builds.) Each version refuses every other.
         /// </summary>
-        public const byte Version = 4;
+        public const byte Version = 6;
         /// <summary>The host's UDP port. Clients bind an ephemeral port.</summary>
         public const ushort HostPort = 47800;
         public const int MaxDatagram = 1200;
@@ -140,6 +143,12 @@ namespace TrashAstronauts.Core.Net
         public const byte WireReport = 135;
         public const byte WireChanged = 136;
 
+        // co-op revive (protocol 5)
+        public const byte PlayerDowned = 137;   // host -> all
+        public const byte PlayerRevived = 138;  // host -> all
+        public const byte ReviveProgress = 139; // host -> all, at most 5 a second per downed player while the ring moves
+        public const byte ReviveHold = 140;     // client -> host: my hand is on (or off) this crew member's beacon
+
         public static bool IsReliable(byte type) => type >= FirstReliable;
 
         /// <summary>Every message id, for tests and tools.</summary>
@@ -152,6 +161,7 @@ namespace TrashAstronauts.Core.Net
             GrabRequest, ItemOwner, ItemCollected, ItemReleased, ItemThrown, ItemHandoff, ItemRest, ItemDamageReport, ItemValue, ItemDeposited, ItemRecovered,
             DoorRequest, DoorState, PointCutReport, PointCut, PanelOpened,
             CreatureStateChanged, Tranquilized, CatchStarted, TranqHitReport, TranqTracer, BlackoutStarted, BlackoutEnded, WireReport, WireChanged,
+            PlayerDowned, PlayerRevived, ReviveProgress, ReviveHold,
         };
 
         /// <summary>
@@ -215,6 +225,10 @@ namespace TrashAstronauts.Core.Net
                 case BlackoutEnded: return BlackoutEndedMsg.MaxSize;
                 case WireReport: return WireReportMsg.MaxSize;
                 case WireChanged: return WireChangedMsg.MaxSize;
+                case PlayerDowned: return PlayerDownedMsg.MaxSize;
+                case PlayerRevived: return PlayerRevivedMsg.MaxSize;
+                case ReviveProgress: return ReviveProgressMsg.MaxSize;
+                case ReviveHold: return ReviveHoldMsg.MaxSize;
                 default: return -1;
             }
         }
@@ -276,6 +290,10 @@ namespace TrashAstronauts.Core.Net
                 case BlackoutEnded: return "BlackoutEnded";
                 case WireReport: return "WireReport";
                 case WireChanged: return "WireChanged";
+                case PlayerDowned: return "PlayerDowned";
+                case PlayerRevived: return "PlayerRevived";
+                case ReviveProgress: return "ReviveProgress";
+                case ReviveHold: return "ReviveHold";
                 default: return "Unknown(" + type + ")";
             }
         }
@@ -778,11 +796,15 @@ namespace TrashAstronauts.Core.Net
     /// (and kept so a mid-contract join can be added later). Done welds are a length-prefixed bitset over every
     /// cut point of every panel: bit = NetIdTable.CutPointOffset(panel) + index in Cuttable.cutPoints. The byte
     /// array is reused between reads.
+    /// Protocol 5 adds the crew's revive state at the end, fixed size (<see cref="CrewSize"/>): downedMask u8, how many
+    /// times each slot was downed (4 x u8), and where each slot lies (4 x PosCm, zero for one who is up). Who is down
+    /// is world state: a late joiner would see the downed suits where they lie.
     /// </summary>
     public struct WorldStateMsg
     {
         public const int MaxWeldBytes = NetProtocol.MaxCutPoints / 8;
-        public const int MaxSize = 2 + 2 + 1 + MaxWeldBytes + 4 + 4;
+        public const int CrewSize = 1 + NetProtocol.MaxPlayers + NetProtocol.MaxPlayers * 6;
+        public const int MaxSize = 2 + 2 + 1 + MaxWeldBytes + 4 + 4 + CrewSize;
 
         public ushort doorOpenMask;
         public ushort panelOpenMask;
@@ -790,6 +812,44 @@ namespace TrashAstronauts.Core.Net
         public int weldByteCount;
         public uint wireSnappedMask;
         public uint wireBurntMask;
+        /// <summary>Bit n = slot n is downed.</summary>
+        public byte downedMask;
+        /// <summary>Times downed this contract, one byte per slot (slot n in bits 8n..8n+7).</summary>
+        public uint downCounts;
+        public NetVec3 downedAt0, downedAt1, downedAt2, downedAt3;
+
+        public bool IsDowned(int slot) => slot >= 0 && slot < NetProtocol.MaxPlayers && (downedMask & (1 << slot)) != 0;
+        public int DownCount(int slot) => slot >= 0 && slot < NetProtocol.MaxPlayers ? (int)((downCounts >> (slot * 8)) & 0xFFu) : 0;
+
+        public NetVec3 DownedAt(int slot)
+        {
+            switch (slot)
+            {
+                case 0: return downedAt0;
+                case 1: return downedAt1;
+                case 2: return downedAt2;
+                case 3: return downedAt3;
+                default: return NetVec3.Zero;
+            }
+        }
+
+        /// <summary>Sets one slot's revive state: downed (at <paramref name="at"/>) or up, and how many times it has been downed.</summary>
+        public void SetCrew(int slot, bool downed, NetVec3 at, int downs)
+        {
+            if (slot < 0 || slot >= NetProtocol.MaxPlayers) return;
+            if (downed) downedMask |= (byte)(1 << slot);
+            else downedMask &= (byte)~(1 << slot);
+            if (!downed) at = NetVec3.Zero;
+            switch (slot)
+            {
+                case 0: downedAt0 = at; break;
+                case 1: downedAt1 = at; break;
+                case 2: downedAt2 = at; break;
+                default: downedAt3 = at; break;
+            }
+            uint count = (uint)(downs < 0 ? 0 : downs > 255 ? 255 : downs);
+            downCounts = (downCounts & ~(0xFFu << (slot * 8))) | (count << (slot * 8));
+        }
 
         public bool IsWeldDone(int bit)
         {
@@ -819,6 +879,12 @@ namespace TrashAstronauts.Core.Net
             panelOpenMask = other.panelOpenMask;
             wireSnappedMask = other.wireSnappedMask;
             wireBurntMask = other.wireBurntMask;
+            downedMask = other.downedMask;
+            downCounts = other.downCounts;
+            downedAt0 = other.downedAt0;
+            downedAt1 = other.downedAt1;
+            downedAt2 = other.downedAt2;
+            downedAt3 = other.downedAt3;
             weldByteCount = 0;
             int n = other.weldDone == null ? 0 : Math.Min(Math.Min(other.weldByteCount, other.weldDone.Length), MaxWeldBytes);
             if (n <= 0) return;
@@ -834,6 +900,9 @@ namespace TrashAstronauts.Core.Net
             weldByteCount = 0;
             wireSnappedMask = 0u;
             wireBurntMask = 0u;
+            downedMask = 0;
+            downCounts = 0u;
+            downedAt0 = downedAt1 = downedAt2 = downedAt3 = NetVec3.Zero;
         }
 
         public void Write(ref NetWriter w)
@@ -846,6 +915,9 @@ namespace TrashAstronauts.Core.Net
             if (n > 0) w.Bytes(weldDone, 0, n);
             w.U32(wireSnappedMask);
             w.U32(wireBurntMask);
+            w.U8((byte)(downedMask & 15));
+            w.U32(downCounts);
+            for (int i = 0; i < NetProtocol.MaxPlayers; i++) Quant.WritePosCm(ref w, IsDowned(i) ? DownedAt(i) : NetVec3.Zero);
         }
 
         /// <summary>Reads into <paramref name="m"/>, reusing its weld array when it is big enough.</summary>
@@ -860,6 +932,12 @@ namespace TrashAstronauts.Core.Net
             r.Bytes(m.weldDone, 0, n);
             m.wireSnappedMask = r.U32();
             m.wireBurntMask = r.U32();
+            m.downedMask = (byte)(r.U8() & 15);
+            m.downCounts = r.U32();
+            m.downedAt0 = Quant.ReadPosCm(ref r);
+            m.downedAt1 = Quant.ReadPosCm(ref r);
+            m.downedAt2 = Quant.ReadPosCm(ref r);
+            m.downedAt3 = Quant.ReadPosCm(ref r);
             if (r.Failed) return false;
             m.weldByteCount = n;
             return true;
@@ -1099,10 +1177,14 @@ namespace TrashAstronauts.Core.Net
         }
     }
 
-    /// <summary>Host -> all: the contract ended. Mirrors <see cref="MissionResult"/> field for field.</summary>
+    /// <summary>
+    /// Host -> all: the contract ended. Mirrors <see cref="MissionResult"/> field for field, the revive penalties
+    /// included (protocol 5: times downed per slot, one byte each, and the left-behind mask), so every headset banks
+    /// its own share.
+    /// </summary>
     public struct RunEndedMsg
     {
-        public const int MaxSize = 37;
+        public const int MaxSize = 42;
         public MissionOutcome outcome;
         public int quota;
         public int depositedValue;
@@ -1113,6 +1195,10 @@ namespace TrashAstronauts.Core.Net
         public int payout;
         public float oxygenRemainingSeconds;
         public float elapsedSeconds;
+        /// <summary>Times downed this contract, one byte per slot (slot n in bits 8n..8n+7).</summary>
+        public uint crewDowns;
+        /// <summary>Bit n = slot n was still downed at extraction.</summary>
+        public byte leftBehindMask;
 
         public static RunEndedMsg From(MissionResult result)
         {
@@ -1128,6 +1214,12 @@ namespace TrashAstronauts.Core.Net
             m.payout = result.Payout;
             m.oxygenRemainingSeconds = result.OxygenRemainingSeconds;
             m.elapsedSeconds = result.ElapsedSeconds;
+            for (int i = 0; i < NetProtocol.MaxPlayers; i++)
+            {
+                int d = result.DownsOf(i);
+                m.crewDowns |= (uint)(d < 0 ? 0 : d > 255 ? 255 : d) << (i * 8);
+            }
+            m.leftBehindMask = (byte)(result.LeftBehindMask & 15);
             return m;
         }
 
@@ -1146,6 +1238,10 @@ namespace TrashAstronauts.Core.Net
                 Payout = payout,
                 OxygenRemainingSeconds = oxygenRemainingSeconds,
                 ElapsedSeconds = elapsedSeconds,
+                CrewDowns = crewDowns != 0u
+                    ? new[] { (int)(crewDowns & 0xFF), (int)((crewDowns >> 8) & 0xFF), (int)((crewDowns >> 16) & 0xFF), (int)((crewDowns >> 24) & 0xFF) }
+                    : null,
+                LeftBehindMask = leftBehindMask & 15,
             };
         }
 
@@ -1161,6 +1257,8 @@ namespace TrashAstronauts.Core.Net
             w.I32(payout);
             w.F32(oxygenRemainingSeconds);
             w.F32(elapsedSeconds);
+            w.U32(crewDowns);
+            w.U8((byte)(leftBehindMask & 15));
         }
 
         public static bool Read(ref NetReader r, out RunEndedMsg m)
@@ -1178,6 +1276,8 @@ namespace TrashAstronauts.Core.Net
             m.payout = r.I32();
             m.oxygenRemainingSeconds = r.F32();
             m.elapsedSeconds = r.F32();
+            m.crewDowns = r.U32();
+            m.leftBehindMask = (byte)(r.U8() & 15);
             return !r.Failed;
         }
     }
@@ -1688,6 +1788,72 @@ namespace TrashAstronauts.Core.Net
             m.by = r.U8();
             if (m.index >= NetProtocol.MaxWires || change > (byte)NetWireChange.Burnt || (m.by >= NetProtocol.MaxPlayers && m.by != NetProtocol.NoSlot)) r.Fail();
             m.change = (NetWireChange)change;
+            return !r.Failed;
+        }
+    }
+
+    // ====================================================================== co-op revive (reliable, protocol 5)
+
+    /// <summary>Host -> all: this crew member was caught and is downed here (where their head was when it caught them).</summary>
+    public struct PlayerDownedMsg
+    {
+        public const int MaxSize = 7;
+        public byte slot;
+        public NetVec3 position;
+        public void Write(ref NetWriter w) { w.U8(slot); Quant.WritePosCm(ref w, position); }
+        public static bool Read(ref NetReader r, out PlayerDownedMsg m)
+        {
+            m = new PlayerDownedMsg { slot = r.U8() };
+            m.position = Quant.ReadPosCm(ref r);
+            if (m.slot >= NetProtocol.MaxPlayers) r.Fail();
+            return !r.Failed;
+        }
+    }
+
+    /// <summary>Host -> all: this crew member is up again, revived by <see cref="by"/> (255 = nobody in particular).</summary>
+    public struct PlayerRevivedMsg
+    {
+        public const int MaxSize = 2;
+        public byte slot;
+        public byte by;
+        public void Write(ref NetWriter w) { w.U8(slot); w.U8(by); }
+        public static bool Read(ref NetReader r, out PlayerRevivedMsg m)
+        {
+            m = new PlayerRevivedMsg { slot = r.U8(), by = r.U8() };
+            if (m.slot >= NetProtocol.MaxPlayers || (m.by >= NetProtocol.MaxPlayers && m.by != NetProtocol.NoSlot)) r.Fail();
+            return !r.Failed;
+        }
+    }
+
+    /// <summary>Host -> all: how far this downed crew member's revive ring is (0..1 in 255 steps) and who is holding it (255 = nobody).</summary>
+    public struct ReviveProgressMsg
+    {
+        public const int MaxSize = 3;
+        public byte slot;
+        public float progress;
+        public byte rescuerSlot;
+        public void Write(ref NetWriter w) { w.U8(slot); w.U8(Quant.ToByte(progress)); w.U8(rescuerSlot); }
+        public static bool Read(ref NetReader r, out ReviveProgressMsg m)
+        {
+            m = new ReviveProgressMsg { slot = r.U8() };
+            m.progress = Quant.FromByte(r.U8());
+            m.rescuerSlot = r.U8();
+            if (m.slot >= NetProtocol.MaxPlayers || (m.rescuerSlot >= NetProtocol.MaxPlayers && m.rescuerSlot != NetProtocol.NoSlot)) r.Fail();
+            return !r.Failed;
+        }
+    }
+
+    /// <summary>Client -> host: my hand closed on (on) or let go of (off) the beacon of the downed crew member in <see cref="slot"/>.</summary>
+    public struct ReviveHoldMsg
+    {
+        public const int MaxSize = 2;
+        public byte slot;
+        public bool on;
+        public void Write(ref NetWriter w) { w.U8(slot); w.Bool(on); }
+        public static bool Read(ref NetReader r, out ReviveHoldMsg m)
+        {
+            m = new ReviveHoldMsg { slot = r.U8(), on = r.Bool() };
+            if (m.slot >= NetProtocol.MaxPlayers) r.Fail();
             return !r.Failed;
         }
     }

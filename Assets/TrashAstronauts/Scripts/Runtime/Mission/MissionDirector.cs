@@ -630,17 +630,8 @@ namespace TrashAstronauts.Mission
         int PickCreature(int seed)
         {
             if (CreatureOverride.HasValue) return Mathf.Clamp(CreatureOverride.Value, 0, enemies.Length - 1);
-            var rng = new System.Random(seed ^ 0x5f3759df);
-            if (Net == null) return rng.Next(enemies.Length);
-
-            // In a session the Mimic stays ashore: it plays back one player's own microphone, and no
-            // microphone audio ever leaves a headset.
-            var candidates = new List<int>();
-            for (int i = 0; i < enemies.Length; i++)
-            {
-                if (enemies[i] != null && enemies[i].GetComponent<VoiceMimic>() == null) candidates.Add(i);
-            }
-            return candidates.Count > 0 ? candidates[rng.Next(candidates.Count)] : RunStartParams.NoCreature;
+            // Every species, offline and in co-op alike (in co-op the Mimic hears the whole crew: Net/Voice/MimicCrewVoice.cs).
+            return new System.Random(seed ^ 0x5f3759df).Next(enemies.Length);
         }
 
         /// <summary>
@@ -833,13 +824,19 @@ namespace TrashAstronauts.Mission
             }
 
             var result = Session.Extract(by);
-            if (result != null) FinishRun(result);
+            if (result != null)
+            {
+                // Co-op: anyone still downed is brought home by the company, at a price (ReviveRules.LeftBehindPenalty).
+                StampRevive(result, true);
+                FinishRun(result);
+            }
             return result;
         }
 
         /// <summary>
         /// Who is keeping the tug from leaving: one bit per player (bit = PlayerId.Value) whose head is
-        /// outside the tug. Players who are away (headset off, link silent) are not waited for. 0 = all aboard.
+        /// outside the tug. Players who are away (headset off, link silent) are not waited for, and neither is a
+        /// downed crew member (co-op revive: they come home with the crew, left behind). 0 = all aboard.
         /// </summary>
         public int MissingAboardMask()
         {
@@ -848,7 +845,7 @@ namespace TrashAstronauts.Mission
             for (int i = 0; i < m_Players.Count; i++)
             {
                 var player = m_Players[i];
-                if (player == null || player.IsAway) continue;
+                if (player == null || player.IsAway || player.IsDowned) continue;
                 if (!safeZone.Contains(player.HeadPosition)) mask |= 1 << Mathf.Clamp(player.Id.Value, 0, 30);
             }
             return mask;
@@ -860,13 +857,18 @@ namespace TrashAstronauts.Mission
             // Only the host ends a shared contract; a client hears about it.
             if (Net != null && Net.IsClient) return null;
             var result = Session.Fail(reason);
-            if (result != null) FinishRun(result);
+            if (result != null)
+            {
+                StampRevive(result, false);
+                FinishRun(result);
+            }
             return result;
         }
 
         void FinishRun(MissionResult result)
         {
-            Session.BankInto(Profile);
+            // This headset's own share: offline the whole payout; in a crew less this player's revive penalties.
+            Session.BankInto(Profile, LocalPayoutSlot);
 
             if (noise != null) noise.Muted = true;
             if (enemies != null)
@@ -897,11 +899,18 @@ namespace TrashAstronauts.Mission
                 }
                 if (!anyMoved) CloseHatch();
             }
+            else if (Net != null)
+            {
+                // A crew extracted while this player was downed in the wreck: home with the crew, behind a fade.
+                BringLocalPlayerHome(false);
+            }
             else
             {
                 CloseHatch();
             }
 
+            // The contract is over: in a crew, everyone downed gets up (they are on their way home).
+            ClearCrewDowned();
             MissionEnded?.Invoke(result);
         }
 
@@ -986,6 +995,8 @@ namespace TrashAstronauts.Mission
             if (Session.Phase == MissionPhase.Active) AbortRun();
             Net = null;
             ContractStartBlocked = false;
+            ReviveClient = null;
+            ClearCrewDowned();
             RestoreRunItemsLocal();
             MoveAwayToPauses();
             ApplyHostSilent(false);
@@ -1170,7 +1181,8 @@ namespace TrashAstronauts.Mission
                     float exertion = 0f;
                     foreach (var player in m_Players)
                     {
-                        if (player == null || player.IsAway) continue;
+                        // A downed player lies still: their exertion does not drain the shared tank (their suit still breathes).
+                        if (player == null || player.IsAway || player.IsDowned) continue;
                         if (player.IsRemote)
                             exertion = Mathf.Max(exertion, player.RemoteExertion);
                         else if (player.locomotion != null && player.locomotion.zeroG != null)
@@ -1180,6 +1192,9 @@ namespace TrashAstronauts.Mission
                 }
             }
             if (Net != null && Net.IsClient) ExtrapolateClientClock(everyoneSafe, Time.deltaTime);
+            // Co-op revive: the host fills the rings; every headset reports its own hand on a crew mate's beacon.
+            if (ReviveHost != null) ReviveHost.Tick(Time.deltaTime);
+            if (ReviveClient != null) ReviveClient.Tick();
 
             if (Time.time >= m_NextBoundsCheck)
             {
@@ -1193,7 +1208,11 @@ namespace TrashAstronauts.Mission
         {
             if (Net != null && Net.IsClient) return null;
             var result = Session.Tick(deltaSeconds, playersInSafeZone);
-            if (result != null) FinishRun(result);
+            if (result != null)
+            {
+                StampRevive(result, false);
+                FinishRun(result);
+            }
             return result;
         }
 

@@ -11,7 +11,8 @@ namespace TrashAstronauts.EditorTools
     /// Wreck D: an abandoned mining outpost in a lunar lava tube. The tug sets down at the cave mouth and
     /// the airlock opens straight into it.
     ///
-    /// Top-down layout (metres, +Z is deeper into the tube):
+    /// Top-down layout (metres, +Z is deeper into the tube). The builder is written in the layout's first
+    /// coordinates (below) and builds it 1.5x about the airlock join (see Builder.Maps.cs: X, Z, P):
     ///   Cave mouth       x[-6,9.6]    z[7.6,13.6]   the airlock opens here; crates, a cargo sled
     ///   Main tunnel      x[-1.6,1.6]  z[13.6,33.6]  work lights on stands, some dead
     ///   Habitat module   x[1.6,9.6]   z[13.6,24.6]  pressurised rooms: living (door from the mouth), workshop
@@ -20,6 +21,7 @@ namespace TrashAstronauts.EditorTools
     ///   Skylight chamber x[-12,-1.6]  z[18,28]      collapsed roof, stars above, rubble below
     ///   Back passage     x[-9.2,-6]   z[28,38.8]    skylight chamber to the drill chamber
     ///   Drill chamber    x[-6,6]      z[33.6,41.4]  the drill rig, its power core, the creature's lair
+    /// Built: x[-18,14.4] z[7.6,58.3].
     /// Loops: mouth - tunnel - skylight - side tunnel - mouth, and tunnel - drill - back passage - skylight - tunnel.
     /// The Moon's gravity (1.62 m/s^2) applies inside the tube only (MapGravity).
     /// </summary>
@@ -432,206 +434,231 @@ namespace TrashAstronauts.EditorTools
         {
             CaveMaterials();
             var map = BeginMap("Wreck D - Lava Tube", CaveMapId, "LAVA TUBE OUTPOST", "A mining outpost in a lunar lava tube. Low gravity. Two loops round the dark.");
+            s_Plan = MapScale;
             Transform root = map.transform;
             const SalvageCategoryMask S = SalvageCategoryMask.SmallScrap;
             const SalvageCategoryMask E = SalvageCategoryMask.Electronics;
             const SalvageCategoryMask N = SalvageCategoryMask.Novelty;
-            const float MH = 3.4f, TH = 3.2f, SH = 4.2f, DH = 4.2f, PH = 2.6f, HH = 2.8f;
+            // Heights (mouth, tunnel, skylight, drill, passage, side tunnel, habitat), raised with the bigger plan.
+            const float MH = 4.0f, TH = 3.8f, SH = 5.0f, DH = 5.0f, PH = 3.0f, ST = 3.2f, HH = 3.2f;
             var sodium = new Color(1f, 0.72f, 0.42f);
             var white = new Color(0.9f, 0.93f, 1f);
             var hab = M("Wall");
+            // Rock openings follow the passages they open into (doors and hatches keep their size).
+            const float sideW = 3.3f, sideH = 3.0f, tunnelW = 4.5f, tunnelH = 3.6f, skyW = 3.6f, skyH = 3.0f, passW = 3.0f, passH = 2.8f, drillW = 2.7f, drillH = 2.8f;
+            float galleyZ = Z(15.4f), lockersZ = Z(19.6f), benchX = X(3.0f);
 
             // --- cave mouth: the airlock opens into its south wall
-            CaveSlabs("D Mouth Slabs", -6f, 9.6f, 7.6f, 13.6f, MH);
-            Wall("D Mouth S West", new Vector2(-6f, 7.6f), new Vector2(-2.18f, 7.6f), MH, M("Basalt"));
-            Wall("D Mouth S East", new Vector2(2.18f, 7.6f), new Vector2(9.6f, 7.6f), MH, M("Basalt"));
-            Wall("D Mouth N", new Vector2(-6f, 13.6f), new Vector2(1.6f, 13.6f), MH, M("Basalt"),
-                new Gap(1.1f, 2.2f, 2.6f), new Gap(6f, 3.0f, 3.0f));
-            Wall("D Hab Front", new Vector2(1.6f, 13.6f), new Vector2(9.6f, 13.6f), MH, hab, new Gap(4.4f, 1.6f, 2.1f)); // the module's front, facing the mouth
-            CaveWallsAndRails("D Mouth", -6f, 9.6f, 7.6f, 13.6f, MH, "WE", "WE",
-                new Opening('S', 0f, 4.4f, 2.2f), new Opening('N', -4.9f, 2.2f, 2.6f), new Opening('N', 0f, 3.0f, 3.0f), new Opening('N', 6f, 1.6f, 2.1f));
-            TeleportArea("D Mouth", -5.65f, 9.25f, 7.95f, 13.25f);
+            CaveSlabs("D Mouth Slabs", X(-6f), X(9.6f), JoinZ, Z(13.6f), MH);
+            JoinWall("D Mouth S", X(-6f), X(9.6f), MH, M("Basalt"));
+            Wall("D Mouth N", new Vector2(X(-6f), Z(13.6f)), new Vector2(X(1.6f), Z(13.6f)), MH, M("Basalt"),
+                new Gap(X(-4.9f) - X(-6f), sideW, sideH), new Gap(-X(-6f), tunnelW, tunnelH));
+            Wall("D Hab Front", new Vector2(X(1.6f), Z(13.6f)), new Vector2(X(9.6f), Z(13.6f)), MH, hab, new Gap(X(6f) - X(1.6f), 1.6f, 2.1f)); // the module's front, facing the mouth
+            CaveWallsAndRails("D Mouth", X(-6f), X(9.6f), JoinZ, Z(13.6f), MH, "WE", "WE",
+                new Opening('S', 0f, 4.4f, 2.2f), new Opening('N', X(-4.9f), sideW, sideH), new Opening('N', 0f, tunnelW, tunnelH), new Opening('N', X(6f), 1.6f, 2.1f));
+            TeleportArea("D Mouth", X(-6f) + 0.35f, X(9.6f) - 0.35f, JoinZ + 0.35f, Z(13.6f) - 0.35f);
             TeleportArea("D Mouth Airlock Doorway", -0.5f, 0.5f, 7.2f, 8.2f);
-            TeleportArea("D Side Tunnel Doorway", -5.4f, -4.4f, 13.0f, 14.2f);
-            TeleportArea("D Tunnel Doorway", -1.2f, 1.2f, 13.0f, 14.2f);
-            TeleportArea("D Hab Doorway", 5.5f, 6.5f, 13.0f, 14.2f);
+            TeleportArea("D Side Tunnel Doorway", X(-4.9f) - 0.5f, X(-4.9f) + 0.5f, Z(13.6f) - 0.6f, Z(13.6f) + 0.6f);
+            TeleportArea("D Tunnel Doorway", -1.2f, 1.2f, Z(13.6f) - 0.6f, Z(13.6f) + 0.6f);
+            TeleportArea("D Hab Doorway", X(6f) - 0.5f, X(6f) + 0.5f, Z(13.6f) - 0.6f, Z(13.6f) + 0.6f);
 
             // --- main tunnel; its west wall beside the skylight chamber belongs to the (taller) chamber
-            CaveSlabs("D Tunnel Slabs", -1.6f, 1.6f, 13.6f, 33.6f, TH);
-            Wall("D Tunnel W South", new Vector2(-1.6f, 13.6f), new Vector2(-1.6f, 18f), TH, M("Basalt"));
-            Wall("D Tunnel W North", new Vector2(-1.6f, 28f), new Vector2(-1.6f, 33.6f), TH, M("Basalt"));
-            Wall("D Hab West", new Vector2(1.6f, 13.6f), new Vector2(1.6f, 24.6f), TH, hab, new Gap(22f - 13.6f, 1.0f, 2.0f));
-            Wall("D Tunnel E", new Vector2(1.6f, 24.6f), new Vector2(1.6f, 33.6f), TH, M("Basalt"));
-            CaveWallsAndRails("D Tunnel", -1.6f, 1.6f, 13.6f, 33.6f, TH, "", "WE", new Opening('W', 23f, 2.4f, 2.6f), new Opening('E', 22f, 1.0f, 2.0f));
-            TeleportArea("D Tunnel", -1.25f, 1.25f, 13.95f, 33.25f);
+            float tW = X(-1.6f), tE = X(1.6f);
+            CaveSlabs("D Tunnel Slabs", tW, tE, Z(13.6f), Z(33.6f), TH);
+            Wall("D Tunnel W South", new Vector2(tW, Z(13.6f)), new Vector2(tW, Z(18f)), TH, M("Basalt"));
+            Wall("D Tunnel W North", new Vector2(tW, Z(28f)), new Vector2(tW, Z(33.6f)), TH, M("Basalt"));
+            Wall("D Hab West", new Vector2(tE, Z(13.6f)), new Vector2(tE, Z(24.6f)), TH, hab, new Gap(Z(22f) - Z(13.6f), 1.0f, 2.0f));
+            Wall("D Tunnel E", new Vector2(tE, Z(24.6f)), new Vector2(tE, Z(33.6f)), TH, M("Basalt"));
+            CaveWallsAndRails("D Tunnel", tW, tE, Z(13.6f), Z(33.6f), TH, "", "WE", new Opening('W', Z(23f), skyW, skyH), new Opening('E', Z(22f), 1.0f, 2.0f));
+            TeleportArea("D Tunnel", tW + 0.35f, tE - 0.35f, Z(13.6f) + 0.35f, Z(33.6f) - 0.35f);
 
             // --- habitat module: two pressurised rooms with metal walls
-            Room("D Hab Living", 1.6f, 9.6f, 13.6f, 18.6f, HH, "E", hab, new Opening('S', 6f, 1.6f, 2.1f), new Opening('N', 4f, 1.2f, 2.0f));
-            Room("D Hab Workshop", 1.6f, 9.6f, 18.6f, 24.6f, HH, "NSE", hab, new Opening('S', 4f, 1.2f, 2.0f), new Opening('W', 22f, 1.0f, 2.0f));
-            TeleportArea("D Hab Hatch Doorway", 1.0f, 2.2f, 21.5f, 22.5f);
-            var habDoor = BuildDoor("Habitat Door", "lt_door_hab", new Vector3(6f, 0, 13.6f), 1.6f, 2.1f, false, false, true);
+            Room("D Hab Living", tE, X(9.6f), Z(13.6f), Z(18.6f), HH, "E", hab, new Opening('S', X(6f), 1.6f, 2.1f), new Opening('N', X(4f), 1.2f, 2.0f),
+                RailGap('W', galleyZ, 1.6f));
+            Room("D Hab Workshop", tE, X(9.6f), Z(18.6f), Z(24.6f), HH, "NSE", hab, new Opening('S', X(4f), 1.2f, 2.0f), new Opening('W', Z(22f), 1.0f, 2.0f),
+                RailGap('E', lockersZ, 1.3f), RailGap('E', Z(21.4f), 1.0f), RailGap('N', benchX, 2.5f));
+            TeleportArea("D Hab Hatch Doorway", tE - 0.6f, tE + 0.6f, Z(22f) - 0.5f, Z(22f) + 0.5f);
+            var habDoor = BuildDoor("Habitat Door", "lt_door_hab", new Vector3(X(6f), 0, Z(13.6f)), 1.6f, 2.1f, false, false, true);
 
             // --- side tunnel, skylight chamber, back passage, drill chamber
-            CaveRoom("D Side Tunnel", -6f, -3.8f, 13.6f, 18f, 2.8f, "WE", "W", new Opening('S', -4.9f, 2.2f, 2.6f), new Opening('N', -4.9f, 2.2f, 2.6f));
-            CaveRoom("D Skylight", -12f, -1.6f, 18f, 28f, SH, "SNWE", "WN", new Opening('S', -4.9f, 2.2f, 2.6f), new Opening('E', 23f, 2.4f, 2.6f), new Opening('N', -8.1f, 2.0f, 2.4f));
-            CaveSlabs("D Passage A Slabs", -9.2f, -7f, 28f, 36.6f, PH);
-            CaveSlabs("D Passage B Slabs", -9.2f, -6f, 36.6f, 38.8f, PH);
-            Wall("D Passage W", new Vector2(-9.2f, 28f), new Vector2(-9.2f, 38.8f), PH, M("Basalt"));
-            Wall("D Passage E", new Vector2(-7f, 28f), new Vector2(-7f, 36.6f), PH, M("Basalt"));
-            Wall("D Passage N", new Vector2(-9.2f, 38.8f), new Vector2(-6f, 38.8f), PH, M("Basalt"));
-            Wall("D Passage S", new Vector2(-7f, 36.6f), new Vector2(-6f, 36.6f), PH, M("Basalt"));
-            TeleportArea("D Passage A", -8.85f, -7.35f, 28.3f, 38.45f);
-            TeleportArea("D Passage B", -8.85f, -5.6f, 36.95f, 38.45f);
-            Rail(new Vector3(-9f, RailY, 28.6f), new Vector3(-9f, RailY, 38.2f));
-            Rail(new Vector3(-6.6f, RailY, 38.6f), new Vector3(-8.6f, RailY, 38.6f));
-            CaveRoom("D Drill", -6f, 6f, 33.6f, 41.4f, DH, "SNWE", "NE", new Opening('S', 0f, 3.0f, 3.0f), new Opening('W', 37.7f, 1.8f, 2.4f));
+            CaveRoom("D Side Tunnel", X(-6f), X(-3.8f), Z(13.6f), Z(18f), ST, "WE", "W", new Opening('S', X(-4.9f), sideW, sideH), new Opening('N', X(-4.9f), sideW, sideH));
+            CaveRoom("D Skylight", X(-12f), tW, Z(18f), Z(28f), SH, "SNWE", "WN", new Opening('S', X(-4.9f), sideW, sideH), new Opening('E', Z(23f), skyW, skyH), new Opening('N', X(-8.1f), passW, passH));
+            float pW = X(-9.2f), pE = X(-7f), pB = X(-6f), pS = Z(28f), pM = Z(36.6f), pN = Z(38.8f);
+            CaveSlabs("D Passage A Slabs", pW, pE, pS, pM, PH);
+            CaveSlabs("D Passage B Slabs", pW, pB, pM, pN, PH);
+            Wall("D Passage W", new Vector2(pW, pS), new Vector2(pW, pN), PH, M("Basalt"));
+            Wall("D Passage E", new Vector2(pE, pS), new Vector2(pE, pM), PH, M("Basalt"));
+            Wall("D Passage N", new Vector2(pW, pN), new Vector2(pB, pN), PH, M("Basalt"));
+            Wall("D Passage S", new Vector2(pE, pM), new Vector2(pB, pM), PH, M("Basalt"));
+            TeleportArea("D Passage A", pW + 0.35f, pE - 0.35f, pS + 0.3f, pN - 0.35f);
+            TeleportArea("D Passage B", pW + 0.35f, pB + 0.4f, pM + 0.35f, pN - 0.35f);
+            RailLine(new Vector2(pW, pS), new Vector2(pW, pN), Vector2.right);
+            RailLine(new Vector2(pW, pN), new Vector2(pB, pN), Vector2.down);
+            CaveRoom("D Drill", X(-6f), X(6f), Z(33.6f), Z(41.4f), DH, "SNWE", "NE", new Opening('S', 0f, tunnelW, tunnelH), new Opening('W', Z(37.7f), drillW, drillH));
 
             // --- the skylight: a collapsed section of roof, open to the stars
             // (built as a frame of ceiling around a hole, a shaft above it and a sky cap)
             {
                 var sky = Empty(s_Level, "D Skylight Shaft", Vector3.zero, null, GameLayers.Environment).transform;
-                const float top = 6.2f; // close enough that the stars are not lost in the fog
-                Box(sky, "Shaft W", new Vector3(-9.1f, (SH + top) * 0.5f, 23f), new Vector3(0.2f, top - SH, 4.4f), M("Basalt"));
-                Box(sky, "Shaft E", new Vector3(-4.9f, (SH + top) * 0.5f, 23f), new Vector3(0.2f, top - SH, 4.4f), M("Basalt"));
-                Box(sky, "Shaft S", new Vector3(-7f, (SH + top) * 0.5f, 20.9f), new Vector3(4.4f, top - SH, 0.2f), M("Basalt"));
-                Box(sky, "Shaft N", new Vector3(-7f, (SH + top) * 0.5f, 25.1f), new Vector3(4.4f, top - SH, 0.2f), M("Basalt"));
-                Box(sky, "Sky", new Vector3(-7f, top + 0.05f, 23f), new Vector3(4.6f, 0.1f, 4.6f), M("Stars"), GameLayers.Environment);
+                Vector3 c = P(-7f, 0f, 23f);
+                const float hole = 6f, top = SH + 2.0f; // close enough that the stars are not lost in the fog
+                float h0 = hole * 0.5f;
+                Box(sky, "Shaft W", new Vector3(c.x - h0 - 0.1f, (SH + top) * 0.5f, c.z), new Vector3(0.2f, top - SH, hole + 0.4f), M("Basalt"));
+                Box(sky, "Shaft E", new Vector3(c.x + h0 + 0.1f, (SH + top) * 0.5f, c.z), new Vector3(0.2f, top - SH, hole + 0.4f), M("Basalt"));
+                Box(sky, "Shaft S", new Vector3(c.x, (SH + top) * 0.5f, c.z - h0 - 0.1f), new Vector3(hole + 0.4f, top - SH, 0.2f), M("Basalt"));
+                Box(sky, "Shaft N", new Vector3(c.x, (SH + top) * 0.5f, c.z + h0 + 0.1f), new Vector3(hole + 0.4f, top - SH, 0.2f), M("Basalt"));
+                Box(sky, "Sky", new Vector3(c.x, top + 0.05f, c.z), new Vector3(hole + 0.6f, 0.1f, hole + 0.6f), M("Stars"), GameLayers.Environment);
                 // Cut the hole: the chamber's ceiling slab is replaced by four pieces around it.
+                float x0 = X(-12f), x1 = tW, z0 = Z(18f), z1 = Z(28f);
                 var slabs = s_Level.Find("D Skylight Slabs");
                 var ceiling = slabs.Find("Ceiling");
                 UnityEngine.Object.DestroyImmediate(ceiling.gameObject);
-                Box(slabs, "Ceiling W", new Vector3((-12f + -9f) * 0.5f, SH + 0.1f, 23f), new Vector3(3f, 0.2f, 10f), M("RockCeiling"));
-                Box(slabs, "Ceiling E", new Vector3((-5f + -1.6f) * 0.5f, SH + 0.1f, 23f), new Vector3(3.4f, 0.2f, 10f), M("RockCeiling"));
-                Box(slabs, "Ceiling S", new Vector3(-7f, SH + 0.1f, (18f + 21f) * 0.5f), new Vector3(4f, 0.2f, 3f), M("RockCeiling"));
-                Box(slabs, "Ceiling N", new Vector3(-7f, SH + 0.1f, (25f + 28f) * 0.5f), new Vector3(4f, 0.2f, 3f), M("RockCeiling"));
-                // What came down: a rubble heap under the hole.
-                Rock(new Vector3(-7.2f, 0, 23.2f), new Vector3(1.2f, 0.7f, 1.0f), 301, true);
-                Rock(new Vector3(-6.3f, 0, 22.4f), new Vector3(0.6f, 0.4f, 0.55f), 302, true);
-                Rock(new Vector3(-7.9f, 0, 22.1f), new Vector3(0.5f, 0.35f, 0.45f), 303, true);
-                Rock(new Vector3(-6.6f, 0, 24.1f), new Vector3(0.45f, 0.3f, 0.5f), 304, false);
-                var earthshine = PointLight(s_Lights, "Earthshine", new Vector3(-7f, SH - 0.3f, 23f), new Color(0.55f, 0.65f, 0.85f), 2.6f, 9f);
+                Box(slabs, "Ceiling W", new Vector3((x0 + c.x - h0) * 0.5f, SH + 0.1f, (z0 + z1) * 0.5f), new Vector3(c.x - h0 - x0, 0.2f, z1 - z0), M("RockCeiling"));
+                Box(slabs, "Ceiling E", new Vector3((c.x + h0 + x1) * 0.5f, SH + 0.1f, (z0 + z1) * 0.5f), new Vector3(x1 - c.x - h0, 0.2f, z1 - z0), M("RockCeiling"));
+                Box(slabs, "Ceiling S", new Vector3(c.x, SH + 0.1f, (z0 + c.z - h0) * 0.5f), new Vector3(hole, 0.2f, c.z - h0 - z0), M("RockCeiling"));
+                Box(slabs, "Ceiling N", new Vector3(c.x, SH + 0.1f, (c.z + h0 + z1) * 0.5f), new Vector3(hole, 0.2f, z1 - c.z - h0), M("RockCeiling"));
+                // What came down: a rubble heap under the hole (rocks a little bigger, spread with the plan).
+                Rock(P(-7.2f, 0, 23.2f), new Vector3(1.2f, 0.7f, 1.0f) * 1.4f, 301, true);
+                Rock(P(-6.3f, 0, 22.4f), new Vector3(0.6f, 0.4f, 0.55f) * 1.4f, 302, true);
+                Rock(P(-7.9f, 0, 22.1f), new Vector3(0.5f, 0.35f, 0.45f) * 1.4f, 303, true);
+                Rock(P(-6.6f, 0, 24.1f), new Vector3(0.45f, 0.3f, 0.5f) * 1.4f, 304, false);
+                Rock(P(-8.0f, 0, 24.2f), new Vector3(0.55f, 0.35f, 0.5f) * 1.3f, 305, true);
+                var earthshine = PointLight(s_Lights, "Earthshine", new Vector3(c.x, SH - 0.3f, c.z), new Color(0.55f, 0.65f, 0.85f), 3.0f, 13f);
                 earthshine.gameObject.name = "Earthshine (not powered)";
             }
 
             // --- panels and loot
-            var corePanel = SealedCompartment("Drill Power Core", "lt_panel_core", "DRILL POWER CORE", new Vector3(-3.2f, 0, 39.9f), new Vector3(1.8f, 2.4f, 1.8f), M("ReactorShell"), out Vector3 coreCavity);
-            MakeCuttable("Habitat Service Hatch", "lt_panel_hatch", "SERVICE HATCH", new Vector3(1.6f - T * 0.5f - 0.03f, 1.02f, 22f), Vector3.left, new Vector2(1.12f, 2.04f), s_HatchCuts);
-            Exclusion(root, "No Drone: D Hab Hatch", new Vector3(1.6f, 1.2f, 22f), new Vector3(1.4f, 2.6f, 1.3f));
+            var corePanel = SealedCompartment("Drill Power Core", "lt_panel_core", "DRILL POWER CORE", P(-3.2f, 0, 39.9f), new Vector3(1.8f, 2.4f, 1.8f), M("ReactorShell"), out Vector3 coreCavity);
+            MakeCuttable("Habitat Service Hatch", "lt_panel_hatch", "SERVICE HATCH", new Vector3(tE - T * 0.5f - 0.03f, 1.02f, Z(22f)), Vector3.left, new Vector2(1.12f, 2.04f), s_HatchCuts);
+            Exclusion(root, "No Drone: D Hab Hatch", new Vector3(tE, 1.2f, Z(22f)), new Vector3(1.4f, 2.6f, 1.3f));
             Spawn("lt_drill_core", coreCavity, SalvageCategoryMask.ReactorComponent, corePanel);
-            RackMount("lt_mount_rack", new Vector3(9.6f, 0, 21.4f), Vector3.left, "lt_hab_rack");
+            RackMount("lt_mount_rack", new Vector3(X(9.6f), 0, Z(21.4f)), Vector3.left, "lt_hab_rack");
 
-            Spawn("lt_mouth_west", new Vector3(-4.4f, 1.0f, 9.0f), S);
-            Spawn("lt_mouth_sled", new Vector3(3.4f, 1.2f, 11.9f), S | E);
-            Spawn("lt_mouth_east", new Vector3(8.4f, 1.1f, 9.0f), S | N);
-            Spawn("lt_side_mid", new Vector3(-4.6f, 1.1f, 16.0f), S);
-            Spawn("lt_tunnel_south", new Vector3(0.8f, 1.1f, 16.2f), S);
-            Spawn("lt_tunnel_mid", new Vector3(-0.9f, 1.2f, 26.6f), S | E);
-            Spawn("lt_tunnel_north", new Vector3(0.9f, 1.0f, 31.4f), S);
-            Spawn("lt_sky_east", new Vector3(-3.0f, 1.2f, 19.4f), S | E);
-            Spawn("lt_sky_west", new Vector3(-10.8f, 1.1f, 26.6f), S | N);
-            Spawn("lt_sky_south", new Vector3(-10.6f, 1.0f, 19.2f), S);
-            Spawn("lt_sky_north", new Vector3(-4.0f, 1.3f, 26.8f), E | N);
-            Spawn("lt_passage_mid", new Vector3(-8.1f, 1.1f, 32.0f), S | E);
-            Spawn("lt_passage_bend", new Vector3(-6.8f, 1.0f, 37.6f), S);
-            Spawn("lt_drill_west", new Vector3(-4.9f, 1.1f, 35.0f), S | E);
-            Spawn("lt_drill_east", new Vector3(5.0f, 1.2f, 38.0f), S | N);
-            Spawn("lt_drill_back", new Vector3(0.6f, 1.2f, 40.6f), S | E);
-            Spawn("lt_hab_galley", new Vector3(2.4f, 1.2f, 14.6f), N | S);
-            Spawn("lt_hab_table", new Vector3(4.6f, 1.25f, 16.4f), E | S);
-            Spawn("lt_hab_bunk", new Vector3(8.6f, 1.2f, 17.4f), S | N);
-            Spawn("lt_hab_bench", new Vector3(3.0f, 1.25f, 23.8f), E | N);
-            Spawn("lt_hab_floor", new Vector3(7.2f, 1.0f, 20.0f), S);
+            Spawn("lt_mouth_west", P(-4.4f, 1.0f, 9.0f), S);
+            Spawn("lt_mouth_sled", P(3.4f, 1.2f, 11.9f), S | E);
+            Spawn("lt_mouth_east", P(8.4f, 1.1f, 9.0f), S | N);
+            Spawn("lt_side_mid", P(-4.6f, 1.1f, 16.0f), S);
+            Spawn("lt_tunnel_south", P(0.8f, 1.1f, 16.2f), S);
+            Spawn("lt_tunnel_mid", P(-0.9f, 1.2f, 26.6f), S | E);
+            Spawn("lt_tunnel_north", P(0.9f, 1.0f, 31.4f), S);
+            Spawn("lt_sky_east", P(-3.0f, 1.2f, 19.4f), S | E);
+            Spawn("lt_sky_west", P(-10.8f, 1.1f, 26.6f), S | N);
+            Spawn("lt_sky_south", P(-10.6f, 1.0f, 19.2f), S);
+            Spawn("lt_sky_north", P(-4.0f, 1.3f, 26.8f), E | N);
+            Spawn("lt_passage_mid", P(-8.1f, 1.1f, 32.0f), S | E);
+            Spawn("lt_passage_bend", P(-6.8f, 1.0f, 37.6f), S);
+            Spawn("lt_drill_west", P(-4.9f, 1.1f, 35.0f), S | E);
+            Spawn("lt_drill_east", P(5.0f, 1.2f, 38.0f), S | N);
+            Spawn("lt_drill_back", P(0.6f, 1.2f, 40.6f), S | E);
+            Spawn("lt_hab_galley", new Vector3(tE + 0.8f, 1.2f, galleyZ - 0.8f), N | S);
+            Spawn("lt_hab_table", P(4.6f, 1.25f, 16.4f), E | S);
+            Spawn("lt_hab_bunk", new Vector3(X(9.6f) - 1.0f, 1.2f, Z(16.2f) + 1.2f), S | N);
+            Spawn("lt_hab_bench", new Vector3(benchX, 1.25f, Z(24.6f) - 0.8f), E | N);
+            Spawn("lt_hab_floor", P(7.2f, 1.0f, 20.0f), S);
 
             // --- dressing: crates and a cargo sled in the mouth
-            Container(new Vector3(-3.0f, 0, 12.7f), new Vector3(1.2f, 1.1f, 1.0f), "ContainerBlue");
-            Container(new Vector3(-2.8f, 0, 8.6f), new Vector3(1.2f, 1.0f, 1.0f));
-            Container(new Vector3(8.6f, 0, 12.4f), new Vector3(1.4f, 1.3f, 1.2f));
-            Container(new Vector3(3.4f, 0, 8.5f), new Vector3(1.6f, 0.9f, 1.0f), "ContainerBlue");
-            Box(s_Props, "Cargo Sled", new Vector3(3.4f, 0.3f, 11.9f), new Vector3(1.8f, 0.12f, 0.9f), M("Trim"));
-            Box(s_Props, "Cargo Sled Runner", new Vector3(3.4f, 0.12f, 11.55f), new Vector3(1.9f, 0.24f, 0.08f), M("Steel"), GameLayers.Default, false);
-            Box(s_Props, "Cargo Sled Runner", new Vector3(3.4f, 0.12f, 12.25f), new Vector3(1.9f, 0.24f, 0.08f), M("Steel"), GameLayers.Default, false);
-            Barrel(new Vector3(-5.4f, 0, 8.3f));
-            Barrel(new Vector3(9.0f, 0, 8.3f), "BarrelBlue");
-            Pipe("D Power Cable Mouth", new Vector3(1.4f, 0.05f, 8.0f), new Vector3(1.4f, 0.05f, 13.5f), 0.035f, "Cable");
-            Pipe("D Power Cable Tunnel", new Vector3(1.4f, 0.05f, 13.7f), new Vector3(1.4f, 0.05f, 33.4f), 0.035f, "Cable");
+            Container(P(-3.0f, 0, 12.7f), new Vector3(1.2f, 1.1f, 1.0f), "ContainerBlue");
+            Container(P(-2.8f, 0, 8.6f), new Vector3(1.2f, 1.0f, 1.0f));
+            Container(new Vector3(X(9.6f) - 1.0f, 0, Z(12.4f)), new Vector3(1.4f, 1.3f, 1.2f));
+            Container(P(3.4f, 0, 8.5f), new Vector3(1.6f, 0.9f, 1.0f), "ContainerBlue");
+            Container(P(-5.0f, 0, 11.6f), new Vector3(1.0f, 0.8f, 1.2f));
+            Vector3 sled = P(3.4f, 0f, 11.9f);
+            Box(s_Props, "Cargo Sled", sled + Vector3.up * 0.3f, new Vector3(1.8f, 0.12f, 0.9f), M("Trim"));
+            Box(s_Props, "Cargo Sled Runner", sled + new Vector3(0f, 0.12f, -0.35f), new Vector3(1.9f, 0.24f, 0.08f), M("Steel"), GameLayers.Default, false);
+            Box(s_Props, "Cargo Sled Runner", sled + new Vector3(0f, 0.12f, 0.35f), new Vector3(1.9f, 0.24f, 0.08f), M("Steel"), GameLayers.Default, false);
+            Barrel(new Vector3(X(-6f) + 0.6f, 0, 8.4f));
+            Barrel(new Vector3(X(9.6f) - 0.6f, 0, 8.4f), "BarrelBlue");
+            Pipe("D Power Cable Mouth", new Vector3(tE - 0.2f, 0.05f, 8.0f), new Vector3(tE - 0.2f, 0.05f, Z(13.6f) - 0.1f), 0.035f, "Cable");
+            Pipe("D Power Cable Tunnel", new Vector3(tE - 0.2f, 0.05f, Z(13.6f) + 0.1f), new Vector3(tE - 0.2f, 0.05f, Z(33.6f) - 0.2f), 0.035f, "Cable");
 
             // Drill chamber: the rig, its power core, ore bins.
-            var rig = Empty(s_Props, "Drill Rig", new Vector3(3.0f, 0, 40.0f), null, GameLayers.Environment).transform;
-            Box(rig, "Rig Base", new Vector3(3.0f, 0.5f, 40.0f), new Vector3(2.4f, 1.0f, 2.0f), M("Container"));
-            Box(rig, "Rig Mast", new Vector3(3.0f, 2.0f, 40.6f), new Vector3(0.5f, 2.0f, 0.5f), M("Steel"));
+            Vector3 rigAt = P(3.0f, 0, 40.0f);
+            var rig = Empty(s_Props, "Drill Rig", rigAt, null, GameLayers.Environment).transform;
+            Box(rig, "Rig Base", rigAt + new Vector3(0, 0.5f, 0), new Vector3(2.4f, 1.0f, 2.0f), M("Container"));
+            Box(rig, "Rig Mast", rigAt + new Vector3(0, 2.0f, 0.6f), new Vector3(0.5f, 2.0f, 0.5f), M("Steel"));
             Part(rig, "Drill Bit", Cone(0.35f, 0.05f, 1.2f, 12), new Vector3(0, 2.0f, 1.2f), M("Steel"), new Vector3(90f, 0, 0));
-            Box(rig, "Rig Cab", new Vector3(2.2f, 1.4f, 39.6f), new Vector3(0.8f, 0.8f, 0.9f), M("Trim"));
-            Container(new Vector3(-5.0f, 0, 40.4f), new Vector3(1.2f, 0.9f, 1.4f), "ContainerBlue");
-            Container(new Vector3(5.0f, 0, 34.6f), new Vector3(1.2f, 0.8f, 0.9f));
-            Barrel(new Vector3(-5.3f, 0, 34.2f), "BarrelBlue");
-            Pipe("D Drill Cable", new Vector3(1.4f, 0.05f, 33.8f), new Vector3(2.2f, 0.05f, 39.0f), 0.035f, "Cable");
+            Box(rig, "Rig Cab", rigAt + new Vector3(-0.8f, 1.4f, -0.4f), new Vector3(0.8f, 0.8f, 0.9f), M("Trim"));
+            Container(new Vector3(X(-6f) + 1.0f, 0, Z(41.4f) - 1.0f), new Vector3(1.2f, 0.9f, 1.4f), "ContainerBlue");
+            Container(new Vector3(X(6f) - 1.0f, 0, Z(33.6f) + 1.0f), new Vector3(1.2f, 0.8f, 0.9f));
+            Barrel(new Vector3(X(-6f) + 0.7f, 0, Z(33.6f) + 0.6f), "BarrelBlue");
+            Barrel(new Vector3(X(6f) - 0.7f, 0, Z(41.4f) - 0.8f));
+            Pipe("D Drill Cable", new Vector3(tE - 0.2f, 0.05f, Z(33.6f) + 0.2f), rigAt + new Vector3(-0.8f, 0.05f, -1.1f), 0.035f, "Cable");
 
             // Habitat: bunks, a table, a galley, the workshop bench.
-            Box(s_Props, "Bunk Lower", new Vector3(8.6f, 0.35f, 16.2f), new Vector3(0.9f, 0.3f, 1.9f), M("Trim"));
-            Box(s_Props, "Bunk Upper", new Vector3(8.6f, 1.55f, 16.2f), new Vector3(0.9f, 0.12f, 1.9f), M("Trim"));
-            Box(s_Props, "Bunk Mattress", new Vector3(8.6f, 0.56f, 16.2f), new Vector3(0.8f, 0.12f, 1.8f), M("Rubber"), GameLayers.Default, false);
-            Box(s_Props, "Mess Table", new Vector3(4.6f, 0.4f, 16.0f), new Vector3(1.4f, 0.8f, 0.8f), M("Trim"));
-            Box(s_Props, "Galley Counter", new Vector3(2.15f, 0.45f, 15.4f), new Vector3(0.7f, 0.9f, 1.4f), M("Trim"));
-            Box(s_Props, "Workshop Bench", new Vector3(3.0f, 0.45f, 24.0f), new Vector3(2.2f, 0.9f, 0.7f), M("Trim"));
-            ConsoleDetail(new Vector3(3.0f, 0.9f, 24.0f), 1.6f, Vector3.back);
-            LockerRow(new Vector3(9.6f - T * 0.5f - 0.24f, 0, 19.6f), Vector3.left, 2);
-            Window(new Vector3(9.6f - T * 0.5f - 0.015f, 1.65f, 15.6f), Vector3.left, 1.6f, 0.8f);
-            Poster("OUTPOST RULES\n1. Helmets on past the door.\n2. Count heads at every shift.", new Vector3(5.2f, 1.6f, 18.6f - T * 0.5f - 0.015f), Vector3.back, 0.95f, 0.55f, 0.36f);
-            Poster("SHIFT LOG 41\nDrill team did not come back up.\nThe lights in the tube keep dying.", new Vector3(9.6f - T * 0.5f - 0.012f, 1.5f, 23.2f), Vector3.left, 0.95f, 0.55f, 0.36f);
+            float bunkX = X(9.6f) - 1.0f, bunkZ = Z(16.2f);
+            Box(s_Props, "Bunk Lower", new Vector3(bunkX, 0.35f, bunkZ), new Vector3(0.9f, 0.3f, 1.9f), M("Trim"));
+            Box(s_Props, "Bunk Upper", new Vector3(bunkX, 1.55f, bunkZ), new Vector3(0.9f, 0.12f, 1.9f), M("Trim"));
+            Box(s_Props, "Bunk Mattress", new Vector3(bunkX, 0.56f, bunkZ), new Vector3(0.8f, 0.12f, 1.8f), M("Rubber"), GameLayers.Default, false);
+            Box(s_Props, "Mess Table", P(4.6f, 0.4f, 16.0f), new Vector3(1.4f, 0.8f, 0.8f), M("Trim"));
+            Box(s_Props, "Galley Counter", new Vector3(tE + 0.55f, 0.45f, galleyZ), new Vector3(0.7f, 0.9f, 1.4f), M("Trim"));
+            Box(s_Props, "Workshop Bench", new Vector3(benchX, 0.45f, Z(24.6f) - 0.6f), new Vector3(2.2f, 0.9f, 0.7f), M("Trim"));
+            ConsoleDetail(new Vector3(benchX, 0.9f, Z(24.6f) - 0.6f), 1.6f, Vector3.back);
+            LockerRow(new Vector3(X(9.6f) - T * 0.5f - 0.24f, 0, lockersZ), Vector3.left, 2);
+            Window(new Vector3(X(9.6f) - T * 0.5f - 0.015f, 1.65f, Z(15.6f)), Vector3.left, 1.6f, 0.8f);
+            Poster("OUTPOST RULES\n1. Helmets on past the door.\n2. Count heads at every shift.", new Vector3(X(5.2f), 1.6f, Z(18.6f) - T * 0.5f - 0.015f), Vector3.back, 0.95f, 0.55f, 0.36f);
+            Poster("SHIFT LOG 41\nDrill team did not come back up.\nThe lights in the tube keep dying.", new Vector3(X(9.6f) - T * 0.5f - 0.012f, 1.5f, Z(23.2f)), Vector3.left, 0.95f, 0.55f, 0.36f);
 
             // Work lights on stands down the tunnel (two of them knocked over), lamps in the habitat.
-            WorkLight("D Work Light Mouth W", -3.0f, 11.6f, 2.0f, sodium, 4.8f, 11f);
-            WorkLight("D Work Light Mouth E", 6.6f, 9.0f, 2.0f, sodium, 4.2f, 10f);
-            WorkLight("D Work Light Tunnel 1", -1.05f, 16.8f, 1.9f, sodium, 3.6f, 9f);
-            WorkLight("D Work Light Tunnel 2", 1.05f, 20.6f, 1.9f, sodium, 3.4f, 9f, true);
-            WorkLight("D Work Light Tunnel 3", -1.05f, 25.6f, 1.9f, sodium, 3.6f, 9f);
-            WorkLight("D Work Light Tunnel 4", 1.05f, 29.2f, 1.9f, sodium, 3.4f, 9f);
-            WorkLight("D Work Light Tunnel 5", -1.05f, 32.4f, 1.9f, sodium, 3.4f, 9f, true);
-            WorkLight("D Work Light Skylight", -2.6f, 26.8f, 2.2f, sodium, 3.9f, 11f);
-            WorkLight("D Work Light Side", -4.0f, 17.4f, 1.8f, sodium, 2.8f, 8f, true);
-            WorkLight("D Work Light Drill W", -4.6f, 36.4f, 2.4f, new Color(1f, 0.55f, 0.3f), 4.8f, 12f);
-            WorkLight("D Work Light Drill E", 4.8f, 36.8f, 2.4f, sodium, 4.2f, 12f);
-            RoomLight("D Hab Living Light", 5.6f, 2.4f, 16.1f, white, 3.0f, 8f);
-            RoomLight("D Hab Workshop Light", 5.6f, 2.4f, 21.6f, new Color(0.6f, 1f, 0.75f), 2.8f, 8f);
-            RoomLight("D Passage Light", -8.1f, 2.1f, 33f, new Color(1f, 0.5f, 0.25f), 2.8f, 8f);
-            Strip("D Hab Living Strip", new Vector3(5.6f, HH - 0.03f, 16.1f), new Vector3(4f, 0.03f, 0.1f), "GlowWhite");
-            Strip("D Hab Workshop Strip", new Vector3(5.6f, HH - 0.03f, 21.6f), new Vector3(4f, 0.03f, 0.1f), "GlowTeal");
+            float side = tE - 0.55f;
+            WorkLight("D Work Light Mouth W", X(-3.0f), Z(11.6f), 2.2f, sodium, 5.2f, 13f);
+            WorkLight("D Work Light Mouth E", X(6.6f), Z(9.0f), 2.2f, sodium, 4.6f, 12f);
+            WorkLight("D Work Light Mouth Mid", X(2.6f), Z(9.4f), 2.0f, sodium, 3.6f, 10f);
+            WorkLight("D Work Light Tunnel 1", -side, Z(16.8f), 2.0f, sodium, 3.8f, 10f);
+            WorkLight("D Work Light Tunnel 2", side, Z(20.6f), 2.0f, sodium, 3.6f, 10f, true);
+            WorkLight("D Work Light Tunnel 3", -side, Z(25.6f), 2.0f, sodium, 3.8f, 10f);
+            WorkLight("D Work Light Tunnel 4", side, Z(29.2f), 2.0f, sodium, 3.6f, 10f);
+            WorkLight("D Work Light Tunnel 5", -side, Z(32.4f), 2.0f, sodium, 3.6f, 10f, true);
+            WorkLight("D Work Light Tunnel 6", side, Z(23.0f), 2.0f, sodium, 3.2f, 9f);
+            WorkLight("D Work Light Skylight", tW - 1.0f, Z(26.8f), 2.4f, sodium, 4.2f, 13f);
+            WorkLight("D Work Light Skylight W", X(-11.0f), Z(19.6f), 2.2f, sodium, 3.6f, 11f);
+            WorkLight("D Work Light Side", X(-4.0f), Z(17.4f), 1.8f, sodium, 2.8f, 8f, true);
+            WorkLight("D Work Light Drill W", X(-4.6f), Z(36.4f), 2.6f, new Color(1f, 0.55f, 0.3f), 5.2f, 14f);
+            WorkLight("D Work Light Drill E", X(4.8f), Z(36.8f), 2.6f, sodium, 4.6f, 14f);
+            WorkLight("D Work Light Drill Back", X(-1.4f), Z(40.4f), 2.4f, sodium, 3.6f, 11f);
+            RoomLight("D Hab Living Light", X(4.6f), HH - 0.4f, Z(16.1f), white, 3.0f, 8.5f);
+            RoomLight("D Hab Living Light E", X(7.6f), HH - 0.4f, Z(16.1f), white, 2.6f, 8f);
+            RoomLight("D Hab Workshop Light", X(4.6f), HH - 0.4f, Z(21.6f), new Color(0.6f, 1f, 0.75f), 2.8f, 8.5f);
+            RoomLight("D Hab Workshop Light E", X(7.6f), HH - 0.4f, Z(21.6f), new Color(0.6f, 1f, 0.75f), 2.6f, 8f);
+            RoomLight("D Passage Light", X(-8.1f), PH - 0.5f, Z(31f), new Color(1f, 0.5f, 0.25f), 2.8f, 8.5f);
+            RoomLight("D Passage Light N", X(-8.1f), PH - 0.5f, Z(36.2f), new Color(1f, 0.5f, 0.25f), 2.6f, 8f);
+            Strip("D Hab Living Strip", new Vector3(X(5.6f), HH - 0.03f, Z(16.1f) + 1.3f), new Vector3(6f, 0.03f, 0.1f), "GlowWhite");
+            Strip("D Hab Workshop Strip", new Vector3(X(5.6f), HH - 0.03f, Z(21.6f) + 1.3f), new Vector3(6f, 0.03f, 0.1f), "GlowTeal");
 
-            Web(new Vector3(-11.9f, SH - 0.05f, 27.9f), Vector3.right, Vector3.back, Vector3.down, 1.8f);
-            Web(new Vector3(5.9f, DH - 0.05f, 41.3f), Vector3.left, Vector3.back, Vector3.down, 2.0f);
+            Web(new Vector3(X(-12f) + 0.1f, SH - 0.05f, Z(28f) - 0.1f), Vector3.right, Vector3.back, Vector3.down, 2.3f);
+            Web(new Vector3(X(6f) - 0.1f, DH - 0.05f, Z(41.4f) - 0.1f), Vector3.left, Vector3.back, Vector3.down, 2.5f);
 
-            Sign("LAVA TUBE OUTPOST\nSHAFT 2", new Vector3(-2.6f, 2.4f, 13.6f - T * 0.5f - 0.02f), Vector3.back, 0.8f);
-            Sign("HABITAT", new Vector3(6f, 2.5f, 13.6f - T * 0.5f - 0.02f), Vector3.back, 1.3f, new Color(0.6f, 1f, 0.9f));
-            Sign("DRILL FACE >>", new Vector3(-1.6f + T * 0.5f + 0.02f, 2.4f, 16.4f), Vector3.right, 1.0f);
-            Sign("SKYLIGHT\nROCKFALL", new Vector3(-4.9f, 2.9f, 13.6f - T * 0.5f - 0.02f), Vector3.back, 0.9f, new Color(1f, 0.5f, 0.4f));
-            Sign("SERVICE HATCH\nSEALED", new Vector3(1.6f - T * 0.5f - 0.02f, 2.25f, 22f), Vector3.left, 0.8f);
-            Sign("DRILL CHAMBER", new Vector3(1.6f - T * 0.5f - 0.02f, 2.4f, 31.6f), Vector3.left, 1.1f, new Color(1f, 0.6f, 0.3f));
-            Sign("IT CAME UP THE DRILL HOLE", new Vector3(-2.0f, 2.6f, 41.4f - T * 0.5f - 0.02f), Vector3.back, 0.8f, new Color(1f, 0.5f, 0.4f));
+            Sign("LAVA TUBE OUTPOST\nSHAFT 2", new Vector3(X(-2.6f), 2.6f, Z(13.6f) - T * 0.5f - 0.02f), Vector3.back, 0.8f);
+            Sign("HABITAT", new Vector3(X(6f), 2.5f, Z(13.6f) - T * 0.5f - 0.02f), Vector3.back, 1.3f, new Color(0.6f, 1f, 0.9f));
+            Sign("DRILL FACE >>", new Vector3(tW + T * 0.5f + 0.02f, 2.4f, Z(16.4f)), Vector3.right, 1.0f);
+            Sign("SKYLIGHT\nROCKFALL", new Vector3(X(-4.9f), sideH + 0.4f, Z(13.6f) - T * 0.5f - 0.02f), Vector3.back, 0.9f, new Color(1f, 0.5f, 0.4f));
+            Sign("SERVICE HATCH\nSEALED", new Vector3(tE - T * 0.5f - 0.02f, 2.25f, Z(22f)), Vector3.left, 0.8f);
+            Sign("DRILL CHAMBER", new Vector3(tE - T * 0.5f - 0.02f, 2.4f, Z(31.6f)), Vector3.left, 1.1f, new Color(1f, 0.6f, 0.3f));
+            Sign("IT CAME UP THE DRILL HOLE", new Vector3(X(-2.0f), 2.6f, Z(41.4f) - T * 0.5f - 0.02f), Vector3.back, 0.8f, new Color(1f, 0.5f, 0.4f));
 
-            Anchor("D Mouth", -1.6f, 10.6f);
-            Anchor("D Tunnel", 0f, 24f);
-            Anchor("D Hab", 6.4f, 16.4f);
-            Anchor("D Workshop", 6.0f, 21.8f);
-            Anchor("D Skylight", -4.0f, 23f);
-            Anchor("D Passage", -8.1f, 31f);
-            Anchor("D Drill", 0f, 36.4f);
-            Anchor("D Side", -4.9f, 15.8f);
+            Anchor("D Mouth", X(-1.6f), Z(10.6f));
+            Anchor("D Tunnel", 0f, Z(24f));
+            Anchor("D Hab", X(6.4f), Z(16.4f));
+            Anchor("D Workshop", X(6.0f), Z(21.8f));
+            Anchor("D Skylight", X(-4.0f), Z(23f));
+            Anchor("D Passage", X(-8.1f), Z(31f));
+            Anchor("D Drill", 0f, Z(36.4f));
+            Anchor("D Side", X(-4.9f), Z(15.8f));
 
-            Junk(s_JunkCanPrefab, new Vector3(-1.4f, 1.4f, 9.6f));
-            Junk(s_JunkCanPrefab, new Vector3(0.4f, 1.6f, 27.6f));
-            Junk(s_JunkCanPrefab, new Vector3(6.6f, 1.4f, 20.6f));
-            Junk(s_JunkCratePrefab, new Vector3(-9.6f, 1.8f, 21.0f));
-            Junk(s_JunkCratePrefab, new Vector3(1.8f, 1.6f, 36.2f));
-            Junk(s_JunkCratePrefab, new Vector3(6.4f, 1.5f, 10.4f));
+            Junk(s_JunkCanPrefab, P(-1.4f, 1.4f, 9.6f));
+            Junk(s_JunkCanPrefab, P(0.4f, 1.6f, 27.6f));
+            Junk(s_JunkCanPrefab, P(6.6f, 1.4f, 20.6f));
+            Junk(s_JunkCratePrefab, P(-9.6f, 1.8f, 21.0f));
+            Junk(s_JunkCratePrefab, P(1.8f, 1.6f, 36.2f));
+            Junk(s_JunkCratePrefab, P(6.4f, 1.5f, 10.4f));
 
-            // Creature routes
-            Waypoint("M0", 0, 10.6f); Waypoint("MW", -4.9f, 10.6f); Waypoint("ME", 6f, 10.6f);
-            Waypoint("S1", -4.9f, 15.8f);
-            Waypoint("T0", 0, 14.6f); Waypoint("T1", 0, 18.6f); Waypoint("T2", 0, 23f); Waypoint("T3", 0, 28f); Waypoint("T4", 0, 32.6f);
-            Waypoint("KS", -4.9f, 20f); Waypoint("KE", -3.2f, 23f); Waypoint("KW", -10.4f, 23f); Waypoint("KNW", -8.1f, 26.4f);
-            Waypoint("P2", -8.1f, 28.8f); Waypoint("P1", -8.1f, 32.4f); Waypoint("P0", -8.1f, 37.7f);
-            Waypoint("D0", 0, 35.2f); Waypoint("D1", -4.2f, 37.7f); Waypoint("D2", 0, 38.0f); Waypoint("D3", 4.2f, 36.6f);
-            Waypoint("H0", 6f, 15.2f); Waypoint("H1", 7.8f, 15.0f); Waypoint("H2", 4f, 17.6f); Waypoint("H3", 4f, 20.4f); Waypoint("H4", 7.4f, 22.2f);
+            // Creature routes (Link() puts extra waypoints on any leg longer than MaxLeg)
+            Waypoint("M0", 0, Z(10.6f)); Waypoint("MW", X(-4.9f), Z(10.6f)); Waypoint("ME", X(6f), Z(10.6f));
+            Waypoint("S1", X(-4.9f), Z(15.8f));
+            Waypoint("T0", 0, Z(14.6f)); Waypoint("T1", 0, Z(18.6f)); Waypoint("T2", 0, Z(23f)); Waypoint("T3", 0, Z(28f)); Waypoint("T4", 0, Z(32.6f));
+            Waypoint("KS", X(-4.9f), Z(20f)); Waypoint("KE", X(-3.2f), Z(23f)); Waypoint("KW", X(-10.4f), Z(23f)); Waypoint("KNW", X(-8.1f), Z(26.4f));
+            Waypoint("P2", X(-8.1f), Z(28.8f)); Waypoint("P1", X(-8.1f), Z(32.4f)); Waypoint("P0", X(-8.1f), Z(37.7f));
+            Waypoint("D0", 0, Z(35.2f)); Waypoint("D1", X(-4.2f), Z(37.7f)); Waypoint("D2", 0, Z(38.0f)); Waypoint("D3", X(4.2f), Z(36.6f));
+            Waypoint("H0", X(6f), Z(15.2f)); Waypoint("H1", X(7.8f), Z(15.0f)); Waypoint("H2", X(4f), Z(17.6f)); Waypoint("H3", X(4f), Z(20.4f)); Waypoint("H4", X(7.4f), Z(22.2f));
             Link("M0", "MW", "S1", "KS", "KE", "T2");
             Link("M0", "T0", "T1", "T2", "T3", "T4", "D0");
             Link("M0", "ME", "H0", "H1");
@@ -650,10 +677,16 @@ namespace TrashAstronauts.EditorTools
                 new Vector3(-11.75f, 0, 19.0f), new Vector3(-11.8f, 0, 21.6f), new Vector3(-11.7f, 0, 25.0f), new Vector3(-2.0f, 0, 27.7f),
                 new Vector3(-11.0f, 0, 27.75f), new Vector3(-5.8f, 0, 34.4f), new Vector3(5.75f, 0, 37.6f), new Vector3(-1.2f, 0, 41.15f),
                 new Vector3(5.7f, 0, 40.6f), new Vector3(-3.95f, 0, 14.4f), new Vector3(-8.95f, 0, 30.0f), new Vector3(-7.25f, 0, 34.8f),
+                // more along the longer walls
+                new Vector3(-5.8f, 0, 8.3f), new Vector3(9.4f, 0, 12.6f), new Vector3(-1.35f, 0, 15.4f), new Vector3(1.35f, 0, 25.4f),
+                new Vector3(-1.35f, 0, 33.0f), new Vector3(-11.8f, 0, 23.4f), new Vector3(-5.0f, 0, 27.8f), new Vector3(-8.95f, 0, 33.4f),
+                new Vector3(-5.8f, 0, 39.6f), new Vector3(3.6f, 0, 41.2f), new Vector3(5.8f, 0, 34.2f), new Vector3(-6.2f, 0, 13.4f),
             })
             {
                 float r = 0.22f + (float)scatter.NextDouble() * 0.25f;
-                Rock(p, new Vector3(r * 1.3f, r * 0.8f, r), 400 + (int)(p.x * 10 + p.z * 100), false);
+                // Set against the wall it lay against: the gap to the wall does not grow with the plan.
+                Vector3 at = P(p.x, 0f, p.z);
+                Rock(at, new Vector3(r * 1.3f, r * 0.8f, r) * 1.2f, 400 + (int)(p.x * 10 + p.z * 100), false);
             }
             foreach (var t in s_Props.GetComponentsInChildren<Transform>(true))
             {
@@ -661,17 +694,19 @@ namespace TrashAstronauts.EditorTools
             }
             CaveRockAndCombine(root);
 
-            var dock = Empty(root, "Creature Dock", new Vector3(4.8f, 1.45f, 35.2f), Quaternion.Euler(0, 200f, 0)).transform;
-            var hum = MapHum("D Drill Hum", new Vector3(3f, 1.4f, 40f), 0.38f);
+            var dock = Empty(root, "Creature Dock", P(4.8f, 1.45f, 35.2f), Quaternion.Euler(0, 200f, 0)).transform;
+            var hum = MapHum("D Drill Hum", rigAt + new Vector3(0f, 1.4f, 0f), 0.38f);
             EndMap(map, dock, new[] { habDoor }, new[] { hum }, sharedLights, sharedGlow,
                 "D3", "D0", "T4", "T3", "T2", "T1", "T0", "M0", "ME", "H0", "H1", "H0", "H2", "H3", "H4", "H3", "H2", "H0", "ME", "M0", "MW", "S1", "KS",
                 "KE", "T2", "KE", "KNW", "KW", "KS", "KW", "KNW", "P2", "P1", "P0", "D1", "D2", "D3");
 
             // The Moon: weak gravity everywhere beyond the airlock door, none in the airlock or the tug.
+            // x[-19.5,15.75] y[-1,9] z[7.75,58.7]: the whole tube with a margin, starting just past the airlock door.
             var moon = map.gameObject.AddComponent<MapGravity>();
             moon.gravity = new Vector3(0f, -LunarGravity, 0f);
-            moon.center = new Vector3(-1.25f, 3.5f, 24.7f);
-            moon.size = new Vector3(23.5f, 9f, 33.9f); // x[-13,10.5] y[-1,8] z[7.75,41.65]
+            float gx0 = -13f * MapScale, gx1 = 10.5f * MapScale, gz0 = 7.75f, gz1 = JoinZ + (41.65f - JoinZ) * MapScale; // EndMap has reset the plan factor
+            moon.center = new Vector3((gx0 + gx1) * 0.5f, 4f, (gz0 + gz1) * 0.5f);
+            moon.size = new Vector3(gx1 - gx0, 10f, gz1 - gz0);
             return map;
         }
     }

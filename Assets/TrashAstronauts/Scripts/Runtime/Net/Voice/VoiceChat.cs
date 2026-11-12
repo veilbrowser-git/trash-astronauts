@@ -22,7 +22,13 @@ namespace TrashAstronauts.Net.Voice
     /// Receiving: one <see cref="VoiceStream"/> (jitter buffer and decoder) per crew member and a
     /// <see cref="VoicePlayback"/> on their stand-in's helmet, made when the stand-in appears and gone with it.
     ///
-    /// VOICE CHAT off in the suit settings (separate from MIC) stops both directions at once.
+    /// VOICE CHAT off in the suit settings (separate from MIC) stops both directions at once. A client that switches
+    /// MIC or VOICE CHAT off also tells the host at once (a one-byte "voice off" notice, VoiceMsg.OffNotice), so the
+    /// host's Mimic forgets anything of its voice.
+    ///
+    /// The Mimic in co-op (<see cref="MimicCrewVoice"/>, owned here): on the host, crew voice frames are also kept for
+    /// a Mimic that is aboard, and its playback goes to the crew as the creature's voice (Voice slot 7); on a client,
+    /// those frames play from the creature replica. Its voice counts as speaker playback for the echo suppressor.
     /// </summary>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(310)] // after NetSession (300) has polled the session this frame
@@ -59,6 +65,15 @@ namespace TrashAstronauts.Net.Voice
         readonly Remote[] m_Remotes = new Remote[NetProtocol.MaxPlayers];
         VoicePacketSink m_Sink;
         VoiceFrameHandler m_OnFrame;
+        MimicCrewVoice m_Mimic;
+        bool m_HadConsent;
+        int m_NoticesLeft;
+        double m_NextNoticeAt;
+
+        /// <summary>"Voice off" notices sent after this client switched MIC or VOICE CHAT off.</summary>
+        public const int OffNoticeRepeats = 3;
+        /// <summary>Time between the repeated notices (s).</summary>
+        public const double OffNoticeSpacing = 0.1;
 
         // ------------------------------------------------------------------ state for the wrist display, avatars and tests
 
@@ -88,6 +103,10 @@ namespace TrashAstronauts.Net.Voice
         public VoiceStream Stream(int slot) => RemoteAt(slot)?.stream;
         public VoiceCapture Capture => m_Capture;
         public IVoiceLink Link => m_Link;
+        /// <summary>The co-op Mimic's side of voice chat (host: the crew's phrases and the creature's voice; client: its playback).</summary>
+        public MimicCrewVoice Mimic => m_Mimic;
+        /// <summary>"Voice off" notices sent by this headset.</summary>
+        public int OffNoticesSent { get; private set; }
         /// <summary>True when bound to an open link with VOICE CHAT on.</summary>
         public bool IsLive => m_Link != null && m_Link.IsOpen && SettingOn;
         /// <summary>The VOICE CHAT setting.</summary>
@@ -136,12 +155,17 @@ namespace TrashAstronauts.Net.Voice
             if (m_Sink == null) m_Sink = SendPacket;
             if (m_OnFrame == null) m_OnFrame = OnFrame;
             m_Link.Received += m_OnFrame;
+            m_Mimic = new MimicCrewVoice(this, link, m_Session != null && m_Session.IsOnline);
+            m_HadConsent = false;
+            m_NoticesLeft = 0;
             Active = this;
         }
 
         /// <summary>Drops the link, every crew voice source and the microphone tap.</summary>
         public void Unbind()
         {
+            m_Mimic?.Dispose(); // every phrase of the crew is forgotten with the session
+            m_Mimic = null;
             if (m_Link != null)
             {
                 m_Link.Received -= m_OnFrame;
@@ -240,6 +264,17 @@ namespace TrashAstronauts.Net.Voice
                     }
                 }
             }
+            // The creature's voice (co-op Mimic) comes out of the same speakers.
+            if (m_Mimic != null)
+            {
+                float creatureDb = m_Mimic.Tick(now, listener);
+                if (creatureDb > -90f)
+                {
+                    playbackPower += Mathf.Pow(10f, creatureDb / 10f);
+                    anyPlayback = true;
+                }
+            }
+            UpdateOffNotice(live, now);
             // What is going to this headset's speakers now, for the echo suppressor.
             if (anyPlayback && m_Capture != null) m_Capture.AddPlayback(10f * Mathf.Log10(playbackPower), now);
         }
@@ -264,8 +299,47 @@ namespace TrashAstronauts.Net.Voice
             m_Remotes[slot] = null;
         }
 
+        /// <summary>
+        /// A client that switches MIC or VOICE CHAT off (or loses the microphone setting) tells the host a few times,
+        /// so the host's Mimic drops anything of its voice. Nothing is sent while both stay on, or while off.
+        /// </summary>
+        void UpdateOffNotice(bool live, double now)
+        {
+            if (m_Link == null || m_Link.LocalSlot == NetProtocol.HostSlot) return;
+            var d = director != null ? director : MissionDirector.Active;
+            bool consent = live && (d == null || d.Profile == null || d.Profile.Data.voiceDetection);
+            if (m_HadConsent && !consent)
+            {
+                m_NoticesLeft = OffNoticeRepeats;
+                m_NextNoticeAt = now;
+            }
+            if (consent) m_NoticesLeft = 0;
+            m_HadConsent = consent;
+            if (m_NoticesLeft > 0 && now >= m_NextNoticeAt && m_Link.IsOpen)
+            {
+                m_NoticesLeft--;
+                m_NextNoticeAt = now + OffNoticeSpacing;
+                if (m_Link.Send(0, VoiceMsg.OffNotice, 0, VoiceMsg.OffNoticeLength, 1)) OffNoticesSent++;
+            }
+        }
+
         void OnFrame(byte slot, ushort sequence, byte[] buffer, int offset, int length)
         {
+            if (slot == VoiceMsg.CreatureSlot)
+            {
+                // The creature speaking (from the host only; a client's session never relays it from anyone else).
+                if (IsLive && m_Mimic != null && m_Link != null && m_Link.LocalSlot != NetProtocol.HostSlot) m_Mimic.OnCreatureFrame(sequence, buffer, offset, length);
+                else FramesIgnored++;
+                return;
+            }
+            if (VoiceMsg.IsOffNotice(length))
+            {
+                // Not audio: that crew member switched MIC or VOICE CHAT off.
+                m_Mimic?.OnVoiceOff(slot);
+                return;
+            }
+            // The host's Mimic keeps crew phrases only while it is aboard and asking (whatever this headset's VOICE CHAT).
+            m_Mimic?.OnCrewFrame(slot, sequence, buffer, offset, length);
             Remote r = RemoteAt(slot);
             if (!IsLive || r == null || r.playback == null || m_Link == null || slot == m_Link.LocalSlot)
             {

@@ -74,7 +74,56 @@ namespace TrashAstronauts.EditorTools
             remote.bodyDrop = 0.85f;
             // The four suit tools, visual only: in the glove that holds them or in their holsters (Builder.RemoteTools).
             remote.tools = BuildRemoteTools(root, remote, avatar);
+            // Co-op revive: the glowing handle on the chest pack, shown while this player is downed.
+            remote.beacon = BuildReviveBeacon(root.transform);
             return SavePrefab(root, RemoteCrewPrefabName);
+        }
+
+        /// <summary>
+        /// The revive beacon (ReviveBeacon): a red-orange glowing grip ring facing out of the chest, a soft additive halo
+        /// round it that reads through the dark, twelve teal progress lights in a ring around it, and one small warm point
+        /// light (no shadows, 3.5 m) so a downed crew mate can be found. Placed on the suit's chest by RemoteAvatar. All on
+        /// the Hand layer with no colliders: nothing to bump into, nothing the grab interactors can select.
+        /// </summary>
+        static ReviveBeacon BuildReviveBeacon(Transform parent)
+        {
+            var go = Empty(parent, "Revive Beacon", Vector3.zero, null, GameLayers.Hand);
+            var beacon = go.AddComponent<ReviveBeacon>();
+            var visuals = Empty(go.transform, "Visuals", Vector3.zero, null, GameLayers.Hand);
+            beacon.visuals = visuals;
+            Part(visuals.transform, "Grip", Torus(0.045f, 0.012f, 20, 8), new Vector3(0f, 0f, 0.025f), M("GlowRed"), new Vector3(90f, 0f, 0f), GameLayers.Hand);
+            Prim(visuals.transform, "Grip Core", PrimitiveType.Sphere, new Vector3(0f, 0f, 0.02f), Vector3.one * 0.03f, M("GlowWarm"), false, null, GameLayers.Hand);
+            var halo = Empty(visuals.transform, "Halo", new Vector3(0f, 0f, 0.03f), null, GameLayers.Hand);
+            AddColoredMesh(halo, RemoteGlowMesh("ReviveBeaconGlow", 0.16f, new Color(1f, 0.35f, 0.18f, 0.85f)), M(RemoteAdditiveMaterialName));
+            beacon.halo = halo.transform;
+
+            const int segments = 12;
+            var ring = new Renderer[segments];
+            for (int i = 0; i < segments; i++)
+            {
+                // Clockwise from the top, as seen by someone facing the chest.
+                float angle = Mathf.PI * 0.5f - i / (float)segments * Mathf.PI * 2f;
+                var seg = Prim(visuals.transform, "Ring " + i, PrimitiveType.Cube, new Vector3(-Mathf.Cos(angle) * 0.075f, Mathf.Sin(angle) * 0.075f, 0.03f),
+                    new Vector3(0.016f, 0.016f, 0.012f), M("GlowTeal"), false, new Vector3(0f, 0f, -angle * Mathf.Rad2Deg), GameLayers.Hand);
+                var r = seg.GetComponent<MeshRenderer>();
+                r.enabled = false;
+                ring[i] = r;
+            }
+            beacon.ring = ring;
+
+            var lampGo = Empty(visuals.transform, "Locator Light", new Vector3(0f, 0f, 0.3f), null, GameLayers.Hand);
+            var lamp = lampGo.AddComponent<Light>();
+            lamp.type = LightType.Point;
+            lamp.range = 3.5f;
+            lamp.intensity = 0.8f;
+            lamp.color = new Color(1f, 0.42f, 0.22f);
+            lamp.shadows = LightShadows.None;
+            lamp.renderMode = LightRenderMode.Auto;
+            lamp.enabled = false; // ReviveBeacon.Show switches it on while the player is down
+            beacon.lamp = lamp;
+            beacon.lampIntensity = 0.8f;
+            visuals.SetActive(false);
+            return beacon;
         }
 
         /// <summary>A glove on a bare transform: the local rig's glove model and thruster, without controller, input or interactor.</summary>

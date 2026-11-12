@@ -37,7 +37,7 @@ namespace TrashAstronauts.Net
             switch (change)
             {
                 case RosterChange.Joined: m_Net.AddCrew(slot, handedness, false); break;
-                case RosterChange.Left: m_Net.RemoveCrew(slot); break;
+                case RosterChange.Left: m_Apply.ApplyPlayerLeft(slot); m_Net.RemoveCrew(slot); break;
                 case RosterChange.Away: m_Net.SetCrewAway(slot, true); break;
                 case RosterChange.Back: m_Net.SetCrewAway(slot, false); break;
                 case RosterChange.Settings: m_Net.SetCrewHandedness(slot, handedness); break;
@@ -110,5 +110,13 @@ namespace TrashAstronauts.Net
         public void OnBlackoutEnded(bool instant) => m_Apply.ApplyBlackoutEnded(instant);
 
         public void OnWireChanged(byte index, NetWireChange change, byte by) { /* Webs are never armed in a co-op contract. */ }
+
+        // ------------------------------------------------------------------ co-op revive
+
+        public void OnPlayerDowned(byte slot, NetVec3 position) => m_Apply.ApplyPlayerDowned(slot, position);
+
+        public void OnPlayerRevived(byte slot, byte by) => m_Apply.ApplyPlayerRevived(slot, by);
+
+        public void OnReviveProgress(byte slot, float progress, byte rescuerSlot) => m_Apply.ApplyReviveProgress(slot, progress, rescuerSlot);
     }
 }

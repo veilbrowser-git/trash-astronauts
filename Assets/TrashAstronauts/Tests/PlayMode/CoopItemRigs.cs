@@ -281,6 +281,7 @@ namespace TrashAstronauts.Tests
         public void OnPointCutReport(byte slot, byte panel, byte index) => Rules.HostPointCutReport(panel, index, slot);
         public void OnTranqHitReport(byte slot, NetVec3 origin, NetVec3 hitPoint) { }
         public void OnWireReport(byte slot, byte index, NetWireChange change) { }
+        public void OnReviveHold(byte slot, byte targetSlot, bool on) { }
 
         // ================= ICoopBroadcast: each to the NetSessionHost method of the same name
         public void RunStart(in RunStartParams parameters) { Log.Add("runstart"); Host.SendRunStart(in parameters); }
@@ -314,6 +315,9 @@ namespace TrashAstronauts.Tests
         public void CatchStarted(byte victimSlot) => Host.SendCatchStarted(victimSlot);
         public void BlackoutStarted(float seconds) => Host.SendBlackoutStarted(seconds);
         public void BlackoutEnded(bool instant) => Host.SendBlackoutEnded(instant);
+        public void PlayerDowned(byte slot, NetVec3 position) => Host.SendPlayerDowned(slot, position);
+        public void PlayerRevived(byte slot, byte by) => Host.SendPlayerRevived(slot, by);
+        public void ReviveProgress(byte slot, float progress, byte rescuerSlot) => Host.SendReviveProgress(slot, progress, rescuerSlot);
     }
 
     /// <summary>The scene is a client of a scripted host; CoopClientApply and CoopItemClient behind a real NetSessionClient.</summary>
@@ -435,6 +439,9 @@ namespace TrashAstronauts.Tests
         public void OnBlackoutStarted(float seconds) { }
         public void OnBlackoutEnded(bool instant) { }
         public void OnWireChanged(byte index, NetWireChange change, byte by) { }
+        public void OnPlayerDowned(byte slot, NetVec3 position) { }
+        public void OnPlayerRevived(byte slot, byte by) { }
+        public void OnReviveProgress(byte slot, float progress, byte rescuerSlot) { }
 
         // ================= ICoopItemRequests: each to the NetSessionClient method of the matching name
         public void GrabRequest(byte itemId, byte epochSeen, byte hand)

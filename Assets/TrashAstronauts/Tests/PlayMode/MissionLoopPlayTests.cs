@@ -332,7 +332,7 @@ namespace TrashAstronauts.Tests
             Assert.AreEqual(EnemyState.Patrol, drone.State);
             OpenWreckDoors();
 
-            var noiseAt = new Vector3(0.3f, 1.2f, 25f); // in the spine corridor, well away from the reactor dock but within earshot
+            var noiseAt = MapPoints.Freighter(0.2f, 1.2f, 19.6f); // in the spine corridor, well away from the reactor dock but within earshot
             float startDistance = Vector3.Distance(drone.transform.position, noiseAt);
             m_Director.noise.Emit(new NoiseEvent(noiseAt, 1f, NoiseKind.Cutting, PlayerId.Local));
             Assert.AreEqual(EnemyState.Investigate, drone.State);
