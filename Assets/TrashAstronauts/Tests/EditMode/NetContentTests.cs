@@ -194,6 +194,41 @@ namespace TrashAstronauts.Tests
             Assert.Greater(Vector3.Distance(panel.center, mission.transform.position), 3f, "On the opposite wall from the mission board.");
         }
 
+        [Test]
+        public void CrewSpots_FourSlots_StandApartInsideTheTug_OnClearFloor()
+        {
+            EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            Physics.SyncTransforms();
+            var director = UnityEngine.Object.FindAnyObjectByType<MissionDirector>();
+            Assert.AreEqual(director.hubSpawn.position, director.CrewSpot(0), "slot 0 (and single-player) is the hub spawn itself");
+            var spots = Enumerable.Range(0, 4).Select(director.CrewSpot).ToArray();
+            var obstacles = new[]
+            {
+                BoundsOf(UnityEngine.Object.FindAnyObjectByType<MissionBoard>().gameObject),
+                BoundsOf(UnityEngine.Object.FindAnyObjectByType<NetLobbyBoard>().gameObject),
+                BoundsOf(director.locker.gameObject),
+                BoundsOf(director.sharedCuttables[0].gameObject),
+                BoundsOf(GameObject.Find("Suit Settings Console")),
+            };
+            int mask = GameLayers.EnvironmentMask | (1 << GameLayers.Default) | GameLayers.RailMask | GameLayers.ButtonMask | GameLayers.SalvageMask;
+            for (int i = 0; i < 4; i++)
+            {
+                Vector3 p = spots[i];
+                Assert.That(p.x, Is.InRange(-1.6f, 1.6f), "slot " + i + " inside the tug, clear of the side walls");
+                Assert.That(p.z, Is.InRange(-2.6f, 1.6f), "slot " + i + " inside the tug, clear of the end walls");
+                Assert.IsTrue(director.safeZone.Contains(p + Vector3.up * 1.6f), "slot " + i + " head inside the safe zone");
+                Assert.IsFalse(Physics.CheckCapsule(p + Vector3.up * 0.35f, p + Vector3.up * 1.75f, 0.3f, mask, QueryTriggerInteraction.Ignore),
+                    "slot " + i + " has room to stand (a 0.3 m body from ankle to head hits nothing)");
+                var feet = new Bounds(p + Vector3.up * 1.05f, new Vector3(0.7f, 1.9f, 0.7f));
+                foreach (var o in obstacles) Assert.IsFalse(feet.Intersects(o), "slot " + i + " is too close to a board, the locker or the plate");
+                for (int j = 0; j < i; j++)
+                {
+                    Vector2 a2 = new Vector2(p.x, p.z), b2 = new Vector2(spots[j].x, spots[j].z);
+                    Assert.GreaterOrEqual(Vector2.Distance(a2, b2), 0.7f, "slots " + j + " and " + i + " are at least 0.7 m apart");
+                }
+            }
+        }
+
         static Bounds BoundsOf(GameObject go)
         {
             var renderers = go.GetComponentsInChildren<Renderer>(false).Where(r => r.enabled && !(r is ParticleSystemRenderer)).ToArray();

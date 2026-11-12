@@ -192,7 +192,7 @@ namespace TrashAstronauts.UI
                 SuspendedForSession = inSession;
                 if (!inSession && Step != TutorialStep.Done && director.Phase == MissionPhase.Hub && practiceScrapPrefab != null && practiceScrapSpawn != null && !PracticeScrapAvailable())
                     Instantiate(practiceScrapPrefab, practiceScrapSpawn.position, practiceScrapSpawn.rotation, director.salvageRoot);
-                if (boardText != null && inSession) boardText.text = "ORIENTATION PAUSED\n\nA co-op crew is linked. The tutorial carries on\nwhen you press LEAVE on the CO-OP CREW panel.";
+                if (boardText != null && inSession && Step != TutorialStep.Done) boardText.text = "ORIENTATION PAUSED\n\nA co-op crew is linked. The tutorial carries on\nwhen you press LEAVE on the CO-OP CREW panel.";
                 else Refresh();
             }
             if (inSession)

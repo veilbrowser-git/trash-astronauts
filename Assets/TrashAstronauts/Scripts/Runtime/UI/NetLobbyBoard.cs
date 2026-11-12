@@ -242,7 +242,7 @@ namespace TrashAstronauts.UI
         {
             if (mode == LobbyMode.Hosting || mode == LobbyMode.Connecting || mode == LobbyMode.Joined)
                 return "This first co-op version shows the crew to each other\nin the tug. Contracts are not shared yet: press LEAVE\nto start one. Nothing from your microphone is sent.";
-            return "Nothing is sent over the network until you press\nHOST CO-OP, FIND CREW or ENTER CODE. Only headsets\non this Wi-Fi are contacted. No voice is ever sent.";
+            return "Nothing is sent over the network until you press\nHOST CO-OP, FIND CREW or ENTER CODE, and then only to\naddresses on your local network. No voice is ever sent.";
         }
 
         void RefreshResults()

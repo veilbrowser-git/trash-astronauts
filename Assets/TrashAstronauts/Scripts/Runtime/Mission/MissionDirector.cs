@@ -903,6 +903,37 @@ namespace TrashAstronauts.Mission
         // ------------------------------------------------------------------ co-op session lifecycle
 
         /// <summary>
+        /// Where each crew slot stands in the tug, in the hub spawn's own space (+z is the way it faces, toward the
+        /// mission board; +x is to its right). Slot 0 is the spawn itself, so single-player is unchanged. The others
+        /// stand 0.8 m to either side and one step forward, all inside the tug and clear of the locker, the boards
+        /// and the CO-OP CREW panel (checked by NetContentTests).
+        /// </summary>
+        static readonly Vector3[] k_CrewSpots =
+        {
+            Vector3.zero,
+            new Vector3(0.8f, 0f, 0f),
+            new Vector3(-0.8f, 0f, 0f),
+            new Vector3(0.4f, 0f, 0.8f),
+        };
+
+        /// <summary>The floor point where crew slot <paramref name="slot"/> is put in the tug (the hub spawn for slot 0).</summary>
+        public Vector3 CrewSpot(int slot)
+        {
+            if (hubSpawn == null) return Vector3.zero;
+            return hubSpawn.TransformPoint(k_CrewSpots[Mathf.Clamp(slot, 0, k_CrewSpots.Length - 1)]);
+        }
+
+        /// <summary>Single-player: the hub spawn. In a session: this player's own crew spot, so nobody stands inside anybody.</summary>
+        Vector3 HubSpotFor(PlayerContext player) => Net != null && player != null ? CrewSpot(player.Id.Value) : hubSpawn.position;
+
+        /// <summary>Puts the local rig on its crew spot in the tug, facing the mission board (a head-accurate teleport).</summary>
+        public bool PlaceAtCrewSpot(PlayerContext player)
+        {
+            if (player == null || player.locomotion == null || hubSpawn == null) return false;
+            return player.locomotion.TeleportTo(CrewSpot(player.Id.Value), hubSpawn.rotation);
+        }
+
+        /// <summary>
         /// Puts this headset in the state a co-op session starts from. Called by NetSession when HOST CO-OP
         /// succeeds (<paramref name="asHost"/> true) and when a joiner's Welcome arrives. Only allowed from the
         /// hub or the results screen (a session is never opened mid-contract): a results screen goes back to
@@ -1090,7 +1121,7 @@ namespace TrashAstronauts.Mission
                     // the head somewhere other than the spawn point). Someone centred is left alone.
                     Vector3 offset = player.HeadPosition - player.transform.position;
                     offset.y = 0f;
-                    if (offset.magnitude > 0.3f) player.locomotion.TeleportTo(hubSpawn.position, hubSpawn.rotation);
+                    if (offset.magnitude > 0.3f) player.locomotion.TeleportTo(HubSpotFor(player), hubSpawn.rotation);
                 }
                 return;
             }
@@ -1110,7 +1141,7 @@ namespace TrashAstronauts.Mission
                 anyOutside = true;
                 if (m_OutsideHubTimer + dt >= 0.75f)
                 {
-                    player.locomotion.TeleportTo(hubSpawn.position, hubSpawn.rotation);
+                    player.locomotion.TeleportTo(HubSpotFor(player), hubSpawn.rotation);
                     HubRescueCount++;
                 }
             }

@@ -62,6 +62,8 @@ namespace TrashAstronauts.Net
         bool m_ClientEnded;
         SessionEndReason m_ClientEndReason;
         LobbyNotice m_OwnNotice;
+        bool m_AppPaused;
+        bool m_LocalAway;
 
         // ================================================================== state for the board and tests
 
@@ -76,8 +78,8 @@ namespace TrashAstronauts.Net
         public bool IsProbing => m_Discovery != null && m_Discovery.IsSearching && m_SearchTransport != null;
         /// <summary>A joined client has heard nothing from the host for 1.5 s.</summary>
         public bool HostSilent { get; internal set; }
-        /// <summary>The notice to show: the lobby's, or one of this component's own (a socket that would not open).</summary>
-        public LobbyNotice Notice => m_Lobby.Notice != LobbyNotice.None ? m_Lobby.Notice : m_OwnNotice;
+        /// <summary>The notice to show: this component's own when it has one (a socket that would not open, no Wi-Fi address), else the lobby's.</summary>
+        public LobbyNotice Notice => m_OwnNotice != LobbyNotice.None ? m_OwnNotice : m_Lobby.Notice;
         /// <summary>The fingerprint peers compare before they agree to play together.</summary>
         public uint ContentHash => director != null ? director.NetIds.ContentHash(NetProtocol.Version) : 0u;
         /// <summary>Players in the session, this one included (1 while alone or offline).</summary>
@@ -121,8 +123,24 @@ namespace TrashAstronauts.Net
 
         public void ReportPause(bool paused)
         {
-            if (m_Client != null) m_Client.SetAway(paused, Now);
+            m_AppPaused = paused;
+            RefreshAway();
         }
+
+        /// <summary>
+        /// Away = the app is paused OR the hazard pause is on (headset off, tracking or focus lost). Both sources
+        /// are combined here, so resuming the app while tracking is still lost does not report "back".
+        /// A client tells the host (PauseNotice). A host shows it through the Away bit of its own avatar, which
+        /// the crew's panels show as AWAY; pausing the shared game for everyone (HostPause) is stage 2.
+        /// </summary>
+        void RefreshAway()
+        {
+            m_LocalAway = m_AppPaused || (director != null && director.HazardsPaused);
+            if (m_Client != null) m_Client.SetAway(m_LocalAway, Now);
+        }
+
+        /// <summary>True while this headset counts as away (app paused or hazard pause on).</summary>
+        public bool LocalAway => m_LocalAway;
 
         public void ReportSettingsChanged(Handedness handedness)
         {
@@ -167,13 +185,14 @@ namespace TrashAstronauts.Net
         void OnApplicationPause(bool paused)
         {
             // Sent at once: it may be the last thing this headset gets to say for a while.
-            if (m_Client != null) m_Client.SetAway(paused, Now);
+            m_AppPaused = paused;
+            RefreshAway();
         }
 
         void OnHazardPauseChanged(bool paused)
         {
             // Headset off or tracking lost: the crew sees this player as away (and later stages stop counting them).
-            if (m_Client != null) m_Client.SetAway(paused, Now);
+            RefreshAway();
         }
 
         /// <summary>
@@ -211,15 +230,26 @@ namespace TrashAstronauts.Net
             MissionPhase phase = director.Phase;
             if (!m_Lobby.CanHost(phase)) return m_Lobby.Host(phase, false, 0u, 0); // NotInHub, or not from this mode
             DisposeLingering();
-            CloseSearch();
 
+            // Bind first: if it fails, a search or keypad that was open stays exactly as it was, with the reason.
             INetTransport transport = Open(NetProtocol.HostPort);
-            if (transport == null) return m_Lobby.Host(phase, false, 0u, 0); // PORT BUSY
+            if (transport == null)
+            {
+                m_OwnNotice = LobbyNotice.PortBusy;
+                return false;
+            }
             uint address = LocalAddress(transport);
+            if (address == 0u)
+            {
+                transport.Dispose();
+                m_OwnNotice = LobbyNotice.NoNetwork;
+                return false;
+            }
             ushort tug = JoinCode.MakeTugNumber(NewSeed());
+            CloseSearch();
             if (!m_Lobby.Host(phase, true, address, tug))
             {
-                transport.Dispose(); // NO WI-FI
+                transport.Dispose();
                 Sync();
                 return false;
             }
@@ -249,11 +279,28 @@ namespace TrashAstronauts.Net
             MissionPhase phase = director.Phase;
             if (!LobbyState.PhaseAllowsSession(phase)) return m_Lobby.Find(phase, 0u, Now);
             if (m_Lobby.Mode != LobbyMode.Offline && m_Lobby.Mode != LobbyMode.Searching && m_Lobby.Mode != LobbyMode.EnteringCode) return false;
+            bool wasOffline = m_SearchTransport == null;
             if (!EnsureSearchTransport()) return false;
             double now = Now;
             uint address = LocalAddress(m_SearchTransport);
+            if (address == 0u)
+            {
+                // No Wi-Fi address: neither the subnet broadcast nor the sweep can be aimed. Say so; open nothing.
+                if (m_Discovery != null) m_Discovery.Stop();
+                if (wasOffline || m_Lobby.Mode == LobbyMode.Searching)
+                {
+                    m_Lobby.Leave();
+                    CloseSearch();
+                }
+                m_OwnNotice = LobbyNotice.NoNetwork;
+                Sync();
+                return false;
+            }
+            bool newSearch = m_Lobby.Mode != LobbyMode.Searching;
             if (!m_Lobby.Find(phase, address, now)) return false;
             if (m_Discovery == null) m_Discovery = new Discovery(NetProtocol.Version, NewSeed());
+            // Results of an earlier search are not joinable any more: only tugs that answer this one are listed.
+            if (newSearch) m_Discovery.Hosts.Clear();
             m_Discovery.Start(address, now, NetProtocol.HostPort);
             Sync();
             return true;
@@ -266,8 +313,14 @@ namespace TrashAstronauts.Net
             MissionPhase phase = director.Phase;
             if (!LobbyState.PhaseAllowsSession(phase)) return m_Lobby.EnterCode(phase, 0u);
             if (m_Lobby.Mode != LobbyMode.Offline && m_Lobby.Mode != LobbyMode.Searching && m_Lobby.Mode != LobbyMode.EnteringCode) return false;
+            bool wasOffline = m_SearchTransport == null;
             if (!EnsureSearchTransport()) return false;
-            if (!m_Lobby.EnterCode(phase, LocalAddress(m_SearchTransport))) return false;
+            if (!m_Lobby.EnterCode(phase, LocalAddress(m_SearchTransport)))
+            {
+                // NO WI-FI: do not leave a socket open behind an Offline panel.
+                if (wasOffline && m_Lobby.Mode == LobbyMode.Offline) CloseSearch();
+                return false;
+            }
             if (m_Discovery != null) m_Discovery.Stop();
             Sync();
             return true;
@@ -393,6 +446,8 @@ namespace TrashAstronauts.Net
             if (local != null)
             {
                 AvatarSampler.Sample(local, ref m_LocalAvatar);
+                // The host's own Away bit rides on its avatar (a client's is set by NetSessionClient.SetAway).
+                m_LocalAvatar.flags = (byte)(m_LocalAway && m_Host != null ? m_LocalAvatar.flags | AvatarFlags.Away : m_LocalAvatar.flags & ~AvatarFlags.Away);
                 if (m_Host != null) m_Host.SetLocalAvatar(in m_LocalAvatar);
                 if (m_Client != null) m_Client.SetLocalAvatar(in m_LocalAvatar);
             }
@@ -419,11 +474,14 @@ namespace TrashAstronauts.Net
             m_Present[localSlot] = true;
             director.Net = this;
             ApplyLocalSlot(localSlot);
+            // Every headset starts on the same spawn point: step onto this slot's own spot in the tug.
+            director.PlaceAtCrewSpot(director.LocalPlayer);
             for (int slot = 0; slot < NetProtocol.MaxPlayers; slot++)
             {
                 if (slot != localSlot && welcome.IsPresent(slot)) AddCrew((byte)slot, welcome.Handedness(slot), welcome.IsAway(slot));
             }
             m_Lobby.OnWelcome(localSlot, PlayerCount);
+            RefreshAway(); // already paused or untracked when the Welcome came: the host hears it now
             Sync();
         }
 
@@ -471,7 +529,10 @@ namespace TrashAstronauts.Net
         internal void PushCrewAvatar(byte slot, double time, in AvatarSnapshot avatar)
         {
             RemoteAvatar crew = Crew(slot);
-            if (crew != null && slot != m_LocalSlot) crew.Push(time, in avatar);
+            if (crew == null || slot == m_LocalSlot) return;
+            crew.Push(time, in avatar);
+            // The host has no roster entry for its own Away state; its avatar carries it.
+            if (slot == NetProtocol.HostSlot && crew.context != null) crew.context.IsAway = avatar.IsAway;
         }
 
         /// <summary>The client session ended for a reason other than our own LEAVE. Handled after Poll returns.</summary>

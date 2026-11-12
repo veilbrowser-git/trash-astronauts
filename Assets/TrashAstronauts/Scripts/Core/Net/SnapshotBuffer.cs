@@ -31,7 +31,8 @@ namespace TrashAstronauts.Core.Net
     /// Time-ordered samples of a remote object, rendered <see cref="InterpolationDelay"/> (100 ms) in the past so
     /// there are normally two samples to blend between. When the newest sample is older than the render time the
     /// buffer extrapolates along the last two samples for at most <see cref="ExtrapolationCap"/> (250 ms) and
-    /// then holds still. Out-of-order arrivals are sorted in; duplicates are ignored. Fixed capacity, no allocation
+    /// then holds still. Out-of-order arrivals are sorted in; a sample with the same time as one already held
+    /// replaces it (the later arrival is the newer state). Fixed capacity, no allocation
     /// after construction.
     /// </summary>
     public sealed class SnapshotBuffer<T> where T : struct, ISnapshot<T>
@@ -40,6 +41,13 @@ namespace TrashAstronauts.Core.Net
         public const double ExtrapolationCap = 0.25;
         /// <summary>Two samples further apart than this are not used as a velocity for extrapolation.</summary>
         public const double MaxExtrapolationSpan = 0.5;
+        /// <summary>
+        /// Two samples closer together than this are not used as a velocity either: a pair 10 ms apart that carries
+        /// 50 ms of motion (a bunched arrival) would extrapolate several times the real speed.
+        /// </summary>
+        public const double MinExtrapolationSpan = 0.03;
+        /// <summary>Extrapolation never runs further ahead than this many times the span of the two samples it uses.</summary>
+        public const double MaxExtrapolationRatio = ExtrapolationCap / 0.05;
 
         readonly double[] m_Times;
         readonly T[] m_Values;
@@ -69,7 +77,10 @@ namespace TrashAstronauts.Core.Net
             m_Count = 0;
         }
 
-        /// <summary>Adds a sample. Returns false when it was a duplicate time or older than everything in a full buffer.</summary>
+        /// <summary>
+        /// Adds a sample. A sample with exactly the time of one already held replaces it. Returns false only when the
+        /// time is not a number or the sample is older than everything in a full buffer.
+        /// </summary>
         public bool Push(double time, in T value)
         {
             if (double.IsNaN(time) || double.IsInfinity(time)) return false;
@@ -93,7 +104,11 @@ namespace TrashAstronauts.Core.Net
             for (int i = 0; i < m_Count; i++)
             {
                 double existing = m_Times[Index(i)];
-                if (existing == time) return false;
+                if (existing == time)
+                {
+                    m_Values[Index(i)] = value;
+                    return true;
+                }
                 if (existing > time) { insert = i; break; }
             }
             if (m_Count == capacity)
@@ -146,7 +161,8 @@ namespace TrashAstronauts.Core.Net
                 double span = m_Times[newest] - m_Times[previous];
                 double ahead = renderTime - m_Times[newest];
                 if (ahead > ExtrapolationCap) ahead = ExtrapolationCap;
-                if (ahead <= 0 || span < 1e-4 || span > MaxExtrapolationSpan) { result = m_Values[newest]; return true; }
+                if (ahead > span * MaxExtrapolationRatio) ahead = span * MaxExtrapolationRatio;
+                if (ahead <= 0 || span < MinExtrapolationSpan || span > MaxExtrapolationSpan) { result = m_Values[newest]; return true; }
                 result = m_Values[previous].Blend(in m_Values[newest], (float)(1.0 + ahead / span));
                 return true;
             }

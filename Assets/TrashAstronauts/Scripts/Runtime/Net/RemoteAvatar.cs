@@ -30,8 +30,15 @@ namespace TrashAstronauts.Net
         [Tooltip("How far below the head the capsule's centre hangs (metres).")]
         public float bodyDrop = 0.85f;
 
+        /// <summary>A head that moves further than this between two consecutive samples teleported: snap, do not glide.</summary>
+        public const float TeleportDistance = 1f;
+
         SnapshotBuffer<AvatarSnapshot> m_Buffer;
         bool m_Shown = true;
+        bool m_SnapPending;
+
+        /// <summary>How many times the stand-in snapped instead of gliding (a teleport).</summary>
+        public int Snaps { get; private set; }
 
         /// <summary>This player's crew slot (0 = the host).</summary>
         public int Slot => context != null ? context.Id.Value : -1;
@@ -66,6 +73,14 @@ namespace TrashAstronauts.Net
         public void Push(double time, in AvatarSnapshot sample)
         {
             if (m_Buffer == null) m_Buffer = new SnapshotBuffer<AvatarSnapshot>(32);
+            if (m_Buffer.TryGetNewest(out AvatarSnapshot previous, out double previousTime) && time > previousTime
+                && NetVec3.Distance(previous.headPosition, sample.headPosition) > TeleportDistance)
+            {
+                // A teleport (or the hub guard putting them back): drop the old samples so the suit jumps there
+                // instead of sliding across the tug, and let the torso and legs start square again.
+                m_Buffer.Clear();
+                m_SnapPending = true;
+            }
             if (!m_Buffer.Push(time, in sample)) return;
             if (context != null && m_Buffer.TryGetNewest(out AvatarSnapshot newest, out double _))
             {
@@ -100,6 +115,12 @@ namespace TrashAstronauts.Net
                 body.transform.SetPositionAndRotation(head.position + Vector3.down * bodyDrop, yaw);
             }
 
+            if (m_SnapPending)
+            {
+                m_SnapPending = false;
+                Snaps++;
+                if (suit != null) suit.SnapToHead();
+            }
             if (!HasPose)
             {
                 HasPose = true;
