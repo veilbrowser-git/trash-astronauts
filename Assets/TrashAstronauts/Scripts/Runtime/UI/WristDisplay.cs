@@ -53,6 +53,18 @@ namespace TrashAstronauts.UI
             }
         }
 
+        /// <summary>A line about the flashlight battery, once it is worth worrying about.</summary>
+        string LightNote()
+        {
+            if (player == null || player.tools == null) return "";
+            foreach (var tool in player.tools)
+            {
+                if (tool is Tools.FlashlightTool torch)
+                    return torch.IsFlat ? "\nLIGHT FLAT: switch off to charge" : torch.Charge < 0.3f ? "\nLIGHT " + Mathf.CeilToInt(torch.Charge * 100f) + "%" : "";
+            }
+            return "";
+        }
+
         void UpdateNoiseMeter()
         {
             var director = MissionDirector.Active;
@@ -157,7 +169,7 @@ namespace TrashAstronauts.UI
             {
                 case MissionPhase.Active:
                     Set(salvageText, "SECURED " + session.SecuredValue + " / " + session.Quota + " cr"
-                        + (session.QuotaMet ? "\nQUOTA MET" : ""));
+                        + (session.QuotaMet ? "\nQUOTA MET" : "") + LightNote());
                     break;
                 case MissionPhase.Results:
                     Set(salvageText, "CONTRACT OVER\nSee mission board");

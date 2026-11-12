@@ -1207,26 +1207,21 @@ namespace TrashAstronauts.EditorTools
 
             // --- drifting dust in the big spaces
             Dust("Dust Corridor", new Vector3(0, 1.4f, 14.6f), new Vector3(2.2f, 2.2f, 13f), 50);
+            // --- the crew's last entries, left on the walls
+            Poster("LOG 41\nSomething is in the vents.\nMaintenance says rats.\nThere are no rats on a ship.", new Vector3(1.3f - T * 0.5f - 0.012f, 1.5f, 17.0f), Vector3.left, 0.95f, 0.6f, 0.36f);
+            Poster("LOG 44\nOkafor went to check the reactor.\nThat was two shifts ago.", new Vector3(-10.3f + T * 0.5f + 0.012f, 1.5f, 14.4f), Vector3.right, 0.95f, 0.55f, 0.36f);
+            Poster("LOG 47\nKeep your voice down.\nIt comes to the noise.", new Vector3(2.0f, 1.5f, 21.6f + T * 0.5f + 0.012f), Vector3.forward, 0.9f, 0.5f, 0.38f);
+
             // --- what lives here has been busy: webs in the corners, things wrapped and hung from the ceiling
             Web(new Vector3(-10.2f, H - 0.05f, 18.5f), Vector3.right, Vector3.back, Vector3.down, 1.5f);
-            Web(new Vector3(-10.2f, H - 0.05f, 9.7f), Vector3.right, Vector3.forward, Vector3.down, 1.2f);
-            Web(new Vector3(8.2f, H - 0.05f, 15.5f), Vector3.left, Vector3.back, Vector3.down, 1.2f);
             Web(new Vector3(-4.4f, H - 0.05f, 29.5f), Vector3.right, Vector3.back, Vector3.down, 1.6f);
-            Web(new Vector3(4.4f, H - 0.05f, 21.7f), Vector3.left, Vector3.forward, Vector3.down, 1.3f);
-            Web(new Vector3(-1.2f, H - 0.05f, 16.2f), Vector3.right, Vector3.forward, Vector3.down, 0.9f);
             Cocoon(new Vector3(-3.9f, H, 26.3f), 1.25f, 51);
-            Cocoon(new Vector3(-3.7f, H, 28.9f), 0.95f, 52);
             Cocoon(new Vector3(-8.3f, H, 12.4f), 1.1f, 53);
-            Cocoon(new Vector3(6.6f, H, 9.6f), 1.2f, 54);
             EggSacs(new Vector3(-4.5f + T * 0.5f, 1.9f, 27.6f), Vector3.right, 7, 61);
-            EggSacs(new Vector3(-1.3f + T * 0.5f, 2.2f, 17.4f), Vector3.right, 5, 62);
             EggSacs(new Vector3(8.3f - T * 0.5f, 1.8f, 10.4f), Vector3.left, 6, 63);
             Tripwire("a_corridor_mid", new Vector3(-1.2f, 1.3f, 13.5f), new Vector3(1.2f, 1.1f, 13.5f));
             Tripwire("a_corridor_far", new Vector3(-1.2f, 0.7f, 18.2f), new Vector3(1.2f, 1.8f, 18.2f));
-            Tripwire("a_cargo_door", new Vector3(-1.7f, 1.2f, 11.2f), new Vector3(-1.7f, 1.3f, 12.8f));
-            Tripwire("a_maintenance_door", new Vector3(1.7f, 1.3f, 9.8f), new Vector3(1.7f, 1.1f, 11.2f));
             Tripwire("a_reactor_entry", new Vector3(-0.9f, 1.2f, 22.4f), new Vector3(0.9f, 1.4f, 22.4f));
-            Tripwire("a_cargo_mid", new Vector3(-5.0f, 1.2f, 12.2f), new Vector3(-5.0f, 1.3f, 15.8f));
 
             Dust("Dust Cargo", new Vector3(-5.8f, 1.4f, 14.1f), new Vector3(8f, 2.2f, 8f), 70);
             Dust("Dust Reactor", new Vector3(0, 1.4f, 25.6f), new Vector3(8f, 2.2f, 7f), 60);

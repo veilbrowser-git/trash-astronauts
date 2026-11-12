@@ -28,6 +28,65 @@ namespace TrashAstronauts.Mission
         [Tooltip("Seconds it stays on one surface before picking another, while wandering.")]
         public Vector2 dwell = new Vector2(9f, 20f);
         public LineRenderer thread;
+        [Tooltip("Its feet on the metal. Plays from the body, so it can be heard through walls and overhead.")]
+        public AudioSource steps;
+        [Range(0f, 1f)] public float stepVolume = 0.55f;
+
+        /// <summary>How loud its footsteps are right now (0 when it is still, sedated, or lying in wait).</summary>
+        public float StepLoudness { get; private set; }
+        Vector3 m_LastBody;
+        float m_BodySpeed;
+        static AudioClip s_StepClip;
+
+        /// <summary>A second of quick, uneven taps of claw on metal, made once and shared.</summary>
+        static AudioClip StepClip()
+        {
+            if (s_StepClip != null) return s_StepClip;
+            const int rate = 22050;
+            var data = new float[rate];
+            var rng = new System.Random(4217);
+            float[] at = { 0.02f, 0.13f, 0.21f, 0.36f, 0.47f, 0.58f, 0.74f, 0.86f };
+            foreach (float start in at)
+            {
+                int first = (int)(start * rate);
+                float thud = 150f + (float)rng.NextDouble() * 90f;
+                float previous = 0f;
+                for (int i = 0; i < rate / 16 && first + i < rate; i++)
+                {
+                    float t = i / (float)rate;
+                    float noise = (float)rng.NextDouble() * 2f - 1f;
+                    float tick = (noise - previous) * Mathf.Exp(-t * 190f) * 0.55f;        // the sharp tap
+                    previous = noise;
+                    float body = Mathf.Sin(2f * Mathf.PI * thud * t) * Mathf.Exp(-t * 55f) * 0.35f; // the plate it lands on
+                    data[first + i] += tick + body;
+                }
+            }
+            s_StepClip = AudioClip.Create("Spider Steps", rate, 1, rate, false);
+            s_StepClip.SetData(data, 0);
+            return s_StepClip;
+        }
+
+        void UpdateSteps(float dt)
+        {
+            Vector3 now = surface.position;
+            float speed = dt > 0f ? (now - m_LastBody).magnitude / dt : 0f;
+            m_LastBody = now;
+            if (speed > 12f) speed = 0f; // it was placed somewhere else, it did not run there
+            m_BodySpeed = Mathf.Lerp(m_BodySpeed, speed, 1f - Mathf.Exp(-8f * dt));
+
+            bool quiet = drone.State == EnemyState.Dormant || drone.IsSedated || drone.Silenced || drone.IsScaring || drone.IsLurking || !drone.IsRunning;
+            StepLoudness = quiet ? 0f : Mathf.Clamp01(m_BodySpeed / 1.4f) * stepVolume;
+            if (steps == null || !Application.isPlaying) return;
+            if (steps.clip == null)
+            {
+                steps.clip = StepClip();
+                steps.loop = true;
+            }
+            steps.volume = Mathf.Lerp(steps.volume, StepLoudness, 1f - Mathf.Exp(-10f * dt));
+            steps.pitch = Mathf.Lerp(0.75f, 1.7f, Mathf.Clamp01(m_BodySpeed / 3.2f));
+            if (steps.volume > 0.01f && !steps.isPlaying) steps.Play();
+            else if (steps.volume <= 0.01f && steps.isPlaying) steps.Stop();
+        }
 
         /// <summary>0 = on the floor under its route, 1 = on the ceiling above it, in between = on the way (up the wall, or on its thread).</summary>
         public float Climb { get; private set; }
@@ -177,6 +236,7 @@ namespace TrashAstronauts.Mission
                 surface.SetPositionAndRotation(Vector3.Lerp(surface.position, position, k), Quaternion.Slerp(surface.rotation, rotation, k));
             }
             SurfaceNormal = normal;
+            UpdateSteps(dt);
 
             if (thread != null)
             {

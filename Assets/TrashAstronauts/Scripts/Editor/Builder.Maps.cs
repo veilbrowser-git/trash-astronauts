@@ -558,22 +558,18 @@ namespace TrashAstronauts.EditorTools
 
             Web(new Vector3(-7.9f, AH - 0.05f, 26.5f), Vector3.right, Vector3.back, Vector3.down, 2.2f);
             Web(new Vector3(7.9f, AH - 0.05f, 11.7f), Vector3.left, Vector3.forward, Vector3.down, 2.0f);
-            Web(new Vector3(-14.9f, H - 0.05f, 14.1f), Vector3.right, Vector3.forward, Vector3.down, 1.3f);
-            Web(new Vector3(5.9f, H - 0.05f, 38.5f), Vector3.left, Vector3.back, Vector3.down, 1.6f);
             Cocoon(new Vector3(-5.0f, H, 36.2f), 1.0f, 71);
-            Cocoon(new Vector3(-4.6f, H, 37.7f), 1.25f, 72);
             Cocoon(new Vector3(3.2f, AH, 23.6f), 2.3f, 73);
-            Cocoon(new Vector3(-12.6f, H, 22.6f), 1.1f, 74);
             EggSacs(new Vector3(6f - T * 0.5f, 1.8f, 35.2f), Vector3.left, 8, 81);
 
             Tripwire("b_vestibule", new Vector3(-1.8f, 1.2f, 10.6f), new Vector3(1.8f, 1.4f, 10.6f));
-            Tripwire("b_hold_west_door", new Vector3(-7.6f, 1.25f, 18.2f), new Vector3(-7.6f, 1.15f, 19.8f));
-            Tripwire("b_hold_east_door", new Vector3(7.6f, 1.3f, 18.3f), new Vector3(7.6f, 1.1f, 19.7f));
             Tripwire("b_hold_gap", new Vector3(-1.5f, 1.2f, 16.5f), new Vector3(1.5f, 1.4f, 16.5f));
             Tripwire("b_drive_entry", new Vector3(-0.9f, 1.2f, 27.4f), new Vector3(0.9f, 1.35f, 27.4f));
-            Tripwire("b_duct", new Vector3(-13.9f, 0.9f, 27f), new Vector3(-12.9f, 1.5f, 27f));
             EggSacs(new Vector3(-8f + T * 0.5f, 2.0f, 23.4f), Vector3.right, 6, 82);
-            EggSacs(new Vector3(-15f + T * 0.5f, 1.7f, 19.4f), Vector3.right, 6, 83);
+
+            Poster("SHIFT NOTE\nDo not go in the hold alone.\nCount the crates. One of them moves.", new Vector3(-2f + T * 0.5f + 0.012f, 1.5f, 9.6f), Vector3.right, 0.95f, 0.55f, 0.36f);
+            Poster("LOG 12\nBunk C is empty again.\nNobody saw her leave.", new Vector3(-13.2f, 1.5f, 14f + T * 0.5f + 0.012f), Vector3.forward, 0.9f, 0.5f, 0.38f);
+            Poster("LOG 19\nWe sealed the duct.\nIt was already inside.", new Vector3(6f - T * 0.5f - 0.012f, 1.5f, 30.2f), Vector3.left, 0.9f, 0.5f, 0.38f);
 
             // Signs
             Sign("ORE HOLD", new Vector3(0, 2.45f, 11.6f - T * 0.5f - 0.02f), Vector3.back, 1.4f);
@@ -773,24 +769,18 @@ namespace TrashAstronauts.EditorTools
 
             Web(new Vector3(-8.9f, H - 0.05f, 7.7f), Vector3.right, Vector3.forward, Vector3.down, 1.4f);
             Web(new Vector3(8.9f, H - 0.05f, 31.5f), Vector3.left, Vector3.back, Vector3.down, 1.5f);
-            Web(new Vector3(-8.9f, H - 0.05f, 31.5f), Vector3.right, Vector3.back, Vector3.down, 1.3f);
-            Web(new Vector3(5.9f, H - 0.05f, 36.5f), Vector3.left, Vector3.back, Vector3.down, 1.6f);
-            Web(new Vector3(-4.9f, H - 0.05f, 27.5f), Vector3.right, Vector3.back, Vector3.down, 1.2f);
             Cocoon(new Vector3(-3.9f, H, 35.9f), 1.1f, 91);
-            Cocoon(new Vector3(-2.7f, H, 36.1f), 0.9f, 92);
             Cocoon(new Vector3(-3.4f, H, 18.2f), 1.2f, 93);
-            Cocoon(new Vector3(-7.8f, H, 22.4f), 1.15f, 94);
             EggSacs(new Vector3(-5f + T * 0.5f, 1.9f, 22.4f), Vector3.right, 7, 95);
 
-            Tripwire("c_ring_s_west", new Vector3(-4f, 0.9f, 7.8f), new Vector3(-4f, 1.6f, 11.4f));
-            Tripwire("c_ring_s_east", new Vector3(4f, 1.5f, 7.8f), new Vector3(4f, 0.9f, 11.4f));
             Tripwire("c_ring_west", new Vector3(-8.8f, 1.2f, 17f), new Vector3(-5.2f, 1.35f, 17f));
             Tripwire("c_ring_east", new Vector3(5.2f, 1.2f, 22f), new Vector3(8.8f, 1.3f, 22f));
-            Tripwire("c_ring_north", new Vector3(-3f, 1.2f, 27.8f), new Vector3(-3f, 1.35f, 31.4f));
             Tripwire("c_lab_door", new Vector3(-0.9f, 1.2f, 12f), new Vector3(0.9f, 1.3f, 12f));
-            Tripwire("c_deck_door", new Vector3(-0.8f, 1.2f, 32f), new Vector3(0.8f, 1.3f, 32f));
             EggSacs(new Vector3(9f - T * 0.5f, 1.9f, 12.6f), Vector3.left, 6, 96);
-            EggSacs(new Vector3(-2.2f, 1.8f, 36.6f - T * 0.5f), Vector3.back, 7, 97);
+
+            Poster("LAB NOTE\nSpecimen 14 has doubled in size.\nIt watches the door.", new Vector3(-5f + T * 0.5f + 0.012f, 1.5f, 13.4f), Vector3.right, 0.95f, 0.55f, 0.36f);
+            Poster("LOG 30\nIf you can hear it walking,\nit is not hunting you yet.", new Vector3(-9f + T * 0.5f + 0.012f, 1.5f, 24.8f), Vector3.right, 0.95f, 0.55f, 0.36f);
+            Poster("LOG 33\nIt has stopped walking.", new Vector3(3.6f, 1.5f, 31.6f + T * 0.5f + 0.012f), Vector3.forward, 0.8f, 0.4f, 0.42f);
 
             // Signs
             Sign("LABORATORY", new Vector3(0, 2.45f, 11.6f - T * 0.5f - 0.02f), Vector3.back, 1.4f);

@@ -12,7 +12,7 @@ using UnityEngine.TestTools;
 
 namespace TrashAstronauts.Tests
 {
-    /// <summary>The wrist inventory, the folding 3D shop, the supply bay, hand and body pushing, and the dropping spider.</summary>
+    /// <summary>The folding 3D shop, the supply bay, hand and body pushing, and the dropping spider.</summary>
     public class InventoryShopPhysicsPlayTests
     {
         MissionDirector m_Director;
@@ -26,6 +26,7 @@ namespace TrashAstronauts.Tests
             MissionDirector.CreatureOverride = 0;
             MissionDirector.MapOverride = 0;
             MissionDirector.ConditionOverride = ContractCondition.Standard;
+            BlackoutController.DamageOverride = 0f;
             yield return SceneManager.LoadSceneAsync("TrashAstronauts", LoadSceneMode.Single);
             yield return null;
             yield return null;
@@ -41,94 +42,12 @@ namespace TrashAstronauts.Tests
             MissionDirector.CreatureOverride = null;
             MissionDirector.MapOverride = null;
             MissionDirector.ConditionOverride = null;
+            BlackoutController.DamageOverride = null;
         }
 
         static IEnumerator Frames(int count)
         {
             for (int i = 0; i < count; i++) yield return null;
-        }
-
-        [UnityTest]
-        public IEnumerator Inventory_OpensFromTheWrist_StowsSmallSalvage_AndGivesItBack()
-        {
-            var inventory = m_Player.inventory;
-            Assert.IsNotNull(inventory, "The suit should have an inventory.");
-            Assert.AreEqual(5, inventory.Capacity);
-            Assert.IsFalse(inventory.IsOpen, "It starts closed.");
-            Assert.IsNotNull(inventory.wristButton, "There should be an INV button on the wrist display.");
-            Assert.IsTrue(inventory.wristButton.transform.IsChildOf(m_Player.wristDisplay), "The button belongs on the wrist display.");
-
-            m_Director.StartMission(PlayerId.Local);
-            yield return Frames(2);
-
-            // Touching the wrist button opens the tray in front of the player; it is see-through.
-            Assert.IsTrue(inventory.wristButton.Press(m_Player.rightHand));
-            yield return null;
-            Assert.IsTrue(inventory.IsOpen);
-            Vector3 toPanel = inventory.panel.transform.position - m_Player.HeadPosition;
-            Assert.That(toPanel.magnitude, Is.InRange(0.3f, 0.8f), "The tray should appear within easy reach.");
-            var glass = inventory.panel.GetComponentsInChildren<MeshRenderer>().First(r => r.name == "Glass");
-            Assert.Less(glass.sharedMaterial.color.a, 0.5f, "The tray should be see-through.");
-
-            var small = m_Director.Items.Where(i => !i.IsMounted && i.definition != null && !i.definition.bulky).Take(6).ToArray();
-            Assert.AreEqual(6, small.Length);
-            var bulky = m_Director.Items.FirstOrDefault(i => i.definition != null && i.definition.bulky);
-
-            // Letting go of an item over a slot stows it there, shrunk to pocket size.
-            Vector3 fullScale = small[0].transform.localScale;
-            small[0].transform.position = inventory.slots[2].position + Vector3.up * 0.03f;
-            Assert.IsTrue(inventory.TryStoreReleased(small[0]));
-            Assert.AreSame(small[0], inventory.ItemAt(2));
-            Assert.AreSame(inventory, small[0].StoredIn);
-            Assert.IsTrue(small[0].Body.isKinematic);
-            Assert.Less(Vector3.Distance(small[0].transform.position, inventory.slots[2].position), 0.01f);
-            var bounds = new Bounds(small[0].transform.position, Vector3.zero);
-            foreach (var r in small[0].GetComponentsInChildren<MeshRenderer>()) bounds.Encapsulate(r.bounds);
-            Assert.Less(Mathf.Max(bounds.size.x, bounds.size.y, bounds.size.z), 0.16f, "A stowed item should be shrunk to fit its pocket.");
-
-            // Letting go somewhere else does not.
-            small[1].transform.position = inventory.panel.transform.position + Vector3.up * 0.6f;
-            Assert.IsFalse(inventory.TryStoreReleased(small[1]));
-
-            // It fills up, refuses a sixth, and refuses anything big.
-            for (int i = 1; i < 5; i++) Assert.IsTrue(inventory.TryStore(small[i]), "slot " + i);
-            Assert.AreEqual(5, inventory.Count);
-            Assert.IsFalse(inventory.TryStore(small[5]));
-            Assert.AreEqual("Pockets full.", inventory.Refusal(small[5]));
-            Assert.AreEqual(small.Take(5).Sum(i => i.Value), inventory.CarriedValue);
-            if (bulky != null && !bulky.IsMounted) Assert.AreEqual("Too big for a pocket.", inventory.Refusal(bulky));
-
-            // Stowed things are safe from knocks, and the locker does not take them out of your pockets.
-            var delicate = small.Take(5).FirstOrDefault(i => i.definition.fragility > 0f);
-            if (delicate != null) Assert.AreEqual(0, delicate.ApplyImpact(9f));
-            Assert.IsFalse(m_Director.locker.TryAccept(small[0]));
-            Assert.AreEqual(0, m_Director.Session.DepositedCount);
-
-            // Close it: everything travels with you, out of sight. Open it somewhere else: still there.
-            inventory.wristButton.Press(m_Player.rightHand);
-            yield return new WaitForSecondsRealtime(0.4f);
-            if (inventory.IsOpen) inventory.Close();
-            Assert.IsFalse(inventory.IsOpen);
-            Assert.IsFalse(small[0].gameObject.activeSelf);
-            m_Player.locomotion.TeleportTo(new Vector3(0f, 0f, 5.6f));
-            yield return Frames(4);
-            inventory.Open();
-            Assert.IsTrue(small[0].gameObject.activeSelf);
-            Assert.Less(Vector3.Distance(small[0].transform.position, m_Player.HeadPosition), 1.2f, "Stowed salvage should come with you.");
-
-            // Take one out: full size, loose again, and the locker accepts it.
-            var taken = inventory.Take(2);
-            Assert.AreSame(small[0], taken);
-            Assert.IsNull(taken.StoredIn);
-            Assert.IsFalse(taken.Body.isKinematic);
-            Assert.AreEqual(fullScale, taken.transform.localScale);
-            Assert.AreEqual(4, inventory.Count);
-            Assert.IsTrue(m_Director.locker.TryAccept(taken));
-
-            // The pockets are emptied when the contract ends.
-            m_Director.FailMission(FailureReason.Caught, PlayerId.Local);
-            yield return Frames(3);
-            Assert.AreEqual(0, inventory.Count);
         }
 
         [UnityTest]

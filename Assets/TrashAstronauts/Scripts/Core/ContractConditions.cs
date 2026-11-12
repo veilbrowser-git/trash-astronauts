@@ -62,7 +62,7 @@ namespace TrashAstronauts.Core
         public static float BlackoutDelayMultiplier(ContractCondition c) => c == ContractCondition.PowerFault ? 0.35f : 1f;
         public static float WakeDelayMultiplier(ContractCondition c) => c == ContractCondition.LightSleeper ? 0.15f : c == ContractCondition.DeadCalm ? 3.75f : 1f;
         /// <summary>Chance (0..1) that each web tripwire is strung this contract.</summary>
-        public static float WebChance(ContractCondition c) => c == ContractCondition.Infested ? 1f : 0.55f;
+        public static float WebChance(ContractCondition c) => c == ContractCondition.Infested ? 1f : 0.45f;
         public static float BonusMultiplier(ContractCondition c)
         {
             switch (c)

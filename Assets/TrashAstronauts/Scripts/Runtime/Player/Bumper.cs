@@ -72,7 +72,7 @@ namespace TrashAstronauts.Player
                 var body = s_Hits[i] != null ? s_Hits[i].attachedRigidbody : null;
                 if (body == null || body.isKinematic) continue;
                 var item = body.GetComponent<SalvageItem>();
-                if (item != null && (item.IsHeld || item.IsSecured || item.StoredIn != null)) continue;
+                if (item != null && (item.IsHeld || item.IsSecured)) continue;
 
                 // Push along the line from the pusher to the thing, but only if we are closing on it.
                 Vector3 axisPoint = goal;

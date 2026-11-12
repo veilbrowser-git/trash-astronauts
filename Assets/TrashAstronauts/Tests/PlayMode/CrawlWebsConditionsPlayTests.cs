@@ -27,6 +27,7 @@ namespace TrashAstronauts.Tests
             MissionDirector.CreatureOverride = 0;
             MissionDirector.MapOverride = 0;
             MissionDirector.ConditionOverride = ContractCondition.Standard;
+            BlackoutController.DamageOverride = 0f;
             yield return SceneManager.LoadSceneAsync("TrashAstronauts", LoadSceneMode.Single);
             yield return null;
             yield return null;
@@ -159,8 +160,7 @@ namespace TrashAstronauts.Tests
             m_Director.StartMission(PlayerId.Local);
             yield return Frames(3);
             var wires = Object.FindObjectsByType<WebTripwire>(FindObjectsSortMode.None);
-            Assert.GreaterOrEqual(wires.Length, 5, "The wreck should have webs strung across its routes.");
-            Assert.IsTrue(wires.Any(w => w.Armed) && wires.Any(w => !w.Armed), "Some are strung and some are not; it changes each contract.");
+            Assert.That(wires.Length, Is.InRange(2, 4), "A few webs across the routes, not one in every doorway.");
             Assert.IsTrue(wires.All(w => w.visual.activeSelf == w.Armed));
 
             var wire = wires.First(w => w.wireId == "a_corridor_mid");
@@ -219,6 +219,132 @@ namespace TrashAstronauts.Tests
         }
 
         [UnityTest]
+        public IEnumerator YouHearItWalking_UntilItStopsToListen()
+        {
+            m_Director.StartMission(PlayerId.Local);
+            yield return Frames(3);
+            var creature = m_Director.ActiveEnemy;
+            var walker = creature.GetComponent<SurfaceWalker>();
+            Assert.IsNotNull(walker.steps, "It should have footsteps.");
+            Assert.AreEqual(1f, walker.steps.spatialBlend, "Footsteps come from where it is.");
+            Assert.IsTrue(walker.steps.transform.IsChildOf(walker.surface), "They come from its body, not from mid-air.");
+            yield return Seconds(0.4f);
+            Assert.AreEqual(0f, walker.StepLoudness, "Dormant, it makes no sound.");
+
+            creature.WakeNow();
+            foreach (var door in m_Director.wreckDoors) door.SetOpen(true, true);
+            creature.lurkChance = 0f;
+            float loudest = 0f;
+            for (int i = 0; i < 240; i++)
+            {
+                creature.Step(Time.deltaTime > 0f ? Time.deltaTime : 0.02f);
+                loudest = Mathf.Max(loudest, walker.StepLoudness);
+                yield return null;
+            }
+            Assert.Greater(loudest, 0.1f, "Walking its rounds, its feet can be heard.");
+            Assert.IsTrue(walker.steps.isPlaying || walker.steps.volume < 0.02f);
+
+            // Sooner or later it stops dead and listens: no footsteps, no hum, and it does not move.
+            creature.lurkChance = 1f;
+            bool lurked = false;
+            for (int i = 0; i < 6000 && !lurked; i++)
+            {
+                creature.Step(0.05f);
+                lurked = creature.IsLurking;
+                if (i % 200 == 0) yield return null;
+            }
+            Assert.IsTrue(lurked, "It should sometimes stop on its rounds.");
+            Vector3 where = creature.transform.position;
+            for (int i = 0; i < 20; i++) creature.Step(0.05f);
+            Assert.AreEqual(where, creature.transform.position, "Lying in wait, it does not move.");
+            yield return Seconds(1.2f);
+            Assert.Less(walker.StepLoudness, 0.01f, "And it makes no sound.");
+
+            // A noise ends the wait at once.
+            m_Director.noise.Emit(new NoiseEvent(creature.transform.position + Vector3.back * 3f, 1f, NoiseKind.Impact, PlayerId.Local));
+            Assert.IsFalse(creature.IsLurking);
+            Assert.AreEqual(EnemyState.Investigate, creature.State);
+        }
+
+        [UnityTest]
+        public IEnumerator SomeOfTheWrecksLightsAreDead_DifferentOnesEachContract_AndTheAirlockStaysLit()
+        {
+            BlackoutController.DamageOverride = 1f;
+            var blackout = m_Director.blackout;
+            var patterns = new System.Collections.Generic.HashSet<string>();
+            for (int seed = 1; seed <= 6; seed++)
+            {
+                MissionDirector.SeedOverride = seed;
+                if (m_Director.Phase == MissionPhase.Active) m_Director.FailMission(FailureReason.Caught, PlayerId.Local);
+                m_Director.StartMission(PlayerId.Local);
+                yield return Frames(2);
+                var lights = m_Director.ActiveMap.lights;
+                foreach (var l in lights)
+                {
+                    if (blackout.IsDead(l)) Assert.IsFalse(l.enabled, l.name + " should be dark.");
+                    if (l.transform.position.z < 7.75f) Assert.IsFalse(blackout.IsDead(l), "The airlock light must always work.");
+                }
+                Assert.Less(blackout.DeadLightCount, lights.Length * 0.6f, "Most of the wreck still has light.");
+                patterns.Add(string.Join(",", lights.Select(l => blackout.IsDead(l) ? "x" : "o")));
+
+                // A blackout and its recovery leave the dead ones dead.
+                blackout.TriggerNow(2f);
+                Assert.IsTrue(lights.All(l => !l.enabled));
+                blackout.EndBlackout(true);
+                foreach (var l in lights) if (blackout.IsDead(l)) Assert.IsFalse(l.enabled);
+            }
+            Assert.Greater(patterns.Count, 2, "Which lights are dead should change from contract to contract.");
+
+            // Back in the hub everything is restored.
+            m_Director.FailMission(FailureReason.Caught, PlayerId.Local);
+            yield return Frames(2);
+            Assert.AreEqual(0, blackout.DeadLightCount);
+        }
+
+        [UnityTest]
+        public IEnumerator Flashlight_RunsDown_Recovers_AndTheTugRechargesIt()
+        {
+            var torch = m_Player.tools.OfType<FlashlightTool>().First();
+            Assert.AreEqual(1f, torch.Charge, 0.001f);
+            m_Director.StartMission(PlayerId.Local);
+            yield return Frames(2);
+            m_Director.keepPlayersInHub = false;
+            m_Player.locomotion.TeleportTo(MapPoints.Freighter(0f, 0f, 14f));
+            yield return Frames(4);
+            Assert.IsFalse(m_Player.InSafeZone);
+
+            // Out in the wreck with the light on, it drains.
+            torch.SetOn(true, false);
+            torch.batterySeconds = 10f;
+            float before = torch.Charge;
+            yield return Seconds(1f);
+            Assert.Less(torch.Charge, before - 0.05f, "The flashlight should run down while it is on.");
+
+            // Flat: it goes out, says so on the wrist, and will not come back on straight away.
+            torch.SetCharge(0.001f);
+            yield return Seconds(0.3f);
+            Assert.IsTrue(torch.IsFlat);
+            Assert.IsFalse(torch.IsOn, "A flat flashlight goes out.");
+            Assert.IsFalse(torch.beam.enabled);
+            torch.SetOn(true, false);
+            Assert.IsFalse(torch.IsOn, "It cannot be switched on while flat.");
+            var wrist = m_Player.GetComponentInChildren<WristDisplay>(true);
+            wrist.Refresh();
+            StringAssert.Contains("LIGHT FLAT", wrist.salvageText.text);
+
+            // Left off, it recovers; then it lights again.
+            yield return Seconds(1.2f);
+            Assert.Greater(torch.Charge, 0.05f, "Switched off, it charges.");
+            torch.SetOn(true, false);
+            Assert.IsTrue(torch.IsOn);
+
+            // The tug tops it up.
+            m_Player.locomotion.TeleportTo(m_Director.hubSpawn.position, m_Director.hubSpawn.rotation);
+            yield return Seconds(2.5f);
+            Assert.Greater(torch.Charge, 0.95f, "Back in the tug the flashlight recharges.");
+        }
+
+        [UnityTest]
         public IEnumerator ContractConditions_ChangeTheRun_AndAreShownOnTheBoard()
         {
             float standardOxygen = m_Director.NextRunOxygenCapacity;
@@ -252,6 +378,7 @@ namespace TrashAstronauts.Tests
 
             // Left to chance, different seeds give different conditions, and the same seed gives the same one.
             MissionDirector.ConditionOverride = null;
+            BlackoutController.DamageOverride = null;
             var seen = new System.Collections.Generic.HashSet<ContractCondition>();
             for (int seed = 1; seed <= 40; seed++) seen.Add(ContractConditions.Pick(seed));
             Assert.GreaterOrEqual(seen.Count, 6, "Conditions should vary from contract to contract.");

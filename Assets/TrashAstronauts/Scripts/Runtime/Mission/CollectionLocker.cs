@@ -91,7 +91,7 @@ namespace TrashAstronauts.Mission
             for (int i = 0; i < count; i++)
             {
                 var item = m_Hits[i].GetComponentInParent<SalvageItem>();
-                if (item == null || item.IsSecured || item.IsHeld || item.IsMounted || item.StoredIn != null) continue;
+                if (item == null || item.IsSecured || item.IsHeld || item.IsMounted) continue;
                 TryAccept(item);
             }
         }
@@ -99,7 +99,7 @@ namespace TrashAstronauts.Mission
         /// <summary>Attempts to secure one item. Returns true if it was accepted.</summary>
         public bool TryAccept(SalvageItem item)
         {
-            if (item == null || item.IsSecured || item.IsMounted || item.StoredIn != null) return false;
+            if (item == null || item.IsSecured || item.IsMounted) return false;
 
             if (item.isTraining)
             {

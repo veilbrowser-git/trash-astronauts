@@ -73,6 +73,17 @@ namespace TrashAstronauts.Mission
         Vector3 m_LastSeenPosition;
         Vector3 m_LastSeenVelocity;
 
+        [Header("Lying in wait")]
+        [Tooltip("Chance, at each stop on its rounds, that it goes completely still and silent for a while.")]
+        [Range(0f, 1f)] public float lurkChance = 0.3f;
+        public Vector2 lurkSeconds = new Vector2(3f, 9f);
+        /// <summary>True while it has stopped dead on its rounds: no footsteps, no hum. You lose track of it.</summary>
+        public bool IsLurking => m_Running && Brain != null && Brain.State == EnemyState.Patrol && m_Clock < m_LurkUntil;
+        float m_Clock;
+        float m_LurkUntil;
+        float m_NoLurkBefore;
+        System.Random m_LurkRandom = new System.Random(1);
+
         /// <summary>When it last reacted to a sound (Time.time).</summary>
         public float LastHeardNoiseTime { get; private set; } = -100f;
         /// <summary>True while it is flying straight at its quarry instead of following its route points.</summary>
@@ -133,6 +144,9 @@ namespace TrashAstronauts.Mission
             m_Running = true;
             m_WakeTimer = m_Tuning.wakeDelaySeconds * (director != null ? ContractConditions.WakeDelayMultiplier(director.Condition) : 1f);
             m_PatrolIndex = 0;
+            m_LurkRandom = new System.Random(seed ^ 0x6a09e667);
+            m_LurkUntil = 0f;
+            m_NoLurkBefore = m_Clock + 25f;
             m_HasPath = false;
             m_Target = null;
             m_DoorTimer = 0f;
@@ -161,6 +175,8 @@ namespace TrashAstronauts.Mission
             EnsureBrain();
             m_Running = true;
             m_WakeTimer = 0f;
+            m_LurkUntil = 0f;
+            m_NoLurkBefore = m_Clock + 25f;
             Brain.WakeUp();
         }
 
@@ -201,6 +217,7 @@ namespace TrashAstronauts.Mission
         public void Step(float dt)
         {
             if (!m_Running || IsScaring) return;
+            m_Clock += dt;
 
             if (m_SedateTimer > 0f)
             {
@@ -390,6 +407,9 @@ namespace TrashAstronauts.Mission
                 if (m_PathIndex >= m_Path.Count)
                 {
                     m_PatrolIndex = (m_PatrolIndex + 1) % patrolRoute.Length;
+                    // Now and then it simply stops here, and listens.
+                    if (m_Clock >= m_NoLurkBefore && m_LurkRandom.NextDouble() < lurkChance)
+                        m_LurkUntil = m_Clock + Mathf.Lerp(lurkSeconds.x, lurkSeconds.y, (float)m_LurkRandom.NextDouble());
                     node = patrolRoute[m_PatrolIndex];
                     goal = node != null ? node.Position : transform.position;
                     BuildPath(goal, false);
@@ -450,6 +470,7 @@ namespace TrashAstronauts.Mission
 
         void Move(float dt, Vector3 lookGoal)
         {
+            if (IsLurking) return; // perfectly still
             if (m_PathIndex >= m_Path.Count)
             {
                 // Arrived: sweep the eye around so the player can read where it is looking.
@@ -853,7 +874,7 @@ namespace TrashAstronauts.Mission
 
             if (hum != null && Application.isPlaying)
             {
-                bool shouldPlay = m_Running && state != EnemyState.Dormant && !Silenced && !IsScaring;
+                bool shouldPlay = m_Running && state != EnemyState.Dormant && !Silenced && !IsScaring && !IsLurking;
                 if (shouldPlay && !hum.isPlaying) hum.Play();
                 else if (!shouldPlay && hum.isPlaying) hum.Stop();
                 hum.pitch = Mathf.Lerp(hum.pitch, humPitch, 0.1f);

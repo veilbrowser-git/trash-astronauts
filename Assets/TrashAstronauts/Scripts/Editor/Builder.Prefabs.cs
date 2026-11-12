@@ -459,6 +459,10 @@ namespace TrashAstronauts.EditorTools
             walker.bodyHeight = spider.footDrop * 0.92f;
             walker.thread = MakeLine(go.transform, "Thread", 0.004f);
             walker.thread.startColor = walker.thread.endColor = new Color(0.85f, 0.87f, 0.9f);
+            var stepSource = Empty(surfaceGo.transform, "Footsteps", Vector3.zero).AddComponent<AudioSource>();
+            ConfigureSpatial(stepSource, null, true, 0f, 1.2f, warden ? 18f : 15f);
+            walker.steps = stepSource;
+            walker.stepVolume = listener ? 0.35f : warden ? 0.75f : mimic ? 0.4f : 0.55f;
             return SavePrefab(go, go.name);
         }
 
@@ -756,6 +760,8 @@ namespace TrashAstronauts.EditorTools
             cam.backgroundColor = Color.black;
             cam.allowHDR = false;
             camGo.AddComponent<AudioListener>();
+            // Everything is heard from inside a helmet: the top end is taken off all of it.
+            camGo.AddComponent<AudioLowPassFilter>().cutoffFrequency = 6200f;
             var headDriver = camGo.AddComponent<TrackedPoseDriver>();
             headDriver.positionInput = new InputActionProperty(Ref("Head/Position"));
             headDriver.rotationInput = new InputActionProperty(Ref("Head/Rotation"));
@@ -885,29 +891,6 @@ namespace TrashAstronauts.EditorTools
             display.voiceText = Text(wrist.transform, "Voice", "NOISE: quiet", new Vector3(0, -0.063f, -0.001f), Quaternion.identity, 0.055f, new Vector2(0.12f, 0.012f), new Color(0.6f, 1f, 0.7f));
             context.wristDisplay = wrist.transform;
 
-            // --- inventory: an INV button beside the wrist display, and a see-through tray of pockets
-            var invButton = Button(wrist.transform, "Inventory Button", new Vector3(0.1f, 0.012f, 0f), Quaternion.identity, new Vector2(0.04f, 0.04f), "INV", M("ButtonAmber"), 0.075f);
-            var invRoot = Empty(rig.transform, "Inventory", Vector3.zero, null, GameLayers.Default);
-            var tray = Empty(invRoot.transform, "Tray", Vector3.zero, null, GameLayers.Default);
-            Prim(tray.transform, "Glass", PrimitiveType.Cube, new Vector3(0, 0.01f, 0.03f), new Vector3(0.94f, 0.3f, 0.004f), M("Ghost"));
-            CBox(tray.transform, "Top Edge", new Vector3(0, 0.162f, 0.03f), new Vector3(0.94f, 0.008f, 0.008f), M("GlowTeal"), 0.002f);
-            CBox(tray.transform, "Bottom Edge", new Vector3(0, -0.142f, 0.03f), new Vector3(0.94f, 0.008f, 0.008f), M("GlowTeal"), 0.002f);
-            var invHeader = Text(tray.transform, "Header", "POCKETS", new Vector3(0, 0.115f, 0.026f), Quaternion.identity, 0.16f, new Vector2(0.9f, 0.07f), new Color(0.7f, 1f, 0.95f));
-            var invSlots = new List<Transform>();
-            for (int i = 0; i < 5; i++)
-            {
-                var slot = Empty(tray.transform, "Slot " + i, new Vector3(-0.36f + i * 0.18f, -0.03f, -0.02f), null, GameLayers.Default);
-                Part(slot.transform, "Ring", Torus(0.07f, 0.004f, 20, 5), Vector3.zero, M("GlowTeal"), new Vector3(90, 0, 0));
-                Prim(slot.transform, "Pocket", PrimitiveType.Sphere, Vector3.zero, Vector3.one * 0.135f, M("Ghost"));
-                invSlots.Add(slot.transform);
-            }
-            var inventory = rig.AddComponent<Inventory>();
-            inventory.player = context;
-            inventory.panel = tray;
-            inventory.slots = invSlots.ToArray();
-            inventory.header = invHeader;
-            inventory.wristButton = invButton;
-            context.inventory = inventory;
             context.visor = visor;
 
             // --- one-way pushers: the chest shoulders floating junk aside, an open hand can swat it

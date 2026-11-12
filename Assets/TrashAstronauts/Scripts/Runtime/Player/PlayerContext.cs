@@ -18,7 +18,6 @@ namespace TrashAstronauts.Player
         [SerializeField] int m_PlayerIndex;
         public Transform head;
         public VoiceSensor voice;
-        public Inventory inventory;
         public VisorDamage visor;
         [Tooltip("One-way pushers on the chest and hands (see Bumper).")]
         public Bumper[] bumpers;

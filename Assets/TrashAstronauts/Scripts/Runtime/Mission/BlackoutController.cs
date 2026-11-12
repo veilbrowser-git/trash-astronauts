@@ -50,6 +50,58 @@ namespace TrashAstronauts.Mission
             director.MissionEnded -= OnMissionEnded;
         }
 
+        [Header("Damage")]
+        [Tooltip("Share of the wreck's lights that are simply dead on any given contract.")]
+        [Range(0f, 0.6f)] public float deadFraction = 0.22f;
+        [Tooltip("Share that are failing: they stutter on and off.")]
+        [Range(0f, 0.6f)] public float flickerFraction = 0.18f;
+        /// <summary>Test seam: scales both fractions (0 = every light works).</summary>
+        public static float? DamageOverride;
+
+        readonly System.Collections.Generic.HashSet<Light> m_Dead = new System.Collections.Generic.HashSet<Light>();
+        readonly System.Collections.Generic.List<Light> m_Failing = new System.Collections.Generic.List<Light>();
+        float[] m_FailingNext = new float[0];
+        public int DeadLightCount => m_Dead.Count;
+        public int FailingLightCount => m_Failing.Count;
+        public bool IsDead(Light l) => m_Dead.Contains(l);
+
+        /// <summary>Decides from the run's seed which lights are dead and which are failing. Different every contract.</summary>
+        void ApplyDamage(int seed)
+        {
+            ClearDamage();
+            if (lights == null) return;
+            float scale = DamageOverride ?? 1f;
+            var rng = new System.Random(seed ^ 0x1f83d9ab);
+            foreach (var l in lights)
+            {
+                if (l == null || l.transform.position.z < 7.75f) continue; // the airlock always has light
+                double roll = rng.NextDouble();
+                if (roll < deadFraction * scale) m_Dead.Add(l);
+                else if (roll < (deadFraction + flickerFraction) * scale) m_Failing.Add(l);
+            }
+            m_FailingNext = new float[m_Failing.Count];
+            SetLights(!IsBlackout);
+        }
+
+        void ClearDamage()
+        {
+            m_Dead.Clear();
+            m_Failing.Clear();
+            m_FailingNext = new float[0];
+            if (!IsBlackout) SetLights(true);
+        }
+
+        void UpdateFailingLights()
+        {
+            for (int i = 0; i < m_Failing.Count; i++)
+            {
+                var l = m_Failing[i];
+                if (l == null || Time.time < m_FailingNext[i]) continue;
+                l.enabled = !l.enabled;
+                m_FailingNext[i] = Time.time + (l.enabled ? UnityEngine.Random.Range(0.3f, 4f) : UnityEngine.Random.Range(0.04f, 0.5f));
+            }
+        }
+
         [Tooltip("Ambience that plays whatever wreck is docked.")]
         public AudioSource[] globalAmbience;
 
@@ -57,6 +109,7 @@ namespace TrashAstronauts.Mission
         public void SetTargets(Light[] newLights, Renderer[] newStrips, AudioSource[] mapAmbience)
         {
             EndBlackout(true);
+            ClearDamage();
             lights = newLights ?? new Light[0];
             glowStrips = newStrips ?? new Renderer[0];
             var all = new System.Collections.Generic.List<AudioSource>();
@@ -69,12 +122,14 @@ namespace TrashAstronauts.Mission
         {
             EndBlackout(true);
             Schedule();
+            ApplyDamage(director != null && director.Session != null ? director.Session.Seed : 0);
         }
 
         void OnMissionEnded(MissionResult result)
         {
             m_Scheduled = false;
             EndBlackout(true);
+            ClearDamage();
         }
 
         void Schedule()
@@ -88,6 +143,7 @@ namespace TrashAstronauts.Mission
         void Update()
         {
             if (director == null || director.Phase != MissionPhase.Active || director.HazardsPaused) return;
+            if (!IsBlackout && m_Failing.Count > 0) UpdateFailingLights();
 
             if (IsBlackout)
             {
@@ -186,7 +242,7 @@ namespace TrashAstronauts.Mission
             if (lights == null) return;
             foreach (var l in lights)
             {
-                if (l != null) l.enabled = on;
+                if (l != null) l.enabled = on && !m_Dead.Contains(l);
             }
         }
 
