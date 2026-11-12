@@ -10,13 +10,15 @@ janitor finds you.
 
 ## Download
 
-**[Download TrashAstronauts.apk](https://github.com/veilbrowser-git/trash-astronauts/raw/builds/TrashAstronauts.apk)** (version 0.9.3, about 48 MB, Meta Quest 3 / 3S)
+**[Download TrashAstronauts.apk](https://github.com/veilbrowser-git/trash-astronauts/raw/builds/TrashAstronauts.apk)** (version 0.10.0, about 48 MB, Meta Quest 3 / 3S)
 
 That one file is the whole game. To install it:
 
 1. Turn on **Developer Mode** for your headset in the Meta Horizon phone app (required for any app that is not from the Meta store).
 2. Connect the headset to a computer by USB and install the APK with [Meta Quest Developer Hub](https://developers.meta.com/horizon/documentation/unity/ts-mqdh/), SideQuest, or `adb install -r TrashAstronauts.apk`.
 3. In the headset, open the app library and look under **Unknown Sources**.
+
+Version 0.10.0 is the **first co-op build**, and it is deliberately small: on the same Wi-Fi, one headset presses **HOST CO-OP** on the new CO-OP CREW panel in the tug, the others press **FIND CREW** and **JOIN** (or ENTER CODE), and up to four players **see each other** in the tug as suited astronauts with moving heads, arms and gloved hands, each in their own colour. Contracts cannot be started while a crew link is open yet; the shared contract comes next, and online play after that. The game now asks for the network permission, and contacts nothing until one of those buttons is pressed. It has never been tried on two real headsets: whether they find each other on your network is exactly what this build is for.
 
 Version 0.9.3 is about the spider's legs and what you hear. **The spider's feet are planted**: each foot stays fixed on the floor, wall or ceiling while the body moves over it, the legs step in two alternating groups of four with the knees up, and it stands still when it stops. **Breathing and a heartbeat** follow your effort and your fear (the spider near or chasing). **Sounds are muffled through walls** and clear in line of sight, and **rooms echo according to their size**. The new light fixtures **go dark with their lamp** when it is dead or during a blackout. It has not been run on a headset yet.
 
@@ -47,7 +49,7 @@ Version 0.4.0 put one of three different creatures aboard at random each contrac
 Version 0.3.0 moved the grab point into the palm, made swimming work with open hands, made hands and walls solid, quieted the creature and gave it a jumpscare, and added a shop, a tranquilizer, random blackouts, a map art pass and experimental hand tracking. Versions 0.2.0 and 0.3.0 were played on a Quest by the project owner.
 
 > **Verification status, read this first.** The project compiles, the scene and all assets are
-> generated, 382 automated tests pass in the Unity editor on macOS, and a Quest APK builds
+> generated, 401 automated tests pass in the Unity editor on macOS, and a Quest APK builds
 > (`Builds/Quest/TrashAstronauts.apk`). It has **not** been installed or run on a headset. Comfort,
 > hand/controller alignment, text legibility in the headset, haptic strength and frame rate are all
 > **unverified on hardware**. See [What was and was not tested](#what-was-and-was-not-tested).
