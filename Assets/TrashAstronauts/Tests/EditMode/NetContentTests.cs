@@ -90,7 +90,16 @@ namespace TrashAstronauts.Tests
             Assert.IsNotNull(prefab);
             Assert.IsEmpty(prefab.GetComponentsInChildren<Camera>(true));
             Assert.IsEmpty(prefab.GetComponentsInChildren<AudioListener>(true));
-            Assert.IsEmpty(prefab.GetComponentsInChildren<Light>(true), "No light (and so no shadow-casting light).");
+            // One light only: the crew flashlight's spot, saved switched off (RemoteToolRig hands it out to the nearest
+            // one or two lit flashlights at runtime), and never casting shadows.
+            var lights = prefab.GetComponentsInChildren<Light>(true);
+            Assert.LessOrEqual(lights.Length, 1, "No light but the flashlight's spot.");
+            foreach (var light in lights)
+            {
+                Assert.IsFalse(light.enabled, "Saved switched off.");
+                Assert.AreEqual(LightShadows.None, light.shadows, "No shadow-casting light.");
+                Assert.AreSame(prefab.GetComponent<RemoteToolRig>().flashlightSpot, light);
+            }
             Assert.IsEmpty(prefab.GetComponentsInChildren<XRBaseInteractor>(true));
             Assert.IsEmpty(prefab.GetComponentsInChildren<CharacterController>(true));
             Assert.IsEmpty(prefab.GetComponentsInChildren<Tools.SuitTool>(true), "No tools: a crew member's tools are not shared yet.");
@@ -103,7 +112,14 @@ namespace TrashAstronauts.Tests
                 Assert.IsFalse(type.Contains("TrackedPoseDriver"), "no tracked pose driver: " + component.name);
                 Assert.IsFalse(type.Contains("InputActionManager"), "no input: " + component.name);
                 Assert.IsFalse(type.StartsWith("UnityEngine.XR.Interaction.Toolkit.Locomotion"), "no locomotion: " + type);
-                Assert.IsFalse(component is AudioSource, "no audio source on a stand-in: " + component.name);
+                // The one sound on a stand-in is its cutter's loop: positional, muffled by walls, silent until it fires.
+                if (component is AudioSource source)
+                {
+                    Assert.AreSame(prefab.GetComponent<RemoteToolRig>().cutterLoop, source, "no audio source on a stand-in but the cutter loop: " + component.name);
+                    Assert.AreEqual(1f, source.spatialBlend, "The cutter is heard from where it is.");
+                    Assert.IsFalse(source.playOnAwake);
+                    Assert.IsNotNull(source.GetComponent<TrashAstronauts.Audio.SoundOcclusion>());
+                }
             }
             foreach (var t in prefab.GetComponentsInChildren<Transform>(true))
             {

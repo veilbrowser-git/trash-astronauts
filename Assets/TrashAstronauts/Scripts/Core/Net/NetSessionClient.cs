@@ -21,6 +21,8 @@ namespace TrashAstronauts.Core.Net
         public uint contentHash;
         /// <summary>The local player's handedness (0 right, 1 left).</summary>
         public byte handedness;
+        /// <summary>The local player's suit colour (0 = slot colour, 1..12 = suit palette; see <see cref="SuitLook"/>).</summary>
+        public byte suitColour;
         /// <summary>Seeds the client nonce.</summary>
         public int seed = 1;
     }
@@ -31,7 +33,7 @@ namespace TrashAstronauts.Core.Net
     /// into <see cref="IClientWorld"/>. Pure C#, explicit time, same call pattern as <see cref="NetSessionHost"/>:
     /// Poll(now) from Update, SendTick(now) from LateUpdate.
     /// </summary>
-    public sealed class NetSessionClient : IDisposable
+    public sealed partial class NetSessionClient : IDisposable
     {
         const int k_MaxDatagramsPerPoll = 512;
         const int k_MaxExtraDatagrams = 3;
@@ -59,6 +61,8 @@ namespace TrashAstronauts.Core.Net
         uint m_Nonce;
         ushort m_ConnId;
         byte m_Handedness;
+        byte m_SuitColour;
+        readonly byte[] m_CrewColour = new byte[NetProtocol.MaxPlayers];
         double m_Now;
         double m_ConnectStarted;
         double m_LastHello = double.NegativeInfinity;
@@ -108,6 +112,7 @@ namespace TrashAstronauts.Core.Net
             m_World = world ?? throw new ArgumentNullException(nameof(world));
             m_Config = config ?? new NetClientConfig();
             m_Handedness = (byte)(m_Config.handedness & 1);
+            m_SuitColour = SuitLook.Clamp(m_Config.suitColour);
             uint nonce = (uint)new Random(m_Config.seed).Next(1, int.MaxValue);
             m_Nonce = nonce ^ ((uint)m_Config.seed * 2654435761u) | 1u;
             m_PoseWrite.entries = new ItemPoseEntry[k_PoseCapacity];
@@ -320,12 +325,31 @@ namespace TrashAstronauts.Core.Net
             m_Noises[m_NoiseCount++] = new NoiseMsg { position = position, loudness = loudness, kind = kind };
         }
 
-        public void SendSettingsChanged(byte handedness)
+        public void SendSettingsChanged(byte handedness) => SendSettingsChanged(handedness, m_SuitColour);
+
+        /// <summary>Handedness and suit colour (0 = slot colour, 1..12 = suit palette; out of range = 0) to the host, who relays them.</summary>
+        public void SendSettingsChanged(byte handedness, byte suitColour)
         {
             m_Handedness = (byte)(handedness & 1);
+            m_SuitColour = SuitLook.Clamp(suitColour);
             var w = new NetWriter(m_Small);
-            new SettingsChangedMsg { handedness = m_Handedness }.Write(ref w);
+            new SettingsChangedMsg { handedness = m_Handedness, suitColour = m_SuitColour }.Write(ref w);
             Enqueue(NetMsg.SettingsChanged, ref w);
+        }
+
+        /// <summary>The handedness this client last told the host (0 right, 1 left).</summary>
+        public byte LocalHandedness => m_Handedness;
+        /// <summary>The suit colour this client last told the host.</summary>
+        public byte LocalSuitColour => m_SuitColour;
+
+        /// <summary>
+        /// A crew member's suit colour as the host last reported it (Welcome, then RosterChanged); 0 = slot colour,
+        /// 1..12 = suit palette. The local slot answers with <see cref="LocalSuitColour"/>.
+        /// </summary>
+        public byte SuitColour(int slot)
+        {
+            if (slot < 0 || slot >= NetProtocol.MaxPlayers) return SuitLook.Default;
+            return slot == LocalSlot ? m_SuitColour : m_CrewColour[slot];
         }
 
         public void SendStartRequest()
@@ -418,7 +442,7 @@ namespace TrashAstronauts.Core.Net
         void SendHello()
         {
             m_LastHello = m_Now;
-            var hello = new HelloMsg { protocol = m_Config.protocol, contentHash = m_Config.contentHash, clientNonce = m_Nonce, handedness = m_Handedness };
+            var hello = new HelloMsg { protocol = m_Config.protocol, contentHash = m_Config.contentHash, clientNonce = m_Nonce, handedness = m_Handedness, suitColour = m_SuitColour };
             var w = new NetWriter(m_Send);
             hello.WriteDatagram(ref w);
             SendRaw(w.Position);
@@ -526,6 +550,7 @@ namespace TrashAstronauts.Core.Net
                 Tap?.Invoke(true, 0, NetMsg.Noise, m_Send, start, w.Position - start, time);
             }
             m_NoiseCount = 0;
+            WriteCutProgress(ref w, time);
         }
 
         // ================================================================== receiving
@@ -699,6 +724,7 @@ namespace TrashAstronauts.Core.Net
                 case NetMsg.ItemPoses: return ItemPoseBatch.Read(ref r, ref m_PoseRead);
                 case NetMsg.Clock: return ClockMsg.Read(ref r, out _);
                 case NetMsg.Voice: return VoiceMsg.Read(ref r, ref m_VoiceRead);
+                case CutProgressMsg.Id: return CutProgressMsg.Read(ref r, out _);
                 default: return false;
             }
         }
@@ -760,19 +786,29 @@ namespace TrashAstronauts.Core.Net
                             handler(m_VoiceRead.slot, (ushort)(m_VoiceRead.sequence + f), m_VoiceRead.data, m_VoiceRead.Offset(f), m_VoiceRead.Length(f));
                     return true;
                 }
+                case CutProgressMsg.Id: return DispatchCutProgress(ref r);
 
                 // ---------------- session
                 case NetMsg.Welcome:
                 {
                     if (!WelcomeMsg.Read(ref r, ref m_Welcome)) return false;
                     Welcomed = true;
+                    for (int i = 0; i < NetProtocol.MaxPlayers; i++) m_CrewColour[i] = m_Welcome.SuitColour(i);
                     m_World.OnWelcome(LocalSlot, in m_Welcome);
+                    if (m_World is ICrewLookListener welcomeLook)
+                    {
+                        for (int i = 0; i < NetProtocol.MaxPlayers; i++)
+                            if (i != LocalSlot && m_Welcome.IsPresent(i)) welcomeLook.OnCrewLook((byte)i, m_CrewColour[i]);
+                    }
                     return true;
                 }
                 case NetMsg.RosterChanged:
                 {
                     if (!RosterChangedMsg.Read(ref r, out RosterChangedMsg m)) return false;
+                    m_CrewColour[m.slot] = m.change == RosterChange.Left ? SuitLook.Default : m.suitColour;
                     m_World.OnRosterChanged(m.slot, m.change, m.handedness);
+                    if (m_World is ICrewLookListener rosterLook && m.slot != LocalSlot && (m.change == RosterChange.Joined || m.change == RosterChange.Settings))
+                        rosterLook.OnCrewLook(m.slot, m.suitColour);
                     return true;
                 }
                 case NetMsg.WorldState:

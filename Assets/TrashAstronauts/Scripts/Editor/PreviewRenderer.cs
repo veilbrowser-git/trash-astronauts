@@ -184,6 +184,8 @@ namespace TrashAstronauts.EditorTools
 
             CoopShots();
             SettingsShot();
+            SuitColourShots();
+            RemoteToolShots();
 
             Shot("08_top_down", new Vector3(-1f, 46f, 22f), new Vector3(-1f, 0f, 22.01f), true);
             Shot("18_flight_deck", new Vector3(-0.8f, 1.6f, -3.3f), new Vector3(0.3f, 1.3f, -6.2f));
@@ -335,11 +337,191 @@ namespace TrashAstronauts.EditorTools
                 remote.Apply(in s);
                 remote.leftGlove.Apply(s.leftIndexCurl, s.leftGripCurl);
                 remote.rightGlove.Apply(0f, 0f);
+                // The waving one is talking (voice chat's helmet light); the other wears a chosen suit colour .
+                if (p.wave)
+                {
+                    var talk = remote.head.Find(TrashAstronauts.Net.Voice.VoiceTalkLight.ChildName);
+                    if (talk != null) talk.GetComponent<Renderer>().enabled = true;
+                }
+                else TrashAstronauts.Net.CrewLook.ApplyLook(remote, p.slot, 9);
                 remote.suit.SnapToHead();
                 remote.suit.Pose(0f);
             }
             Shot("54_remote_crew_in_tug", new Vector3(-1.3f, 1.6f, 0.7f), new Vector3(-0.1f, 1.3f, -2.0f), false, 70f);
+            Vector3 talker = poses[0].head;
+            Shot("55_remote_talk_light", talker + new Vector3(0.35f, 0.25f, 0.9f), talker + Vector3.up * 0.1f, false, 50f);
             foreach (var go in crew) Object.DestroyImmediate(go);
+        }
+
+        /// <summary>
+        /// The SUIT LOCKER (default and with a colour picked), where it hangs in the supply bay, and the twelve suit colours
+        /// on crew stand-ins (RemoteCrew prefab, suit and gloves dressed through CrewLook) in a lineup away from the level.
+        /// </summary>
+        static void SuitColourShots()
+        {
+            var locker = Object.FindAnyObjectByType<TrashAstronauts.UI.SuitLockerPanel>();
+            if (locker != null)
+            {
+                locker.ShowChoice(0, 0);
+                Shot("60_suit_locker", new Vector3(-4.96f, 1.62f, -4.05f), new Vector3(-4.96f, 1.6f, -3.12f), false, 62f);
+                Shot("61_suit_locker_in_bay", new Vector3(-2.35f, 1.65f, -5.3f), new Vector3(-4.9f, 1.3f, -3.3f), false, 75f);
+                locker.ShowChoice(0, 7); // CYAN
+                Shot("62_suit_locker_cyan", new Vector3(-4.96f, 1.62f, -4.05f), new Vector3(-4.96f, 1.6f, -3.12f), false, 62f);
+                locker.ShowChoice(0, 0);
+            }
+
+            var remotePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(Builder.PrefabDir + "/" + Builder.RemoteCrewPrefabName + ".prefab");
+            if (remotePrefab == null) return;
+            var made = new System.Collections.Generic.List<GameObject>();
+            int count = TrashAstronauts.Player.PlayerAvatar.SuitColors.Length;
+            for (int i = 0; i <= count; i++)
+            {
+                // i = 0: slot 1 with the default (its crew colour, no wash); then palette colours 1..12.
+                var go = Object.Instantiate(remotePrefab);
+                go.hideFlags = HideFlags.HideAndDontSave;
+                made.Add(go);
+                var remote = go.GetComponent<TrashAstronauts.Net.RemoteAvatar>();
+                remote.Setup(new TrashAstronauts.Core.PlayerId(1), 0);
+                Vector3 head = new Vector3(-6.5f + i * 1.0f, 1.62f, -80f);
+                Quaternion face = Quaternion.Euler(4f, 180f, 0f);
+                var s = TrashAstronauts.Core.Net.AvatarSnapshot.Default;
+                Vector3 right = face * Vector3.right, fwd = face * Vector3.forward;
+                s.headPosition = TrashAstronauts.Net.NetUnity.ToNet(head);
+                s.headRotation = TrashAstronauts.Net.NetUnity.ToNet(face);
+                s.leftHandPosition = TrashAstronauts.Net.NetUnity.ToNet(head - right * 0.27f + fwd * 0.28f + Vector3.down * 0.42f);
+                s.rightHandPosition = TrashAstronauts.Net.NetUnity.ToNet(head + right * 0.27f + fwd * 0.28f + Vector3.down * 0.42f);
+                s.leftHandRotation = TrashAstronauts.Net.NetUnity.ToNet(face * Quaternion.Euler(-60f, 0f, 0f));
+                s.rightHandRotation = TrashAstronauts.Net.NetUnity.ToNet(face * Quaternion.Euler(-60f, 0f, 0f));
+                remote.Apply(in s);
+                remote.leftGlove.Apply(0.1f, 0.2f);
+                remote.rightGlove.Apply(0.1f, 0.2f);
+                TrashAstronauts.Net.CrewLook.ApplyLook(remote, 1, i);
+                remote.suit.SnapToHead();
+                remote.suit.Pose(0f);
+            }
+            var lights = new System.Collections.Generic.List<GameObject>();
+            foreach (var at in new[] { new Vector3(-3f, 3f, -83f), new Vector3(3f, 3f, -83f), new Vector3(0f, 1.2f, -84f), new Vector3(0f, 3f, -78f) })
+            {
+                var l = new GameObject("Lineup Light") { hideFlags = HideFlags.HideAndDontSave };
+                lights.Add(l);
+                var light = l.AddComponent<Light>();
+                light.type = LightType.Point;
+                light.range = 12f;
+                light.intensity = 4f;
+                l.transform.position = at;
+            }
+            Shot("63_suit_colours_lineup", new Vector3(0f, 1.3f, -88.2f), new Vector3(0f, 1.0f, -80f), false, 58f);
+            Shot("64_suit_colours_close", new Vector3(-4.0f, 1.35f, -82.4f), new Vector3(-4.0f, 1.05f, -80f), false, 55f);
+            foreach (var go in made) Object.DestroyImmediate(go);
+            foreach (var go in lights) Object.DestroyImmediate(go);
+        }
+
+        /// <summary>
+        /// Three crew stand-ins at a weld panel on the docked wreck: one burning a weld (flame, glow, sparks, the weld
+        /// glowing from streamed progress), one lighting the panel with a flashlight (beam cone and its real spot
+        /// light), one with every tool holstered. Then close-ups of the gloves holding tools. The scene is not saved.
+        /// </summary>
+        static void RemoteToolShots()
+        {
+            var remotePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(Builder.PrefabDir + "/" + Builder.RemoteCrewPrefabName + ".prefab");
+            var director = Object.FindFirstObjectByType<TrashAstronauts.Mission.MissionDirector>();
+            if (remotePrefab == null || director == null || director.maps == null || director.maps.Length == 0) return;
+            TrashAstronauts.Mission.Cuttable panel = null;
+            foreach (var map in director.maps)
+            {
+                if (map == null || !map.gameObject.activeInHierarchy || map.cuttables == null) continue;
+                foreach (var c in map.cuttables)
+                    if (panel == null && c != null && c.cutPoints != null && c.cutPoints.Length > 1) panel = c;
+            }
+            if (panel == null) return;
+
+            Vector3 f = Vector3.ProjectOnPlane(panel.transform.forward, Vector3.up).normalized; // out of the wall
+            Vector3 r = Vector3.Cross(Vector3.up, f).normalized;
+            Vector3 weld = panel.cutPoints[0].transform.position;
+            Vector3 floorAt = panel.transform.position;
+            float eye = Mathf.Max(floorAt.y + 0.35f, 1.45f);
+            var spawned = new System.Collections.Generic.List<GameObject>();
+
+            TrashAstronauts.Net.RemoteAvatar Spawn(int slot, Vector3 head, Vector3 lookAt, System.Func<Quaternion, Vector3, Vector3, (Vector3 l, Quaternion lr, Vector3 rr, Quaternion rrot)> hands,
+                byte leftTool, byte rightTool, byte flags, float leftGrip, float rightGrip)
+            {
+                var go = Object.Instantiate(remotePrefab);
+                go.hideFlags = HideFlags.HideAndDontSave;
+                spawned.Add(go);
+                var remote = go.GetComponent<TrashAstronauts.Net.RemoteAvatar>();
+                remote.Setup(new TrashAstronauts.Core.PlayerId(slot), 0);
+                Quaternion face = Quaternion.LookRotation(lookAt - head, Vector3.up);
+                var h = hands(face, head, lookAt);
+                var s = TrashAstronauts.Core.Net.AvatarSnapshot.Default;
+                s.headPosition = TrashAstronauts.Net.NetUnity.ToNet(head);
+                s.headRotation = TrashAstronauts.Net.NetUnity.ToNet(face);
+                s.leftHandPosition = TrashAstronauts.Net.NetUnity.ToNet(h.l);
+                s.leftHandRotation = TrashAstronauts.Net.NetUnity.ToNet(h.lr);
+                s.rightHandPosition = TrashAstronauts.Net.NetUnity.ToNet(h.rr);
+                s.rightHandRotation = TrashAstronauts.Net.NetUnity.ToNet(h.rrot);
+                s.leftGripCurl = leftGrip;
+                s.rightGripCurl = rightGrip;
+                s.leftTool = leftTool;
+                s.rightTool = rightTool;
+                s.flags = flags;
+                remote.Apply(in s);
+                remote.leftGlove.Apply(leftGrip > 0.5f ? 0.6f : 0.1f, leftGrip);
+                remote.rightGlove.Apply(rightGrip > 0.5f ? 0.6f : 0.1f, rightGrip);
+                remote.suit.SnapToHead();
+                remote.suit.Pose(0f);
+                return remote;
+            }
+
+            // 1. Cutting: right hand holds the cutter with its tip on the first weld.
+            Vector3 cutterHead = weld + f * 0.62f - r * 0.12f + Vector3.up * (eye - weld.y + 0.05f);
+            var cutterCrew = Spawn(1, cutterHead, weld, (face, head, at) =>
+            {
+                Quaternion aim = Quaternion.LookRotation(at - (head + face * new Vector3(0.18f, -0.35f, 0.25f)), Vector3.up);
+                return (head + face * new Vector3(-0.25f, -0.55f, 0.15f), face * Quaternion.Euler(20f, 0f, 0f),
+                        head + face * new Vector3(0.18f, -0.35f, 0.25f), aim);
+            }, 0, TrashAstronauts.Net.AvatarSampler.Cutter,
+                (byte)(TrashAstronauts.Core.Net.AvatarFlags.CutterFiring | TrashAstronauts.Core.Net.AvatarFlags.Cutting), 0.2f, 1f);
+            // Slide the hand so the flame tip lands on the weld, then draw again.
+            var tools = cutterCrew.tools;
+            Vector3 miss = weld + f * 0.02f - tools.cutterTip.position;
+            var snap = cutterCrew.Drawn;
+            snap.rightHandPosition = TrashAstronauts.Net.NetUnity.ToNet(cutterCrew.rightHand.transform.position + miss);
+            cutterCrew.Apply(in snap);
+            cutterCrew.suit.Pose(0f);
+            panel.cutPoints[0].ApplyRemoteProgress(0.7f);
+            for (int i = 0; i < 6; i++) tools.StepSparks(0.02f);
+            if (tools.cutterSparks != null) tools.cutterSparks.Simulate(0.12f, true, false, true);
+
+            // 2. Flashlight in the left hand, lighting the panel; it gets one of the real lights.
+            Vector3 lightHead = floorAt + f * 1.45f + r * 0.75f;
+            lightHead.y = eye + 0.1f;
+            var lightCrew = Spawn(2, lightHead, weld, (face, head, at) =>
+            {
+                Vector3 hand = head + face * new Vector3(-0.2f, -0.3f, 0.35f);
+                return (hand, Quaternion.LookRotation(at - hand, Vector3.up), head + face * new Vector3(0.22f, -0.6f, 0.05f), face);
+            }, TrashAstronauts.Net.AvatarSampler.Flashlight, 0, TrashAstronauts.Core.Net.AvatarFlags.FlashlightOn, 1f, 0.1f);
+            lightCrew.tools.SetRealLight(true);
+
+            // 3. Everything holstered, turned a little toward the camera.
+            Vector3 idleHead = floorAt + f * 1.7f - r * 0.95f;
+            idleHead.y = eye + 0.05f;
+            Spawn(3, idleHead, idleHead + f * 1f + r * 0.6f, (face, head, at) =>
+                (head + face * new Vector3(-0.3f, -0.62f, 0.05f), face, head + face * new Vector3(0.3f, -0.62f, 0.05f), face), 0, 0, 0, 0.1f, 0.1f);
+
+            Vector3 camAt = floorAt + f * 3.4f + r * 0.35f;
+            camAt.y = eye + 0.15f;
+            Shot("70_remote_tools_at_panel", camAt, floorAt + f * 0.9f + Vector3.up * (eye - 0.35f - floorAt.y), false, 70f);
+            Shot("71_remote_cutter_closeup", weld + f * 0.55f + r * 0.55f + Vector3.up * 0.1f, weld + f * 0.25f, false, 55f);
+            Vector3 lightHand = lightCrew.leftHand.transform.position;
+            Vector3 lightFwd = Vector3.ProjectOnPlane(weld - lightHead, Vector3.up).normalized;
+            Vector3 lightRight = Vector3.Cross(Vector3.up, lightFwd);
+            Shot("72_remote_flashlight_hand", lightHand + lightFwd * 0.45f - lightRight * 0.35f + Vector3.up * 0.08f, lightHand, false, 50f);
+            Shot("73_remote_holsters", idleHead + f * 1.1f + r * 0.4f - Vector3.up * 0.25f, idleHead - Vector3.up * 0.45f, false, 55f);
+            Vector3 idleFwd = (f + r * 0.6f).normalized;
+            Vector3 idleRight = Vector3.Cross(Vector3.up, idleFwd);
+            Shot("74_remote_holsters_side", idleHead + idleRight * 0.9f + idleFwd * 0.35f - Vector3.up * 0.35f, idleHead - Vector3.up * 0.4f, false, 55f);
+            panel.cutPoints[0].ResetPoint();
+            foreach (var go in spawned) Object.DestroyImmediate(go);
         }
 
         static void Shot(string name, Vector3 from, Vector3 lookAt, bool topDown = false, float fieldOfView = 80f)

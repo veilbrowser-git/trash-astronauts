@@ -27,6 +27,8 @@ namespace TrashAstronauts.Tools
         Coroutine m_TracerRoutine;
 
         public int ShotsFired { get; private set; }
+        /// <summary>A dart left this launcher (tool, muzzle, where it stopped). Co-op shows the shot to the crew.</summary>
+        public static event System.Action<TranqTool, Vector3, Vector3> Fired;
         public int Hits { get; private set; }
 
         protected override void Start()
@@ -73,6 +75,7 @@ namespace TrashAstronauts.Tools
                 }
             }
 
+            Fired?.Invoke(this, origin, end);
             if (Sfx.Library != null) Sfx.PlayAt(Sfx.Library.tranqFire, origin, 0.5f, 1f, 8f);
             if (HoldingHand != null) HoldingHand.Pulse(hitCreature ? 0.7f : 0.4f, hitCreature ? 0.15f : 0.06f);
             if (director.noise != null)

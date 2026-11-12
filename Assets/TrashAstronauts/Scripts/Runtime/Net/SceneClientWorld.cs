@@ -106,7 +106,7 @@ namespace TrashAstronauts.Net
 
         public void OnCatchStarted(byte victimSlot) => m_Apply.ApplyCatchStarted(victimSlot);
 
-        public void OnTranqTracer(byte by, NetVec3 from, NetVec3 to) { /* Stage 5: another player's dart tracer. */ }
+        public void OnTranqTracer(byte by, NetVec3 from, NetVec3 to) => CoopToolSync.ShowTranqTracer(m_Net, by, from, to);
 
         public void OnBlackoutStarted(float seconds) => m_Apply.ApplyBlackoutStarted(seconds);
 

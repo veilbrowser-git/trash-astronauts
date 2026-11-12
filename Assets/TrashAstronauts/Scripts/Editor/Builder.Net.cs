@@ -21,8 +21,9 @@ namespace TrashAstronauts.EditorTools
 
         /// <summary>
         /// Another crew member: the full suit with the helmet on (tinted per slot at runtime), the same modelled
-        /// gloves as the local rig with fingers curled from the streamed grip and trigger, thruster flames, and a
-        /// kinematic capsule on the Player layer. No camera, audio listener, XR origin, interactor, input, haptics,
+        /// gloves as the local rig with fingers curled from the streamed grip and trigger, thruster flames, visual-only
+        /// copies of the four suit tools (in hand or holstered, with beam, flame and sparks), and a kinematic capsule on
+        /// the Player layer. No camera, audio listener, XR origin, interactor, input, haptics,
         /// and nothing on the Tool or Salvage layers.
         /// </summary>
         static GameObject BuildRemoteCrewPrefab()
@@ -71,6 +72,8 @@ namespace TrashAstronauts.EditorTools
             remote.rightGlove = right.GetComponentInChildren<GloveVisual>(true);
             remote.body = body;
             remote.bodyDrop = 0.85f;
+            // The four suit tools, visual only: in the glove that holds them or in their holsters (Builder.RemoteTools).
+            remote.tools = BuildRemoteTools(root, remote, avatar);
             return SavePrefab(root, RemoteCrewPrefabName);
         }
 

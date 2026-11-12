@@ -62,6 +62,45 @@ namespace TrashAstronauts.Player
         [Header("Feel")]
         public float smoothing = 18f;
 
+        [Header("Suit colour")]
+        [Tooltip("Every renderer of the modelled glove (they share one atlas).")]
+        public Renderer[] bandRenderers;
+        [Tooltip("The glove atlas with its accent bands (gauntlet band and back-of-hand stripe) painted in each suit palette colour; "
+            + "entry 0 is the atlas as modelled (orange). Built by the Builder; empty on the stand-in glove.")]
+        public Texture2D[] bandAtlases;
+
+        static readonly int k_BaseMap = Shader.PropertyToID("_BaseMap");
+        MaterialPropertyBlock m_BandBlock;
+        int m_BandColor;
+
+        /// <summary>The palette entry the accent bands show (0 = the modelled orange).</summary>
+        public int BandColor => m_BandColor;
+
+        /// <summary>
+        /// Paints the glove's accent bands in suit palette entry <paramref name="paletteIndex"/> (PlayerAvatar.SuitColors) by
+        /// swapping in that entry's atlas. Entry 0, an unknown entry or a glove without atlases leaves the glove as modelled.
+        /// </summary>
+        public void SetBandColor(int paletteIndex)
+        {
+            bool known = bandAtlases != null && paletteIndex > 0 && paletteIndex < bandAtlases.Length && bandAtlases[paletteIndex] != null;
+            m_BandColor = known ? paletteIndex : 0;
+            if (bandRenderers == null) return;
+            if (known && m_BandBlock == null) m_BandBlock = new MaterialPropertyBlock();
+            for (int i = 0; i < bandRenderers.Length; i++)
+            {
+                var r = bandRenderers[i];
+                if (r == null) continue;
+                if (!known)
+                {
+                    if (r.HasPropertyBlock()) r.SetPropertyBlock(null);
+                    continue;
+                }
+                r.GetPropertyBlock(m_BandBlock);
+                m_BandBlock.SetTexture(k_BaseMap, bandAtlases[paletteIndex]);
+                r.SetPropertyBlock(m_BandBlock);
+            }
+        }
+
         // Smoothed closing amount per finger: index, middle, ring, little, thumb (0 = relaxed, 1 = closed).
         readonly float[] m_Amount = new float[5];
         readonly float[] m_Target = new float[5];

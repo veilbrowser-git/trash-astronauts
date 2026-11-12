@@ -29,6 +29,8 @@ namespace TrashAstronauts.Net
         public Rigidbody body;
         [Tooltip("How far below the head the capsule's centre hangs (metres).")]
         public float bodyDrop = 0.85f;
+        [Tooltip("Visual-only copies of the four suit tools (in hand or holstered) and their effects.")]
+        public RemoteToolRig tools;
 
         /// <summary>A head that moves further than this between two consecutive samples teleported: snap, do not glide.</summary>
         public const float TeleportDistance = 1f;
@@ -58,7 +60,8 @@ namespace TrashAstronauts.Net
         {
             if (context != null) context.AssignId(id, true);
             SetHandedness(handedness);
-            if (suit != null) suit.SetTint(PlayerAvatar.CrewColors[Mathf.Clamp(id.Value, 0, PlayerAvatar.CrewColors.Length - 1)]);
+            // The slot's own colour, suit and gloves; NetSession's AddCrew then puts on the colour that player chose.
+            CrewLook.ApplyLook(this, id.Value, SuitLook.Default);
             SetShown(false);
         }
 
@@ -89,6 +92,13 @@ namespace TrashAstronauts.Net
             }
         }
 
+        void Start()
+        {
+            // Made by a NetSession: weld progress starts flowing between this headset and the crew.
+            var session = GetComponentInParent<NetSession>();
+            if (session != null) CoopToolSync.Attach(session);
+        }
+
         /// <summary>Draws the player as they were at <paramref name="renderTime"/> (host clock). Does nothing before the first sample.</summary>
         public void Render(double renderTime)
         {
@@ -96,7 +106,7 @@ namespace TrashAstronauts.Net
             Apply(in sample);
         }
 
-        /// <summary>Poses head, hands, finger curls and thruster flames from one sample.</summary>
+        /// <summary>Poses head, hands, finger curls, thruster flames and the tools from one sample.</summary>
         public void Apply(in AvatarSnapshot s)
         {
             Drawn = s;
@@ -106,6 +116,8 @@ namespace TrashAstronauts.Net
             if (head != null) head.SetPositionAndRotation(s.headPosition.ToUnity(), s.headRotation.ToUnity());
             ApplyHand(leftHand, s.leftHandPosition, s.leftHandRotation, s.leftIndexCurl, s.leftGripCurl, s.HasFlag(AvatarFlags.ThrusterLeft));
             ApplyHand(rightHand, s.rightHandPosition, s.rightHandRotation, s.rightIndexCurl, s.rightGripCurl, s.HasFlag(AvatarFlags.ThrusterRight));
+
+            if (tools != null) tools.Apply(in s);
 
             if (body != null && head != null)
             {

@@ -31,6 +31,39 @@ namespace TrashAstronauts.Player
             new Color(0.85f, 0.2f, 0.75f), // magenta
         };
 
+        /// <summary>
+        /// The suit colours a player can choose (the SUIT LOCKER). The four crew colours come first, in their order, so a
+        /// slot's default colour is also palette entry [slot]. On the wire and in the save, colour c (1..12) means entry
+        /// [c - 1] and 0 means "my slot's colour" (see Core.Net.SuitLook).
+        /// </summary>
+        public static readonly Color[] SuitColors =
+        {
+            CrewColors[0],                     // orange
+            CrewColors[1],                     // blue
+            CrewColors[2],                     // green
+            CrewColors[3],                     // magenta
+            new Color(0.86f, 0.1f, 0.12f),     // red
+            new Color(0.98f, 0.8f, 0.08f),     // yellow
+            new Color(0.08f, 0.8f, 0.82f),     // cyan
+            new Color(0.5f, 0.24f, 0.92f),     // purple
+            new Color(1f, 0.52f, 0.68f),       // pink
+            new Color(0.62f, 0.92f, 0.12f),    // lime
+            new Color(0.1f, 0.17f, 0.48f),     // navy
+            new Color(0.16f, 0.16f, 0.18f),    // graphite
+        };
+
+        /// <summary>Names of <see cref="SuitColors"/>, for the panel and the crew list.</summary>
+        public static readonly string[] SuitColorNames =
+        {
+            "ORANGE", "BLUE", "GREEN", "MAGENTA", "RED", "YELLOW", "CYAN", "PURPLE", "PINK", "LIME", "NAVY", "GRAPHITE",
+        };
+
+        /// <summary>How much of a chosen colour washes into the white fabric (0 = none, 1 = full colour).</summary>
+        public const float FabricWash = 0.32f;
+
+        /// <summary>The fabric colour for a suit colour: white with a light wash of the same hue (the atlas's dirt and seams still show).</summary>
+        public static Color WashOf(Color color) => Color.Lerp(Color.white, color, FabricWash);
+
         static readonly int k_BaseColor = Shader.PropertyToID("_BaseColor");
 
         [Header("Sources: the only things the pose is read from. Any of them may be missing.")]
@@ -54,6 +87,9 @@ namespace TrashAstronauts.Player
         public Renderer[] bodyRenderers;
         [Tooltip("The crew-colour pieces (helmet stripe, chest stripe, shoulder patches, arm and leg bands).")]
         public Renderer[] accentRenderers;
+        [Tooltip("Suit pieces whose second material (index 1) is the white fabric and helmet shell, washed with a chosen suit colour. "
+            + "Their first material (metal rings, rubber, boots, the pack) is never tinted.")]
+        public Renderer[] fabricRenderers;
 
         [Header("Proportions (metres; from the model)")]
         [Tooltip("Centre of the head, in the head source's own space (the source is between the eyes).")]
@@ -98,6 +134,8 @@ namespace TrashAstronauts.Player
         [SerializeField] bool m_HelmetVisible = true;
         [SerializeField] bool m_BodyVisible = true;
         [SerializeField] Color m_Tint = new Color(0.9f, 0.4f, 0.1f);
+        [SerializeField] Color m_Wash = Color.white;
+        [SerializeField] int m_SuitColor = -1;
 
         MaterialPropertyBlock m_Block;
         bool m_Initialized;
@@ -114,6 +152,10 @@ namespace TrashAstronauts.Player
         public bool HelmetVisible => m_HelmetVisible;
         public bool BodyVisible => m_BodyVisible;
         public Color Tint => m_Tint;
+        /// <summary>The fabric's wash: white unless a suit colour was chosen with <see cref="SetSuitColor"/>.</summary>
+        public Color FabricTint => m_Wash;
+        /// <summary>The palette entry last set with <see cref="SetSuitColor"/>, or -1 after <see cref="SetTint"/> (a crew colour on the stripes only).</summary>
+        public int SuitColorIndex => m_SuitColor;
         /// <summary>Longest distance from a shoulder that a wrist can be.</summary>
         public float ArmReach => upperArmLength + forearmLength;
 
@@ -159,10 +201,25 @@ namespace TrashAstronauts.Player
             SetEnabled(bodyRenderers, visible);
         }
 
-        /// <summary>Colours the crew stripes and patches. See <see cref="CrewColors"/>.</summary>
+        /// <summary>Colours the crew stripes and patches and leaves the fabric white. See <see cref="CrewColors"/>.</summary>
         public void SetTint(Color color)
         {
             m_Tint = color;
+            m_Wash = Color.white;
+            m_SuitColor = -1;
+            ApplyTint();
+        }
+
+        /// <summary>
+        /// Dresses the suit in palette entry <paramref name="paletteIndex"/> (0..11, see <see cref="SuitColors"/>): the stripes and
+        /// patches at full colour and the fabric and helmet shell with a light wash of it. Out of range uses entry 0.
+        /// </summary>
+        public void SetSuitColor(int paletteIndex)
+        {
+            if (paletteIndex < 0 || paletteIndex >= SuitColors.Length) paletteIndex = 0;
+            m_Tint = SuitColors[paletteIndex];
+            m_Wash = WashOf(m_Tint);
+            m_SuitColor = paletteIndex;
             ApplyTint();
         }
 
@@ -314,15 +371,35 @@ namespace TrashAstronauts.Player
 
         void ApplyTint()
         {
-            if (accentRenderers == null) return;
             if (m_Block == null) m_Block = new MaterialPropertyBlock();
-            for (int i = 0; i < accentRenderers.Length; i++)
+            if (accentRenderers != null)
             {
-                var r = accentRenderers[i];
-                if (r == null) continue;
-                r.GetPropertyBlock(m_Block);
-                m_Block.SetColor(k_BaseColor, m_Tint);
-                r.SetPropertyBlock(m_Block);
+                for (int i = 0; i < accentRenderers.Length; i++)
+                {
+                    var r = accentRenderers[i];
+                    if (r == null) continue;
+                    r.GetPropertyBlock(m_Block);
+                    m_Block.SetColor(k_BaseColor, m_Tint);
+                    r.SetPropertyBlock(m_Block);
+                }
+            }
+            if (fabricRenderers != null)
+            {
+                bool white = m_Wash == Color.white;
+                for (int i = 0; i < fabricRenderers.Length; i++)
+                {
+                    var r = fabricRenderers[i];
+                    if (r == null || r.sharedMaterials.Length < 2) continue;
+                    if (white)
+                    {
+                        // Untinted fabric: no block at all, exactly as before suit colours existed.
+                        if (r.HasPropertyBlock()) r.SetPropertyBlock(null, 1);
+                        continue;
+                    }
+                    r.GetPropertyBlock(m_Block, 1);
+                    m_Block.SetColor(k_BaseColor, m_Wash);
+                    r.SetPropertyBlock(m_Block, 1);
+                }
             }
         }
 
