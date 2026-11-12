@@ -659,6 +659,65 @@ namespace TrashAstronauts.Tests
 
         // ------------------------------------------------------------------ streams
 
+        /// <summary>An IHostWorld that only records avatar arrivals with their host-clock stamps.</summary>
+        sealed class AvatarStampWorld : IHostWorld
+        {
+            public readonly List<double> Times = new List<double>();
+            public readonly List<float> X = new List<float>();
+            public MissionPhase Phase => MissionPhase.Hub;
+            public void FillWorldState(ref WorldStateMsg state) { }
+            public void OnPlayerJoined(byte slot, byte handedness) { }
+            public void OnPlayerLeft(byte slot, PlayerLeaveReason reason) { }
+            public void OnPlayerAway(byte slot, bool away) { }
+            public void OnPlayerSettings(byte slot, byte handedness) { }
+            public void OnAvatar(byte slot, in AvatarSnapshot avatar, double hostTime) { Times.Add(hostTime); X.Add(avatar.headPosition.x); }
+            public void OnNoise(byte slot, NetVec3 position, float loudness, NoiseKind kind) { }
+            public void OnStartRequest(byte slot) { }
+            public void OnExtractRequest(byte slot) { }
+            public bool CanGrabItem(byte itemId, byte slot) => false;
+            public void OnItemGranted(byte itemId, byte slot, byte hand) { }
+            public void OnItemPose(byte itemId, byte slot, NetVec3 position, NetQuat rotation, bool held, double hostTime) { }
+            public void OnItemReleased(byte itemId, byte slot, NetVec3 position, NetQuat rotation, NetVec3 releasePosition) { }
+            public void OnItemThrown(byte itemId, byte slot, NetVec3 linearVelocity, NetVec3 angularVelocity, float throwSpeed, bool wasThrown) { }
+            public void OnItemReturned(in ItemReturn item) { }
+            public void OnItemDamageReport(byte itemId, byte slot, int newValue) { }
+            public void OnDoorRequest(byte slot, byte doorId, bool desiredOpen) { }
+            public void OnPointCutReport(byte slot, byte panel, byte index) { }
+            public void OnTranqHitReport(byte slot, NetVec3 origin, NetVec3 hitPoint) { }
+            public void OnWireReport(byte slot, byte index, NetWireChange change) { }
+        }
+
+        [Test]
+        public void Avatars_ReadTogetherAfterAHiccup_KeepTheirSendingTimes_SoTheyAreNotBunchedOrDropped()
+        {
+            var world = new AvatarStampWorld();
+            using (var rig = new NetTestRig(7, world))
+            {
+                rig.Hub.Latency = 0.02;
+                NetTestRig.Member c = rig.Join();
+                rig.EachStep = now => c.Avatar.headPosition = V((float)(now - 1000.0), 1.6f, 0f); // 1 m/s along x
+                rig.Step(1.0);
+
+                // The host's machine stalls for 160 ms: three or four avatar datagrams queue up and are read in one Poll.
+                rig.HostFrozen = true;
+                rig.Step(0.16);
+                rig.HostFrozen = false;
+                int before = world.Times.Count;
+                rig.Step(0.01);
+                int read = world.Times.Count - before;
+                Assert.GreaterOrEqual(read, 3, "a bunch was read in one Poll");
+                for (int i = before + 1; i < world.Times.Count; i++)
+                {
+                    double gap = world.Times[i] - world.Times[i - 1];
+                    Assert.AreEqual(NetProtocol.SendInterval, gap, 0.012, "each keeps its own 50 ms spacing, not the Poll's single time");
+                    float speed = (world.X[i] - world.X[i - 1]) / (float)gap;
+                    Assert.AreEqual(1f, speed, 0.3f, "position over stamp is the real speed");
+                }
+                Assert.LessOrEqual(world.Times[world.Times.Count - 1], rig.Now + 1e-9, "never stamped in the future");
+                for (int i = 1; i < world.Times.Count; i++) Assert.GreaterOrEqual(world.Times[i], world.Times[i - 1], "stamps never go backwards");
+            }
+        }
+
         [Test]
         public void Avatars_AreRelayedToEveryoneElse_NeverEchoed_AndCarryTheSendersSlot()
         {

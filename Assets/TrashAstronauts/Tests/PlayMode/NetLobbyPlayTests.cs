@@ -262,5 +262,80 @@ namespace TrashAstronauts.Tests
             Assert.IsTrue(m_Net.IsOffline, "No socket was opened.");
             Assert.IsNull(m_Director.Net);
         }
+
+        [UnityTest]
+        public IEnumerator Board_WithNoWifiAddress_FindAndEnterCodeSayNoWifi_AndLeaveNoSocketOpen()
+        {
+            yield return Board();
+            NetSession.LocalAddressOverride = t => 0u;
+            yield return Press(m_Board.codeButton);
+            Assert.AreEqual(LobbyMode.Offline, m_Net.Mode);
+            Assert.IsTrue(m_Net.IsOffline, "no socket left open behind an Offline panel");
+            StringAssert.StartsWith("NO WI-FI", Notice);
+            yield return Press(m_Board.findButton);
+            Assert.AreEqual(LobbyMode.Offline, m_Net.Mode, "no address: no search that could only end in NOBODY FOUND");
+            Assert.IsTrue(m_Net.IsOffline);
+            StringAssert.StartsWith("NO WI-FI", Notice);
+            yield return Press(m_Board.hostButton);
+            Assert.IsTrue(m_Net.IsOffline);
+            StringAssert.StartsWith("NO WI-FI", Notice);
+            NetSession.LocalAddressOverride = null;
+            Assert.AreEqual(0, m_Hub.LiveCount, "every transport that was opened was closed");
+        }
+
+        [UnityTest]
+        public IEnumerator Board_JoinWhenNoSocketOpens_SaysNoWifi_NotNoAnswer()
+        {
+            yield return Board();
+            var factory = NetSession.TransportFactory;
+            NetSession.TransportFactory = port => port == 0 ? null : factory(port);
+            Assert.IsFalse(m_Net.Join(new NetEndpoint(10, 0, 0, 77, NetProtocol.HostPort)));
+            NetSession.TransportFactory = factory;
+            Assert.AreEqual(LobbyMode.Offline, m_Net.Mode);
+            Assert.AreEqual(LobbyNotice.NoNetwork, m_Net.Notice);
+            StringAssert.StartsWith("NO WI-FI", Notice);
+            Assert.IsFalse(m_Director.ContractStartBlocked);
+        }
+
+        [UnityTest]
+        public IEnumerator Board_HostThatFailsFromTheSearchScreen_LeavesTheSearchAsItWas_WithTheReason()
+        {
+            yield return Board();
+            var host = AddScriptedHost(tug: 5150);
+            yield return Press(m_Board.findButton);
+            yield return Until(() => m_Net.FoundHosts.Count > 0);
+            var factory = NetSession.TransportFactory;
+            NetSession.TransportFactory = port => port == NetProtocol.HostPort ? null : factory(port);
+            yield return Press(m_Board.hostButton);
+            NetSession.TransportFactory = factory;
+            Assert.AreEqual(LobbyMode.Searching, m_Net.Mode, "still on the search screen");
+            Assert.IsNotNull(m_Net.Transport, "its socket still open, so JOIN still works");
+            StringAssert.StartsWith("PORT BUSY", Notice);
+            m_Board.Refresh();
+            Assert.IsTrue(m_Board.resultRows[0].activeSelf);
+            yield return Press(m_Board.joinButtons[0]);
+            yield return Until(() => m_Net.Mode == LobbyMode.Joined);
+            Assert.AreEqual(LobbyMode.Joined, m_Net.Mode);
+            Assert.AreEqual(LobbyNotice.None, m_Net.Notice);
+            yield return Press(m_Board.leaveButton);
+            Assert.IsTrue(m_Net.IsOffline);
+        }
+
+        [UnityTest]
+        public IEnumerator Board_ANewSearch_DoesNotListTugsFromTheLastOne()
+        {
+            yield return Board();
+            var host = AddScriptedHost(tug: 6060);
+            yield return Press(m_Board.findButton);
+            yield return Until(() => m_Net.FoundHosts.Count > 0);
+            Assert.AreEqual(1, m_Net.FoundHosts.Count);
+            yield return Press(m_Board.leaveButton);
+            host.Frozen = true; // that tug has gone quiet
+            yield return Press(m_Board.findButton);
+            Assert.AreEqual(0, m_Net.FoundHosts.Count, "a fresh search starts with an empty list");
+            m_Board.Refresh();
+            Assert.IsFalse(m_Board.resultRows[0].activeSelf, "nothing stale to JOIN");
+            yield return Press(m_Board.leaveButton);
+        }
     }
 }
