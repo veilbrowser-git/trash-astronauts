@@ -64,6 +64,57 @@ namespace TrashAstronauts.Net
         /// <summary>True while it glides back to the stream after this machine stopped simulating it.</summary>
         public bool Blending => m_BlendEnd > LocalNow;
 
+        // ---- a hand-back while the item is still flying (here or as another crew member's flight seen here)
+        /// <summary>The glide onto the stream when the item is still flying: long enough that it never looks like a correction.</summary>
+        public const double MovingBlendSeconds = 0.5;
+        /// <summary>How long the lead (the stream drawn as far ahead as it lags) takes to fade back to plain playback.</summary>
+        public const double LeadFadeSeconds = 1.0;
+        /// <summary>Below this an item counts as still at a hand-back: the old short glide.</summary>
+        public const float MovingSpeed = 0.2f;
+        /// <summary>One-way delay from the host to here, seconds (NetSession sets it from the measured round trip).</summary>
+        public static double LinkLatency = 0.05;
+        bool m_Moving;
+        Vector3 m_SeedPosition, m_SeedVelocity;
+        Quaternion m_SeedRotation = Quaternion.identity;
+        double m_SeedTime, m_LeadStart = -1, m_Lead0;
+        // The stream's own velocity (from its newest samples, smoothed; the seed's until it is known) and, while
+        // gliding, the offset from the stream that fades out.
+        Vector3 m_LeadVelocity, m_BlendOffset;
+        bool m_NeedOffset;
+        /// <summary>Hand-backs of a moving item handled with the forward glide (tests).</summary>
+        public int MovingHandbacks { get; private set; }
+
+        /// <summary>Where the item would be now had it kept flying as it was at the hand-back.</summary>
+        Vector3 SeedPath(double now) => m_SeedPosition + m_SeedVelocity * (float)(now - m_SeedTime);
+
+        void BeginMoving(Vector3 position, Quaternion rotation, Vector3 velocity)
+        {
+            m_Moving = true;
+            m_SeedPosition = position;
+            m_SeedRotation = rotation;
+            m_SeedVelocity = velocity;
+            m_LeadVelocity = velocity;
+            m_SeedTime = LocalNow;
+            m_LeadStart = -1;
+            m_BlendDuration = MovingBlendSeconds;
+            m_BlendArmed = true;
+            m_BlendEnd = -1;
+            MovingHandbacks++;
+        }
+
+        /// <summary>Velocity of the stream around <paramref name="time"/> (zero when it cannot tell).</summary>
+        bool StreamVelocity(double time, out Vector3 velocity)
+        {
+            velocity = Vector3.zero;
+            if (m_Buffer.Count < 2) return false;
+            // Only inside the samples: before the first one the buffer holds still, which is no speed at all.
+            double t1 = System.Math.Min(time, m_Buffer.NewestTime);
+            double t0 = System.Math.Max(t1 - 0.1, m_Buffer.OldestTime);
+            if (t1 - t0 < 0.04 || !m_Buffer.Sample(t1, out PoseSnapshot a) || !m_Buffer.Sample(t0, out PoseSnapshot b)) return false;
+            velocity = (ToUnity(a.position) - ToUnity(b.position)) / (float)(t1 - t0);
+            return true;
+        }
+
         /// <summary>
         /// How far in the past items and the creature replica are drawn: SnapshotBuffer.InterpolationDelay (100 ms) on Wi-Fi; NetSession sets
         /// NetSession.OnlineInterpolationDelay for an online session and puts it back when the session ends.
@@ -89,6 +140,7 @@ namespace TrashAstronauts.Net
             AtRest = true;
             m_BlendArmed = false;
             m_BlendEnd = -1;
+            m_Moving = false;
         }
 
         bool AcceptEpoch(int epoch)
@@ -98,8 +150,17 @@ namespace TrashAstronauts.Net
             if (order < 0) return false;
             if (order > 0)
             {
-                // Somebody else simulates it now: earlier samples belong to a different flight.
-                if (Epoch >= 0) m_Buffer.Clear();
+                // Somebody else simulates it now: earlier samples belong to a different flight. If it was flying,
+                // it carries on along its path here and glides onto the new stream (never back along it).
+                if (Epoch >= 0)
+                {
+                    Vector3 velocity = Vector3.zero;
+                    bool flying = !AtRest && m_Item != null && !m_Item.SimulatedHere
+                        && StreamVelocity(System.Math.Min(LocalNow - Delay, m_Buffer.NewestTime), out velocity)
+                        && velocity.magnitude > MovingSpeed;
+                    m_Buffer.Clear();
+                    if (flying) BeginMoving(transform.position, transform.rotation, velocity);
+                }
                 Epoch = epoch;
             }
             return true;
@@ -144,7 +205,7 @@ namespace TrashAstronauts.Net
         /// is under <paramref name="epoch"/> until the stream says otherwise; from the first pose that arrives it
         /// glides there over <paramref name="blendSeconds"/> instead of jumping.
         /// </summary>
-        public void Seed(Vector3 position, Quaternion rotation, int epoch, double blendSeconds = BlendSeconds)
+        public void Seed(Vector3 position, Quaternion rotation, int epoch, double blendSeconds = BlendSeconds, Vector3 velocity = default(Vector3))
         {
             m_Buffer.Clear();
             Epoch = epoch & CoopEpoch.Mask;
@@ -153,6 +214,9 @@ namespace TrashAstronauts.Net
             m_BlendEnd = -1;
             m_BlendDuration = blendSeconds;
             m_BlendArmed = blendSeconds > 0;
+            m_Moving = false;
+            // Still flying when handed back: keep it on its path until the host's stream arrives, then glide onto it.
+            if (blendSeconds > 0 && velocity.magnitude > MovingSpeed) BeginMoving(position, rotation, velocity);
         }
 
         /// <summary>The first pose after a seed starts the glide from wherever the item is shown now.</summary>
@@ -164,6 +228,13 @@ namespace TrashAstronauts.Net
             m_BlendFromRotation = transform.rotation;
             m_BlendStart = LocalNow;
             m_BlendEnd = LocalNow + m_BlendDuration;
+            if (m_Moving)
+            {
+                // The stream is Delay plus the trip behind the item itself: draw it that far ahead, fading slowly.
+                m_LeadStart = LocalNow;
+                m_Lead0 = Delay + (LinkLatency > 0 && LinkLatency < 1 ? LinkLatency : 0.05);
+                m_NeedOffset = true;
+            }
         }
 
         /// <summary>
@@ -191,6 +262,7 @@ namespace TrashAstronauts.Net
             m_Buffer.Clear();
             m_BlendEnd = -1;
             m_BlendArmed = false;
+            m_Moving = false;
         }
 
         /// <summary>Jumps straight to a pose (a lost item brought back).</summary>
@@ -201,13 +273,20 @@ namespace TrashAstronauts.Net
             AtRest = true;
             m_BlendArmed = false;
             m_BlendEnd = -1;
+            m_Moving = false;
             Move(position, rotation);
         }
 
         void Update()
         {
             if (m_Item == null) m_Item = GetComponent<SalvageItem>();
-            if (m_Item == null || m_Item.IsSecured || m_Item.IsMounted || m_Item.SimulatedHere || m_Buffer.Count == 0) return;
+            if (m_Item == null || m_Item.IsSecured || m_Item.IsMounted || m_Item.SimulatedHere) return;
+            if (m_Buffer.Count == 0)
+            {
+                // Handed back mid-flight and the host's stream is not here yet: it keeps flying, not frozen.
+                if (m_Moving && m_BlendArmed) Move(SeedPath(LocalNow), m_SeedRotation, !physicsDriven);
+                return;
+            }
             double renderTime = LocalNow - Delay;
             PoseSnapshot pose;
             // Something at rest stays exactly where it was put: never carried on past it by extrapolation.
@@ -219,10 +298,30 @@ namespace TrashAstronauts.Net
             Vector3 position = ToUnity(pose.position);
             Quaternion rotation = ToUnity(pose.rotation);
             double now = LocalNow;
+            if (m_Moving && m_LeadStart >= 0)
+            {
+                // A flight handed back here: the stream is drawn where the item really is now (its own motion carried
+                // ahead by the delay and the trip), the lead fading slowly to plain playback, and the glide onto it
+                // only fades out the small difference from where it was shown. It never turns back along its path.
+                if (StreamVelocity(m_Buffer.NewestTime, out Vector3 measured))
+                    m_LeadVelocity = Vector3.Lerp(m_LeadVelocity, measured, 1f - Mathf.Exp(-Time.unscaledDeltaTime / 0.1f));
+                bool resting = AtRest && renderTime >= m_Buffer.NewestTime;
+                if (!resting && renderTime < m_Buffer.OldestTime)
+                    position += m_LeadVelocity * (float)(renderTime - m_Buffer.OldestTime); // before its first sample: where it was then
+                double lead = m_Lead0 * (1.0 - (now - m_LeadStart) / LeadFadeSeconds);
+                if (lead > 0 && !resting) position += m_LeadVelocity * (float)lead;
+                else if (m_BlendEnd <= now) m_Moving = false;
+                if (m_NeedOffset)
+                {
+                    m_NeedOffset = false;
+                    m_BlendOffset = transform.position - position;
+                }
+            }
             if (m_BlendEnd > now && m_BlendEnd > m_BlendStart)
             {
                 float k = Mathf.SmoothStep(0f, 1f, (float)((now - m_BlendStart) / (m_BlendEnd - m_BlendStart)));
-                position = Vector3.Lerp(m_BlendFromPosition, position, k);
+                if (m_Moving) position += m_BlendOffset * (1f - k);
+                else position = Vector3.Lerp(m_BlendFromPosition, position, k);
                 rotation = Quaternion.Slerp(m_BlendFromRotation, rotation, k);
             }
             Move(position, rotation, !physicsDriven);

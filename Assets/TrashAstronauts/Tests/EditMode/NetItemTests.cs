@@ -334,18 +334,18 @@ namespace TrashAstronauts.Tests
         }
 
         [Test]
-        public void HandBackTimer_FiresAfter1500Ms_EvenWhenNoThrowWasEverRegistered()
+        public void HandBackTimer_FiresAfterThreeSeconds_EvenWhenNoThrowWasEverRegistered()
         {
             var item = new ItemAuthority(0, 1);
             item.BeginGrab(out _);
             item.OnOwner(1, 1, true, false, 0.0);
             Assert.IsTrue(item.Release(5.0)); // only the release was reported; no ItemThrown, no RegisterThrow
-            for (double t = 5.0; t < 6.49; t += 0.011)
+            for (double t = 5.0; t < 7.99; t += 0.011)
                 Assert.IsFalse(item.Tick(t, 3.0f, out _), "still flying fast at " + t);
-            Assert.IsTrue(item.Tick(6.5, 3.0f, out byte epoch), "1.5 s after the release it is handed back regardless of speed");
+            Assert.IsTrue(item.Tick(8.0, 3.0f, out byte epoch), "3 s after the release it is handed back regardless of speed");
             Assert.AreEqual(1, epoch);
-            Assert.IsFalse(item.Tick(6.6, 3.0f, out _));
-            Assert.AreEqual(ItemAuthority.HandbackMaxSeconds, 1.5, 1e-12);
+            Assert.IsFalse(item.Tick(8.1, 3.0f, out _));
+            Assert.AreEqual(ItemAuthority.HandbackMaxSeconds, 3.0, 1e-12);
             Assert.AreEqual(ItemAuthority.HandbackSlowSeconds, 0.3, 1e-12);
             Assert.AreEqual(ItemAuthority.HandbackSpeed, 0.25f);
         }
@@ -372,7 +372,8 @@ namespace TrashAstronauts.Tests
             {
                 Assert.IsFalse(nan.Tick(1.4, float.NaN, out _), "an unknown speed is not 'slow'");
                 Assert.IsFalse(nan.Tick(2.0, float.PositiveInfinity, out _));
-                Assert.IsTrue(nan.Tick(2.5, float.NaN, out _), "the 1.5 s limit still ends it");
+                Assert.IsFalse(nan.Tick(3.9, float.NaN, out _));
+                Assert.IsTrue(nan.Tick(4.0, float.NaN, out _), "the 3 s limit still ends it");
             });
         }
 
@@ -487,7 +488,8 @@ namespace TrashAstronauts.Tests
             var surprised = new ItemAuthority(0, 1);
             Assert.AreEqual(ItemAuthorityEvent.GrantedNotHeld, surprised.OnOwner(1, 5, true, false, 20.0));
             Assert.AreEqual(5, surprised.WireEpoch);
-            Assert.IsTrue(surprised.Tick(21.5, 9f, out handoffEpoch));
+            Assert.IsFalse(surprised.Tick(22.9, 9f, out _), "still flying fast, inside the 3 s window");
+            Assert.IsTrue(surprised.Tick(23.0, 9f, out handoffEpoch), "the 3 s hand-back window");
             Assert.AreEqual(5, handoffEpoch);
             // ... and as owner of a free-flying item: nothing to release, only to hand back.
             var flying = new ItemAuthority(0, 1);
@@ -813,7 +815,7 @@ namespace TrashAstronauts.Tests
         }
 
         [Test]
-        public void AFastThrow_IsHandedBackAfter1500Ms_AndTheThrowReachesTheHost()
+        public void AFastThrow_IsHandedBackAfterThreeSeconds_AndTheThrowReachesTheHost()
         {
             NetTestRig.Member a = m_Rig.Join();
             StartRun();
@@ -822,20 +824,20 @@ namespace TrashAstronauts.Tests
             m_Rig.Step(0.3);
             Release(a, 2);
             a.Session.SendItemThrown(2, a.World.Items[2].WireEpoch, V(6, 1, 0), V(0, 3, 0), 6.08f, true);
-            m_Rig.Step(1.3);
+            m_Rig.Step(2.8);
             Assert.AreEqual(1, m_Rig.HostWorld.Calls[NetMsg.ItemThrown]);
             Assert.AreEqual(6.08f, m_Rig.HostWorld.LastThrowSpeed, 0.0051f);
-            Assert.AreEqual(0, m_Rig.HostWorld.Returns.Count, "not yet: 1.5 s have not passed");
+            Assert.AreEqual(0, m_Rig.HostWorld.Returns.Count, "not yet: 3 s have not passed");
             Assert.AreEqual(1, m_Rig.Host.Items.Owner(2));
             m_Rig.Step(0.4);
-            Assert.AreEqual(1, m_Rig.HostWorld.Returns.Count, "handed back at 1.5 s");
+            Assert.AreEqual(1, m_Rig.HostWorld.Returns.Count, "handed back at 3 s");
             Assert.AreEqual(ItemReturnCause.Handoff, m_Rig.HostWorld.Returns[0].cause);
             Assert.AreEqual(6f, m_Rig.HostWorld.Returns[0].linearVelocity.x, 0.0051f, "with its velocity, so the host carries the flight on");
-            AssertEveryoneAgrees(2, "after the 1.5 s handoff");
+            AssertEveryoneAgrees(2, "after the 3 s handoff");
         }
 
         [Test]
-        public void NoHandoffWithinThreeSeconds_TheHostTakesTheItemBack_AtItsLastPose()
+        public void NoHandoffWithinTheFlightBackstop_TheHostTakesTheItemBack_AtItsLastPose()
         {
             NetTestRig.Member a = m_Rig.Join();
             NetTestRig.Member b = m_Rig.Join();
@@ -844,11 +846,11 @@ namespace TrashAstronauts.Tests
             Grab(a, 5);
             m_Rig.Step(0.5);
             Release(a, 5);
-            m_Rig.Step(2.8);
-            Assert.AreEqual(1, m_Rig.Host.Items.Owner(5), "still the thrower's just before 3 s");
+            m_Rig.Step(4.3);
+            Assert.AreEqual(1, m_Rig.Host.Items.Owner(5), "still the thrower's just before 4.5 s");
             Assert.AreEqual(0, m_Rig.HostWorld.Returns.Count);
             m_Rig.Step(0.4);
-            Assert.AreEqual(0, m_Rig.Host.Items.Owner(5), "backstop: owned but not held for 3 s");
+            Assert.AreEqual(0, m_Rig.Host.Items.Owner(5), "backstop: owned but not held for 4.5 s");
             Assert.AreEqual(1, m_Rig.HostWorld.Returns.Count);
             ItemReturn back = m_Rig.HostWorld.Returns[0];
             Assert.AreEqual(ItemReturnCause.Backstop, back.cause);
@@ -860,7 +862,27 @@ namespace TrashAstronauts.Tests
             Assert.AreEqual(1, a.World.Revoked, "the owner is told it lost the item");
             Assert.AreEqual(ItemMode.HostFree, a.World.Items[5].Mode);
             AssertEveryoneAgrees(5, "after the backstop");
-            Assert.AreEqual(NetProtocol.ItemBackstopSeconds, 3.0, 1e-12);
+            Assert.AreEqual(NetProtocol.ItemFlightBackstopSeconds, 4.5, 1e-12);
+            Assert.Greater(NetProtocol.ItemFlightBackstopSeconds, ItemAuthority.HandbackMaxSeconds + 1.0, "the backstop leaves the thrower's own hand-back time to arrive");
+        }
+
+        /// <summary>The trip a hand-back took, for the host's catch-up and the thrower's lead: measured from the acks every header carries.</summary>
+        [Test]
+        public void RoundTrip_IsMeasuredFromTheAcks_OnBothEnds_WithNoChangeOnTheWire()
+        {
+            NetTestRig.Member a = m_Rig.Join();
+            Assert.IsNaN(m_Rig.Host.RoundTripSeconds(0), "no round trip to itself");
+            Assert.IsNaN(m_Rig.Host.RoundTripSeconds(7), "nor to an empty slot");
+            m_Rig.Hub.Latency = 0.15;
+            m_Rig.Step(4.0);
+            double client = a.Session.RoundTripSeconds, host = m_Rig.Host.RoundTripSeconds(a.Slot);
+            // 300 ms, plus at most a send tick for the ack to ride back on.
+            Assert.That(client, Is.InRange(0.28, 0.4), "client's estimate " + client);
+            Assert.That(host, Is.InRange(0.28, 0.4), "host's estimate " + host);
+            m_Rig.Hub.Latency = 0.02;
+            m_Rig.Step(4.0);
+            Assert.That(a.Session.RoundTripSeconds, Is.InRange(0.03, 0.12), "it follows a faster link");
+            Assert.That(m_Rig.Host.RoundTripSeconds(a.Slot), Is.InRange(0.03, 0.12));
         }
 
         [Test]
@@ -1046,11 +1068,11 @@ namespace TrashAstronauts.Tests
         {
             StartRun(3);
             m_Rig.Hub.Latency = 0.04;
-            m_Speed[thrower] = 5f; // a fast throw: only the 1.5 s limit hands it back
+            m_Speed[thrower] = 5f; // a fast throw: only the 3 s limit hands it back
             Assert.IsTrue(Grab(thrower, 0));
             m_Rig.Step(0.5);
             Assert.IsTrue(Release(thrower, 0));
-            Assert.IsTrue(m_Rig.StepUntil(() => thrower.World.Items[0].HandoffSent, 2.0), "the thrower's 1.5 s hand-back fired");
+            Assert.IsTrue(m_Rig.StepUntil(() => thrower.World.Items[0].HandoffSent, 3.5), "the thrower's 3 s hand-back fired");
             thrower.Session.Flush(m_Rig.Now); // the handoff is on the wire ...
 
             ItemAuthority item = catcher.World.Items[0];

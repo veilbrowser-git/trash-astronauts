@@ -245,6 +245,13 @@ namespace TrashAstronauts.Core.Net
         }
 
         /// <summary>Reliable messages waiting for a slot (0 for an empty slot). Bounded by 512.</summary>
+        /// <summary>Smoothed round trip to this client in seconds (NaN before the first sample or for an empty slot).</summary>
+        public double RoundTripSeconds(int slot)
+        {
+            if (slot <= 0 || slot >= m_Peers.Length || !m_Peers[slot].used) return double.NaN;
+            return m_Peers[slot].channel.RoundTripSeconds;
+        }
+
         public int Backlog(int slot)
         {
             return slot > 0 && slot < m_Peers.Length && m_Peers[slot].used ? m_Peers[slot].channel.Backlog : 0;
@@ -589,6 +596,7 @@ namespace TrashAstronauts.Core.Net
                 RefreshAway(peer);
             }
             peer.channel.OnAck(header.ack, header.ackBits);
+            peer.channel.NoteAck(header.ack, m_Now);
 
             // Pass 2: reliable messages first. They were queued before this datagram's streams were sampled
             // (a grab request comes before the first pose of the grabbed item).
@@ -1040,7 +1048,7 @@ namespace TrashAstronauts.Core.Net
                 }
             }
 
-            int expired = m_Items.FindExpired(m_Now, NetProtocol.ItemBackstopSeconds, m_Ids);
+            int expired = m_Items.FindExpired(m_Now, NetProtocol.ItemFlightBackstopSeconds, m_Ids);
             for (int i = 0; i < expired; i++) ReturnItem(m_Ids[i], ItemReturnCause.Backstop, false, default(ItemHandoffMsg));
             // A client the table has as holding an item streams it 20 times a second. One that has streamed
             // nothing for 3 s does not know it holds it; without this the item would stay "held" for good.
@@ -1453,6 +1461,7 @@ namespace TrashAstronauts.Core.Net
                 seq = peer.channel.NextSendSequence(),
                 timeMs = DatagramHeader.ToMs(m_Now),
             };
+            peer.channel.NoteSent(header.seq, m_Now);
             peer.channel.GetAck(out header.ack, out header.ackBits);
             header.Write(ref w);
             return header.seq;

@@ -121,6 +121,9 @@ namespace TrashAstronauts.Core.Net
             m_ReceivedLatest = (ushort)(firstSequence - 1);
             m_ReceivedBits = 0u;
             Overflowed = false;
+            for (int i = 0; i < k_TimedSlots; i++) m_SentValid[i] = false;
+            m_HasTimedAck = false;
+            RoundTripSeconds = double.NaN;
         }
 
         // ------------------------------------------------------------------ sending
@@ -151,6 +154,43 @@ namespace TrashAstronauts.Core.Net
 
         /// <summary>Takes the sequence number for the datagram about to be built.</summary>
         public ushort NextSendSequence() { return m_NextSendSeq++; }
+
+        // ------------------------------------------------------------------ round trip (no wire change: every header acks)
+
+        const int k_TimedSlots = 64;
+        readonly double[] m_SentAt = new double[k_TimedSlots];
+        readonly ushort[] m_SentSeq = new ushort[k_TimedSlots];
+        readonly bool[] m_SentValid = new bool[k_TimedSlots];
+        ushort m_LastTimedAck;
+        bool m_HasTimedAck;
+
+        /// <summary>
+        /// Smoothed time from sending a datagram to receiving the first header that acknowledges it (seconds). It
+        /// includes up to one send interval the peer waits before its next datagram. NaN before the first sample.
+        /// </summary>
+        public double RoundTripSeconds { get; private set; } = double.NaN;
+
+        /// <summary>The datagram with this sequence went out now.</summary>
+        public void NoteSent(ushort sequence, double now)
+        {
+            int i = sequence % k_TimedSlots;
+            m_SentAt[i] = now;
+            m_SentSeq[i] = sequence;
+            m_SentValid[i] = true;
+        }
+
+        /// <summary>A header from the peer acknowledged datagrams up to <paramref name="ack"/> (call once per received datagram).</summary>
+        public void NoteAck(ushort ack, double now)
+        {
+            if (m_HasTimedAck && ack == m_LastTimedAck) return;
+            int i = ack % k_TimedSlots;
+            if (!m_SentValid[i] || m_SentSeq[i] != ack) return;
+            m_HasTimedAck = true;
+            m_LastTimedAck = ack;
+            double sample = now - m_SentAt[i];
+            if (sample < 0 || sample > 5.0) return;
+            RoundTripSeconds = double.IsNaN(RoundTripSeconds) ? sample : RoundTripSeconds + (sample - RoundTripSeconds) * 0.1;
+        }
 
         /// <summary>The ack fields for the header of the datagram about to be built.</summary>
         public void GetAck(out ushort ack, out uint ackBits)

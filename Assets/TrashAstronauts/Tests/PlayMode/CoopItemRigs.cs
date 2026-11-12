@@ -560,4 +560,36 @@ namespace TrashAstronauts.Tests
             yield return Settle();
         }
     }
+
+    /// <summary>Where in the scene an item can fly straight for a while without touching anything.</summary>
+    public static class CoopFlightSpace
+    {
+        static readonly RaycastHit[] s_Hits = new RaycastHit[32];
+
+        /// <summary>A horizontal-ish direction from <paramref name="from"/> clear of everything but <paramref name="item"/> for <paramref name="clearance"/> m.</summary>
+        public static bool TryOpenDirection(SalvageItem item, Vector3 from, float clearance, out Vector3 direction)
+        {
+            Vector3[] candidates =
+            {
+                Vector3.right, Vector3.left, Vector3.forward, Vector3.up,
+                (Vector3.right + Vector3.forward).normalized, (Vector3.left + Vector3.forward).normalized,
+                (Vector3.right + Vector3.up).normalized, (Vector3.left + Vector3.up).normalized, Vector3.back,
+            };
+            Physics.SyncTransforms();
+            foreach (var d in candidates)
+            {
+                int n = Physics.SphereCastNonAlloc(from - d * 0.2f, 0.2f, d, s_Hits, clearance + 0.2f, ~0, QueryTriggerInteraction.Ignore);
+                bool clear = true;
+                for (int i = 0; i < n && clear; i++)
+                {
+                    var hit = s_Hits[i].collider;
+                    if (hit == null || hit.attachedRigidbody == item.Body) continue;
+                    clear = false;
+                }
+                if (clear) { direction = d; return true; }
+            }
+            direction = Vector3.zero;
+            return false;
+        }
+    }
 }

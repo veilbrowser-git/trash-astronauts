@@ -772,6 +772,8 @@ namespace TrashAstronauts.Net
             // Everyone grabs: the host's arbitration of crew grabs, releases, throws and hand-backs.
             m_Items = new CoopItemHost(director, new HostBroadcast(this));
             m_Host = new NetSessionHost(transport, new SceneHostWorld(this, director, m_Rules, m_Items), config);
+            // A hand-back is as old as the sender's one-way trip: half its measured round trip.
+            m_Items.OneWayLatency = OneWayTo;
             m_Online = online;
             CoopItemReplica.Delay = InterpolationDelay;
             m_LastPoseTick = double.NegativeInfinity;
@@ -784,6 +786,12 @@ namespace TrashAstronauts.Net
             ApplyLocalSlot(m_LocalSlot);
             Sync();
             VoiceChat.Attach(this);
+        }
+
+        double OneWayTo(byte slot)
+        {
+            double rtt = m_Host != null ? m_Host.RoundTripSeconds(slot) : double.NaN;
+            return double.IsNaN(rtt) ? CoopItemHost.DefaultOneWaySeconds : rtt * 0.5;
         }
 
         void StartClient(INetTransport transport, NetEndpoint host, bool online)
@@ -881,6 +889,11 @@ namespace TrashAstronauts.Net
             if (m_Client != null)
             {
                 m_Client.Poll(now);
+                if (m_Client != null)
+                {
+                    double rtt = m_Client.RoundTripSeconds;
+                    CoopItemReplica.LinkLatency = double.IsNaN(rtt) ? 0.05 : rtt * 0.5;
+                }
                 // Over Relay a dead connection is known at once: do not sit on HOST NOT RESPONDING for 60 s.
                 if (!m_ClientEnded && m_Client != null && m_Online && m_Client.Transport is IRelayLink clientRelay
                     && (clientRelay.LinkLost || clientRelay.AllocationInvalid || clientRelay.RelayLost))

@@ -47,10 +47,14 @@ namespace TrashAstronauts.Player
         [Range(0f, 0.9f)] public float floorBonus = 0.15f;
         [Tooltip("A new item must be this much cheaper than the shown one to replace it (stops flicker), fraction.")]
         [Range(0f, 0.5f)] public float switchMargin = 0.15f;
-        [Tooltip("Palm this close to a wall or floor counts as touching it.")]
+        [Tooltip("Palm this close to a wall or floor counts as touching it when there is no ZeroGLocomotion (otherwise its grab reach is used, so a squeeze it would turn into a hold is never claimed here).")]
         public float touchRadius = 0.1f;
-        [Tooltip("While the palm touches a surface, only items closer than this are taken (farther, the squeeze grabs the surface).")]
+        [Tooltip("While the palm is within grab reach of a wall or rail, only items closer than this are taken (farther, the squeeze grabs the surface).")]
         public float wallYieldDistance = 0.45f;
+        [Tooltip("A squeeze is only the assist's while the palm moves slower than this (m/s, relative to the player)...")]
+        public float steadySpeed = 0.6f;
+        [Tooltip("...and has done for this long (s): a swim stroke sweeping past an item never snatches it.")]
+        public float steadySeconds = 0.15f;
 
         [Header("Pull")]
         [Tooltip("Average speed of the pull for a light item, m/s.")]
@@ -97,7 +101,31 @@ namespace TrashAstronauts.Player
         /// <summary>Where on the candidate the line points and the grip will be.</summary>
         public Vector3 CandidatePoint => m_CandidatePoint;
         /// <summary>True while a squeeze of this hand belongs to the reach assist (ZeroGLocomotion then neither grabs the wall nor paddles).</summary>
-        public bool ClaimsGrip => m_Candidate != null || (m_PressCandidate != null && m_PressFrame == Time.frameCount);
+        public bool ClaimsGrip => (m_Candidate != null && IsSteady) || (m_PressCandidate != null && m_PressFrame == Time.frameCount);
+        /// <summary>True when the palm has been held roughly still (slower than <see cref="steadySpeed"/> for <see cref="steadySeconds"/>).</summary>
+        public bool IsSteady => m_SteadyFor >= steadySeconds;
+        /// <summary>Squeezes with an item shown that were left to locomotion because the hand was sweeping (tests).</summary>
+        public int SweepsIgnored { get; private set; }
+        float m_SteadyFor;
+        Vector3 m_LastLocalPalm;
+        bool m_HasLastPalm;
+        ZeroGLocomotion m_ZeroG;
+        bool m_LookedForZeroG;
+
+        /// <summary>The player's zero-g locomotion: its grab reach decides when a squeeze means "hold on to the ship".</summary>
+        ZeroGLocomotion ZeroG
+        {
+            get
+            {
+                if (!m_LookedForZeroG)
+                {
+                    m_LookedForZeroG = true;
+                    var player = hand != null && hand.Player != null ? hand.Player : GetComponentInParent<PlayerContext>();
+                    if (player != null && player.locomotion != null) m_ZeroG = player.locomotion.zeroG;
+                }
+                return m_ZeroG;
+            }
+        }
         /// <summary>True while an assisted item is travelling to the palm.</summary>
         public bool IsPulling => m_Pulling != null;
         /// <summary>The item being pulled (null when none).</summary>
@@ -133,6 +161,8 @@ namespace TrashAstronauts.Player
             EndPull();
             m_PressCandidate = null;
             m_GripHeld = false;
+            m_HasLastPalm = false;
+            m_SteadyFor = 0f;
             if (line != null) line.enabled = false;
         }
 
@@ -147,6 +177,7 @@ namespace TrashAstronauts.Player
                 return;
             }
 
+            TrackSteadiness(Time.deltaTime);
             float grip = hand.Grip;
             bool pressed = false;
             if (!m_GripHeld && grip >= gripPress) { m_GripHeld = true; pressed = true; }
@@ -158,8 +189,12 @@ namespace TrashAstronauts.Player
             // the selection itself happens in LateUpdate, after XRI has had its chance at a direct grab.
             if (pressed && m_Candidate != null && HandFree() && Takeable(m_Candidate))
             {
-                m_PressCandidate = m_Candidate;
-                m_PressFrame = Time.frameCount;
+                if (IsSteady)
+                {
+                    m_PressCandidate = m_Candidate;
+                    m_PressFrame = Time.frameCount;
+                }
+                else SweepsIgnored++; // a stroke going past it: the squeeze is a paddle, not a pickup
             }
 
             if (!m_GripHeld && m_Pulling == null && HandFree()) Search();
@@ -176,6 +211,21 @@ namespace TrashAstronauts.Player
                     StartPull(item);
             }
             UpdateLine();
+        }
+
+        /// <summary>Measures how long the palm has moved slowly relative to the player (the tracking space).</summary>
+        void TrackSteadiness(float dt)
+        {
+            Transform space = hand.transform.parent;
+            Vector3 palm = PalmPoint;
+            Vector3 local = space != null ? space.InverseTransformPoint(palm) : palm;
+            if (m_HasLastPalm && dt > 0f)
+            {
+                float speed = (local - m_LastLocalPalm).magnitude / dt;
+                m_SteadyFor = speed < steadySpeed ? m_SteadyFor + dt : 0f;
+            }
+            m_LastLocalPalm = local;
+            m_HasLastPalm = true;
         }
 
         /// <summary>Empty, free hand with nothing in its direct grab.</summary>
@@ -236,8 +286,11 @@ namespace TrashAstronauts.Player
             float off = Mathf.Min(pointAngle / pointCone, palmAngle / palmCone);
             if (off > 1f) return float.PositiveInfinity;
 
-            // Pressed against a wall or the deck, a squeeze means "hold on" unless the item is right there.
-            if (distance > wallYieldDistance && Physics.CheckSphere(palm, touchRadius, GameLayers.EnvironmentMask | GameLayers.RailMask, QueryTriggerInteraction.Ignore))
+            // Within grab reach of a wall, rail or the deck, a squeeze means "hold on" unless the item is right there.
+            // The same reach ZeroGLocomotion grabs surfaces with, so the assist never claims a squeeze it would hold with.
+            var zeroG = ZeroG;
+            float surfaceReach = zeroG != null ? Mathf.Max(zeroG.grabReach, touchRadius) : touchRadius;
+            if (distance > wallYieldDistance && Physics.CheckSphere(palm, surfaceReach, GameLayers.EnvironmentMask | GameLayers.RailMask, QueryTriggerInteraction.Ignore))
                 return float.PositiveInfinity;
 
             // Nothing solid in between: the line from the palm to just short of the grip point must be clear.
