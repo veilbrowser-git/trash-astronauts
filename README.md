@@ -10,13 +10,15 @@ janitor finds you.
 
 ## Download
 
-**[Download TrashAstronauts.apk](https://github.com/veilbrowser-git/trash-astronauts/raw/builds/TrashAstronauts.apk)** (version 0.10.0, about 48 MB, Meta Quest 3 / 3S)
+**[Download TrashAstronauts.apk](https://github.com/veilbrowser-git/trash-astronauts/raw/builds/TrashAstronauts.apk)** (version 0.11.0, about 56 MB, Meta Quest 3 / 3S)
 
 That one file is the whole game. To install it:
 
 1. Turn on **Developer Mode** for your headset in the Meta Horizon phone app (required for any app that is not from the Meta store).
 2. Connect the headset to a computer by USB and install the APK with [Meta Quest Developer Hub](https://developers.meta.com/horizon/documentation/unity/ts-mqdh/), SideQuest, or `adb install -r TrashAstronauts.apk`.
 3. In the headset, open the app library and look under **Unknown Sources**.
+
+Version 0.11.0 lets a crew **play a contract together, on the same Wi-Fi or online from anywhere**. The CO-OP CREW panel gains **HOST ONLINE** and **FIND ONLINE** (through Unity's relay, with a silent anonymous sign-in; nothing is contacted until you press one). Once the crew is together, START CONTRACT on the mission board starts it for everyone: the same wreck and salvage, one oxygen tank, shared doors, cut panels and locker, everyone aboard to extract, and everyone paid. In this version **only the host can carry salvage** and there is **no spider in a co-op contract** yet; voice chat is not in yet either. Same-Wi-Fi joining was confirmed on two real headsets with 0.10.0; online play and the shared contract have only been tested from a computer.
 
 Version 0.10.0 is the **first co-op build**, and it is deliberately small: on the same Wi-Fi, one headset presses **HOST CO-OP** on the new CO-OP CREW panel in the tug, the others press **FIND CREW** and **JOIN** (or ENTER CODE), and up to four players **see each other** in the tug as suited astronauts with moving heads, arms and gloved hands, each in their own colour. Contracts cannot be started while a crew link is open yet; the shared contract comes next, and online play after that. The game now asks for the network permission, and contacts nothing until one of those buttons is pressed. It has never been tried on two real headsets: whether they find each other on your network is exactly what this build is for.
 
@@ -51,7 +53,7 @@ Version 0.4.0 put one of three different creatures aboard at random each contrac
 Version 0.3.0 moved the grab point into the palm, made swimming work with open hands, made hands and walls solid, quieted the creature and gave it a jumpscare, and added a shop, a tranquilizer, random blackouts, a map art pass and experimental hand tracking. Versions 0.2.0 and 0.3.0 were played on a Quest by the project owner.
 
 > **Verification status, read this first.** The project compiles, the scene and all assets are
-> generated, 413 automated tests pass in the Unity editor on macOS, and a Quest APK builds
+> generated, 462 automated tests pass in the Unity editor on macOS, and a Quest APK builds
 > (`Builds/Quest/TrashAstronauts.apk`). It has **not** been installed or run on a headset. Comfort,
 > hand/controller alignment, text legibility in the headset, haptic strength and frame rate are all
 > **unverified on hardware**. See [What was and was not tested](#what-was-and-was-not-tested).
