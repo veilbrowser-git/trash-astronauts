@@ -200,5 +200,147 @@ namespace TrashAstronauts.Tests
             Assert.Greater(metalRebound, 0.2f, "Metal still rings off a wall.");
             Assert.Greater(duckRebound, metalRebound, "Rubber is springier than bare metal.");
         }
+
+        // ------------------------------------------------------------------ Newton's third law for the player
+
+        /// <summary>Puts the player in open space at the near end of the long corridor, at rest, hands idle.</summary>
+        IEnumerator FloatInCargoBay()
+        {
+            m_Director.keepPlayersInHub = false;
+            m_Player.locomotion.TeleportTo(new Vector3(0f, 0.2f, 9.2f), Quaternion.identity);
+            for (int i = 0; i < 3; i++) yield return null;
+            m_Player.locomotion.zeroG.Stop();
+            foreach (var hand in new[] { m_Player.leftHand, m_Player.rightHand })
+            {
+                hand.GripOverride = 0f;
+                hand.TriggerOverride = 0f;
+                hand.ThumbstickClickOverride = false;
+            }
+            yield return null;
+            yield return null;
+        }
+
+        IEnumerator GrabWith(HandRig hand, SalvageItem item)
+        {
+            item.Body.linearVelocity = Vector3.zero;
+            item.Body.angularVelocity = Vector3.zero;
+            item.transform.position = hand.interactor.transform.position;
+            item.Body.position = item.transform.position;
+            Physics.SyncTransforms();
+            hand.GripOverride = 1f;
+            var select = hand.interactor.selectInput;
+            select.inputSourceMode = UnityEngine.XR.Interaction.Toolkit.Inputs.Readers.XRInputButtonReader.InputSourceMode.ManualValue;
+            select.QueueManualState(true, 1f, true, false);
+            for (int i = 0; i < 4; i++) yield return null;
+            Assert.IsTrue(hand.IsHolding, "The hand should have picked up " + item.name);
+        }
+
+        /// <summary>Thrust acceleration (m/s^2) measured over about half a second of firing the left hand's thruster.</summary>
+        IEnumerator MeasureThrust(float[] result)
+        {
+            var zeroG = m_Player.locomotion.zeroG;
+            zeroG.Stop();
+            float gainedBefore = zeroG.ThrusterSpeedGained;
+            float firing = 0f;
+            m_Player.leftHand.TriggerOverride = 1f;
+            yield return null;
+            while (firing < 0.5f)
+            {
+                yield return null;
+                if (zeroG.IsThrusting) firing += Time.deltaTime;
+            }
+            m_Player.leftHand.TriggerOverride = 0f;
+            yield return null;
+            result[0] = (zeroG.ThrusterSpeedGained - gainedBefore) / firing;
+            zeroG.Stop();
+        }
+
+        [UnityTest]
+        public IEnumerator Thrust_IsAFixedForce_SoHaulingTheReactorCoreIsSluggish()
+        {
+            m_Director.StartMission(PlayerId.Local);
+            yield return FloatInCargoBay();
+            var zeroG = m_Player.locomotion.zeroG;
+            Assert.AreEqual(0f, zeroG.CarriedMass, 0.001f);
+            var empty = new float[1];
+            yield return MeasureThrust(empty);
+
+            var core = m_Director.Items.Where(i => !i.IsMounted && i.definition != null).OrderByDescending(i => i.Body.mass).First();
+            yield return FloatInCargoBay();
+            yield return GrabWith(m_Player.rightHand, core);
+            Assert.AreEqual(core.Body.mass, zeroG.CarriedMass, 0.001f, "What the hand holds is carried mass.");
+            var loaded = new float[1];
+            yield return MeasureThrust(loaded);
+
+            float expectedRatio = zeroG.BodyMass / (zeroG.BodyMass + core.Body.mass);
+            Assert.Greater(empty[0], 1f, "The thruster works with empty hands.");
+            Assert.AreEqual(expectedRatio, loaded[0] / empty[0], 0.08f,
+                "a = F / m: with the " + core.Body.mass + " kg core the thrust should give " + expectedRatio + " of the acceleration. Empty " + empty[0] + ", loaded " + loaded[0]);
+        }
+
+        [UnityTest]
+        public IEnumerator ThrowRecoil_ConservesMomentum_InTheThrowersOwnFrame()
+        {
+            m_Director.StartMission(PlayerId.Local);
+            yield return FloatInCargoBay();
+            var zeroG = m_Player.locomotion.zeroG;
+            var item = Loose("elec_comms_relay");
+
+            // Drifting along at 1 m/s and letting go of something that drifts with you: no kick at all.
+            zeroG.AddImpulse(Vector3.right);
+            item.RegisterThrow(zeroG.Velocity, m_Player);
+            Assert.AreEqual(1f, zeroG.Velocity.x, 0.001f, "Letting go of something moving with you is not a throw.");
+            Assert.AreEqual(0f, zeroG.Velocity.z, 0.001f);
+
+            // Throwing it forward at 5 m/s relative to the body: m v = M dV.
+            Vector3 before = zeroG.Velocity;
+            item.RegisterThrow(before + Vector3.forward * 5f, m_Player);
+            Vector3 kick = zeroG.Velocity - before;
+            Assert.AreEqual(-5f * item.Body.mass / zeroG.TotalMass, kick.z, 0.005f, "Momentum is conserved.");
+            Assert.AreEqual(0f, kick.x, 0.005f, "The sideways drift is not touched.");
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator ShovingSomethingHeavy_PushesThePlayerBack_InProportionToItsMass()
+        {
+            m_Director.StartMission(PlayerId.Local);
+            var chest = m_Player.bumpers[0];
+            var light = m_Director.Items.Where(i => !i.IsMounted && i.definition != null).OrderBy(i => i.Body.mass).First();
+            var heavy = m_Director.Items.Where(i => !i.IsMounted && i.definition != null).OrderByDescending(i => i.Body.mass).First();
+            var lost = new float[2];
+            for (int pass = 0; pass < 2; pass++)
+            {
+                var item = pass == 0 ? light : heavy;
+                yield return FloatInCargoBay();
+                var zeroG = m_Player.locomotion.zeroG;
+                item.Body.linearVelocity = Vector3.zero;
+                item.Body.angularVelocity = Vector3.zero;
+                item.transform.position = chest.transform.position + Vector3.forward * 0.7f;
+                item.Body.position = item.transform.position;
+                Physics.SyncTransforms();
+                zeroG.AddImpulse(Vector3.forward * 1.2f);
+                float speedBefore = zeroG.Velocity.z;
+                float pushedAt = -1f;
+                for (int i = 0; i < 90; i++)
+                {
+                    yield return new WaitForFixedUpdate();
+                    if (pushedAt < 0f && item.Body.linearVelocity.z > 0.2f) pushedAt = i;
+                }
+                Assert.GreaterOrEqual(pushedAt, 0f, item.name + " should have been shouldered aside.");
+                Assert.Greater(item.Body.linearVelocity.z, 0.3f, item.name);
+                // The drift's own (tiny) drag over 1.25 s is the same both times, so the difference is the shove.
+                lost[pass] = speedBefore - zeroG.Velocity.z;
+                light.Body.position = light.transform.position = new Vector3(0f, 0.2f, 0f) + Vector3.up * 50f;
+                heavy.Body.position = heavy.transform.position = new Vector3(0f, 0.2f, 0f) + Vector3.up * 52f;
+                light.Body.linearVelocity = heavy.Body.linearVelocity = Vector3.zero;
+                Physics.SyncTransforms();
+            }
+            // Both runs also lose the suit's own slow drift decay (about 0.22 m/s over this time).
+            float dragOnly = 1.2f * (1f - Mathf.Exp(-m_Player.locomotion.zeroG.drag * 90f * Time.fixedDeltaTime));
+            Assert.Less(lost[0], dragOnly + 0.05f, "Nudging the light " + light.name + " barely slows you.");
+            Assert.Greater(lost[1] - lost[0], 0.15f, "Shouldering the " + heavy.Body.mass + " kg " + heavy.name + " slows you right down.");
+            Assert.Less(lost[1], 1.2f, "But you do not bounce back off it.");
+        }
     }
 }
