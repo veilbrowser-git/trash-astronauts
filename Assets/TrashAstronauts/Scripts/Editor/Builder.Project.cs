@@ -68,8 +68,8 @@ namespace TrashAstronauts.EditorTools
         {
             PlayerSettings.companyName = "Trash Astronauts";
             PlayerSettings.productName = "Trash Astronauts";
-            PlayerSettings.bundleVersion = "0.11.0";
-            Try("Android version code", () => PlayerSettings.Android.bundleVersionCode = 18);
+            PlayerSettings.bundleVersion = "0.11.1";
+            Try("Android version code", () => PlayerSettings.Android.bundleVersionCode = 19);
             PlayerSettings.colorSpace = ColorSpace.Linear;
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.LandscapeLeft;
 
