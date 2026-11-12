@@ -167,15 +167,40 @@ namespace TrashAstronauts.UI
 
         void OnSkipStep(PushButton button, HandRig hand)
         {
+            if (SuspendedForSession) return;
             if (Step == TutorialStep.Done) Replay();
             else Advance();
         }
 
-        void OnSkipAll(PushButton button, HandRig hand) => SkipAll();
+        void OnSkipAll(PushButton button, HandRig hand)
+        {
+            if (!SuspendedForSession) SkipAll();
+        }
+
+        /// <summary>True while a co-op session is open: the tutorial is paused (it is a single-player thing).</summary>
+        public bool SuspendedForSession { get; private set; }
 
         void Update()
         {
             if (director == null) return;
+
+            // The tutorial is off in a co-op session: no prompt, no steps. When the session ends it carries on
+            // where it was, with the practice scrap put back if joining the crew cleared it away.
+            bool inSession = director.Net != null;
+            if (inSession != SuspendedForSession)
+            {
+                SuspendedForSession = inSession;
+                if (!inSession && Step != TutorialStep.Done && director.Phase == MissionPhase.Hub && practiceScrapPrefab != null && practiceScrapSpawn != null && !PracticeScrapAvailable())
+                    Instantiate(practiceScrapPrefab, practiceScrapSpawn.position, practiceScrapSpawn.rotation, director.salvageRoot);
+                if (boardText != null && inSession) boardText.text = "ORIENTATION PAUSED\n\nA co-op crew is linked. The tutorial carries on\nwhen you press LEAVE on the CO-OP CREW panel.";
+                else Refresh();
+            }
+            if (inSession)
+            {
+                if (prompt != null) prompt.SetVisible(false);
+                return;
+            }
+
             HookPlayer();
             m_StepTime += Time.deltaTime;
 
