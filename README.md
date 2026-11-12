@@ -2,11 +2,11 @@
 
 This branch holds only the built APK, so the `main` branch stays source-only.
 
-- `TrashAstronauts.apk` - version 0.2.0, built from commit ed493c4 on `main`
+- `TrashAstronauts.apk` - version 0.3.0, built from commit 5963e91 on `main`
 - Meta Quest 3 / 3S, ARM64, OpenXR, minimum Android API 32
 - Signed with the Android debug key (fine for sideloading, not for a store)
-- SHA-256: `82576a6926b819265e20ab8fae4f1470c09638d27982a7e574b8e46b38790399`
-- 0.2.0 fixes grabbing and cutting, which did not work in 0.1.0. Not yet run on a headset.
+- SHA-256: `70fe552ca6378ccb78c4f5b4079d22d45e64d26082400bbfcd3f9b05781166e4`
+- 0.3.0: palm grab, working swimming, solid hands, shop, tranquilizer, blackouts, jumpscare, experimental hand tracking. Not yet run on a headset.
 
 Install with developer mode on and the headset connected by USB:
 
