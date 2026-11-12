@@ -376,14 +376,37 @@ namespace TrashAstronauts.Tests
         }
 
         [Test]
-        public void SnapshotBuffer_SortsLateArrivals_IgnoresDuplicates_AndKeepsItsCapacity()
+        public void SnapshotBuffer_TwoSamplesBunchedClose_AreNotUsedAsAVelocity_AndExtrapolationIsBoundedByTheirSpan()
+        {
+            // A Wi-Fi hiccup delivered two samples 11 ms apart that carry 50 ms of motion (0.1 m).
+            var buffer = new SnapshotBuffer<PoseSnapshot>();
+            buffer.Push(1.000, new PoseSnapshot(V(0, 0, 0), NetQuat.Identity));
+            buffer.Push(1.011, new PoseSnapshot(V(0.1f, 0, 0), NetQuat.Identity));
+            Assert.IsTrue(buffer.Sample(1.2, out PoseSnapshot at));
+            Assert.AreEqual(0.1f, at.position.x, 1e-4f, "too close together to be a speed: hold the newest, do not fly off at 9 m/s");
+
+            // A 40 ms pair may extrapolate, but never more than the ratio times its own span (and never past 250 ms).
+            buffer.Clear();
+            buffer.Push(2.00, new PoseSnapshot(V(0, 0, 0), NetQuat.Identity));
+            buffer.Push(2.04, new PoseSnapshot(V(0.04f, 0, 0), NetQuat.Identity)); // 1 m/s
+            Assert.IsTrue(buffer.Sample(5.0, out at));
+            double maxAhead = System.Math.Min(SnapshotBuffer<PoseSnapshot>.ExtrapolationCap, 0.04 * SnapshotBuffer<PoseSnapshot>.MaxExtrapolationRatio);
+            Assert.AreEqual(0.04f + (float)maxAhead, at.position.x, 1e-4f);
+            Assert.LessOrEqual(SnapshotBuffer<PoseSnapshot>.MinExtrapolationSpan, 0.03 + 1e-9);
+        }
+
+        [Test]
+        public void SnapshotBuffer_SortsLateArrivals_ReplacesSameTimeSamples_AndKeepsItsCapacity()
         {
             var buffer = new SnapshotBuffer<PoseSnapshot>(8);
             Assert.IsFalse(buffer.Sample(0, out _), "empty");
             Assert.IsTrue(buffer.Push(1.0, new PoseSnapshot(V(1, 0, 0), NetQuat.Identity)));
             Assert.IsTrue(buffer.Push(1.2, new PoseSnapshot(V(3, 0, 0), NetQuat.Identity)));
             Assert.IsTrue(buffer.Push(1.1, new PoseSnapshot(V(2, 0, 0), NetQuat.Identity)), "late arrival is sorted in");
-            Assert.IsFalse(buffer.Push(1.1, new PoseSnapshot(V(9, 0, 0), NetQuat.Identity)), "duplicate time ignored");
+            Assert.IsTrue(buffer.Push(1.1, new PoseSnapshot(V(9, 0, 0), NetQuat.Identity)), "same time: the later arrival replaces the earlier");
+            Assert.IsTrue(buffer.Sample(1.1, out PoseSnapshot replaced));
+            Assert.AreEqual(9f, replaced.position.x, 1e-4f);
+            Assert.IsTrue(buffer.Push(1.1, new PoseSnapshot(V(2, 0, 0), NetQuat.Identity)));
             Assert.IsFalse(buffer.Push(double.NaN, default(PoseSnapshot)));
             Assert.AreEqual(3, buffer.Count);
             Assert.IsTrue(buffer.Sample(1.05, out PoseSnapshot at));

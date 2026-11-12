@@ -82,6 +82,13 @@ namespace TrashAstronauts.Core.Net
             /// <summary>Sequence of the newest datagram whose streams were applied (older ones only deliver their reliable messages).</summary>
             public ushort streamSeq;
             public bool hasStreamSeq;
+            /// <summary>Host clock minus this client's clock, following the least-delayed datagrams (see <see cref="UpdatePeerClock"/>).</summary>
+            public double clockOffset;
+            public bool hasClock;
+            /// <summary>The sending time of the datagram being read, on the host's clock.</summary>
+            public double datagramTime;
+            /// <summary>The stamp given to this client's newest avatar (stamps never go backwards).</summary>
+            public double lastAvatarStamp;
         }
 
         const int k_MaxDatagramsPerPoll = 512;
@@ -468,6 +475,8 @@ namespace TrashAstronauts.Core.Net
             peer.avatarFresh = false;
             peer.poseCount = 0;
             peer.hasStreamSeq = false;
+            peer.hasClock = false;
+            peer.lastAvatarStamp = double.NegativeInfinity;
             peer.noiseIndex = 0;
             for (int n = 0; n < peer.noiseTimes.Length; n++) peer.noiseTimes[n] = double.NegativeInfinity;
             SendAccept(peer);
@@ -543,6 +552,7 @@ namespace TrashAstronauts.Core.Net
             // back after a gap (a burst of loss, a headset waking up): resend what it missed now, not after a backoff
             if (m_Now - peer.lastHeard >= NetProtocol.HeardAgainSeconds) peer.channel.ResetBackoff();
             peer.lastHeard = m_Now;
+            UpdatePeerClock(peer, DatagramHeader.ToSeconds(header.timeMs));
             if (!peer.confirmed) Confirm(peer);
             if (peer.silent)
             {
@@ -583,6 +593,25 @@ namespace TrashAstronauts.Core.Net
                 }
                 else if (!HandleStream(peer, type, ref r)) break;
             }
+        }
+
+        /// <summary>
+        /// Maps a client's datagram time onto the host clock. The offset follows the least-delayed datagram at once
+        /// and drifts toward later ones slowly (as NetSessionClient does for the host clock), so a datagram that sat
+        /// in a router queue for 80 ms is stamped 80 ms before it was read. Never later than now.
+        /// </summary>
+        void UpdatePeerClock(Peer peer, double clientTime)
+        {
+            double sample = m_Now - clientTime;
+            if (!peer.hasClock)
+            {
+                peer.hasClock = true;
+                peer.clockOffset = sample;
+            }
+            else if (sample < peer.clockOffset) peer.clockOffset = sample;
+            else peer.clockOffset += (sample - peer.clockOffset) * 0.02;
+            double t = clientTime + peer.clockOffset;
+            peer.datagramTime = t > m_Now ? m_Now : t;
         }
 
         /// <summary>
@@ -655,7 +684,12 @@ namespace TrashAstronauts.Core.Net
                         peer.avatarAway = avatar.IsAway;
                         RefreshAway(peer);
                     }
-                    m_World.OnAvatar(peer.slot, in avatar, m_Now);
+                    // Stamped with when the client SENT it (its clock mapped onto ours), not when this Poll read it:
+                    // two or three datagrams read in one Poll after a Wi-Fi hiccup keep their own 50 ms spacing.
+                    double stamp = peer.datagramTime;
+                    if (stamp < peer.lastAvatarStamp) stamp = peer.lastAvatarStamp;
+                    peer.lastAvatarStamp = stamp;
+                    m_World.OnAvatar(peer.slot, in avatar, stamp);
                     return true;
                 }
                 case NetMsg.ItemPoses:
@@ -853,6 +887,8 @@ namespace TrashAstronauts.Core.Net
             peer.avatarFresh = false;
             peer.poseCount = 0;
             peer.hasStreamSeq = false;
+            peer.hasClock = false;
+            peer.lastAvatarStamp = double.NegativeInfinity;
             peer.connId = 0;
             peer.channel.Reset(0);
         }

@@ -181,7 +181,109 @@ namespace TrashAstronauts.Tests
             Assert.AreEqual(0, Object.FindObjectsByType<RemoteAvatar>(FindObjectsInactive.Include).Length);
         }
 
+        [UnityTest]
+        public IEnumerator Host_ACrewMemberWhoTeleports_SnapsToTheNewSpot_InsteadOfGlidingAcrossTheTug()
+        {
+            Assert.IsTrue(m_Net.Host());
+            var bot = AddBot(m_Net.Transport.Local);
+            SetBotPose(bot, -0.6f, 0f, 0f);
+            yield return Until(() => m_Net.Crew(1) != null && m_Net.Crew(1).HasPose
+                && Vector3.Distance(m_Net.Crew(1).head.position, new Vector3(-0.6f, 1.6f, -1.6f)) < 0.02f);
+            var crew = m_Net.Crew(1);
+            Assert.AreEqual(0, crew.Snaps);
+
+            SetBotPose(bot, 1.4f, 0f, 0f); // 2 m in one tick: a teleport
+            yield return Until(() => crew.Snaps > 0, maxFrames: 20);
+            Assert.AreEqual(1, crew.Snaps, "a jump of more than a metre snaps");
+            yield return Frames(2);
+            Assert.Less(Vector3.Distance(crew.head.position, new Vector3(1.4f, 1.6f, -1.6f)), 0.02f,
+                "drawn at the new spot at once, not sliding there 100 ms behind");
+            Assert.Less(Vector3.Distance(crew.context.HeadPosition, new Vector3(1.4f, 1.6f, -1.6f)), 0.02f, "the rules see the newest head");
+
+            // Ordinary movement afterwards glides again.
+            for (int i = 1; i <= 10; i++) { SetBotPose(bot, 1.4f - i * 0.01f, 0f, 0f); Tick(); yield return null; }
+            Assert.AreEqual(1, crew.Snaps);
+            m_Net.Leave();
+        }
+
+        [UnityTest]
+        public IEnumerator Host_ItsOwnPause_ShowsAsAwayOnTheCrewsPanels()
+        {
+            Assert.IsTrue(m_Net.Host());
+            var bot = AddBot(m_Net.Transport.Local);
+            yield return Until(() => bot.World.AvatarCount[0] > 0);
+            Assert.IsFalse(bot.World.Avatars[0].IsAway);
+            m_Director.SetHazardPause(HazardPauseReason.Scripted, true);
+            yield return Until(() => bot.World.Avatars[0].IsAway);
+            Assert.IsTrue(bot.World.Avatars[0].IsAway, "the host's avatar carries its Away state");
+            m_Director.SetHazardPause(HazardPauseReason.Scripted, false);
+            yield return Until(() => !bot.World.Avatars[0].IsAway);
+            Assert.IsFalse(bot.World.Avatars[0].IsAway);
+            m_Net.Leave();
+        }
+
         // ------------------------------------------------------------------ client half
+
+        [UnityTest]
+        public IEnumerator Client_OnJoining_TheRigStepsOntoItsOwnCrewSpot_AndTheHostsSuitIsShownAwayWhenItPauses()
+        {
+            var host = AddScriptedHost();
+            Vector3 spot = m_Director.CrewSpot(1);
+            Assert.Greater(Vector3.Distance(spot, m_Director.CrewSpot(0)), 0.7f);
+            Assert.IsTrue(m_Net.Join(host.Endpoint));
+            yield return Until(() => m_Net.Mode == LobbyMode.Joined && m_Net.Crew(0) != null && m_Net.Crew(0).HasPose);
+            yield return Frames(10);
+            Vector3 head = m_Player.HeadPosition;
+            Assert.Less(Vector2.Distance(new Vector2(head.x, head.z), new Vector2(spot.x, spot.z)), 0.2f, "slot 1 stands on its own spot, not on the host's");
+
+            // The hub guard keeps it on that spot (not the shared spawn) when it wanders off.
+            yield return Frames(60);
+            head = m_Player.HeadPosition;
+            Assert.Less(Vector2.Distance(new Vector2(head.x, head.z), new Vector2(spot.x, spot.z)), 0.2f);
+
+            host.Avatar.flags = AvatarFlags.Away;
+            yield return Until(() => m_Net.Crew(0).context.IsAway);
+            Assert.IsTrue(m_Net.Crew(0).context.IsAway, "a paused host shows as away");
+            host.Avatar.flags = 0;
+            yield return Until(() => !m_Net.Crew(0).context.IsAway);
+            Assert.IsFalse(m_Net.Crew(0).context.IsAway);
+            m_Net.Leave();
+        }
+
+        [UnityTest]
+        public IEnumerator Client_AwayIsAppPausedOrTrackingLost_ResumingTheAppAloneIsNotBack()
+        {
+            var host = AddScriptedHost();
+            Assert.IsTrue(m_Net.Join(host.Endpoint));
+            yield return Until(() => m_Net.Mode == LobbyMode.Joined && host.World.Joined[1]);
+            m_Director.SetHazardPause(HazardPauseReason.Scripted, true);
+            m_Net.SendMessage("OnApplicationPause", true);
+            yield return Until(() => host.World.Away[1]);
+            Assert.IsTrue(host.World.Away[1]);
+            m_Net.SendMessage("OnApplicationPause", false);
+            yield return Frames(30);
+            Assert.IsTrue(host.World.Away[1], "the app resumed but tracking is still lost: still away");
+            Assert.IsTrue(m_Net.LocalAway);
+            m_Director.SetHazardPause(HazardPauseReason.Scripted, false);
+            yield return Until(() => !host.World.Away[1]);
+            Assert.IsFalse(host.World.Away[1]);
+            Assert.IsFalse(m_Net.LocalAway);
+            m_Net.Leave();
+        }
+
+        [UnityTest]
+        public IEnumerator Client_WithTheTutorialFinished_TheTutorialBoardDoesNotClaimItIsPaused()
+        {
+            var tutorial = Object.FindAnyObjectByType<TutorialController>();
+            tutorial.SkipAll();
+            var host = AddScriptedHost();
+            Assert.IsTrue(m_Net.Join(host.Endpoint));
+            yield return Until(() => m_Net.Mode == LobbyMode.Joined);
+            yield return Frames(3);
+            Assert.IsTrue(tutorial.SuspendedForSession);
+            StringAssert.DoesNotContain("PAUSED", tutorial.boardText.text);
+            m_Net.Leave();
+        }
 
         [UnityTest]
         public IEnumerator Client_TheSceneJoinsAScriptedHost_TakesSlot1_SeesTheHostAndAnotherJoiner_AndLeaveMakesItSoloAgain()
