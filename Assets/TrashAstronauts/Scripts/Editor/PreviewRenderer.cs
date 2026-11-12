@@ -183,6 +183,7 @@ namespace TrashAstronauts.EditorTools
             }
 
             CoopShots();
+            SettingsShot();
 
             Shot("08_top_down", new Vector3(-1f, 46f, 22f), new Vector3(-1f, 0f, 22.01f), true);
             Shot("18_flight_deck", new Vector3(-0.8f, 1.6f, -3.3f), new Vector3(0.3f, 1.3f, -6.2f));
@@ -227,6 +228,19 @@ namespace TrashAstronauts.EditorTools
                 mapDirector.enemies[0].gameObject.SetActive(true);
             }
             Object.DestroyImmediate(lineup);
+        }
+
+        /// <summary>The suit settings console in the tug with its full summary (every setting, VOICE CHAT included).</summary>
+        static void SettingsShot()
+        {
+            var console = GameObject.Find("Suit Settings Console");
+            var panel = console != null ? console.GetComponent<TrashAstronauts.UI.SettingsPanel>() : null;
+            if (panel == null || panel.summary == null) return;
+            string text = panel.summary.text;
+            panel.summary.text = "SUIT SETTINGS\nHeight boost: +10 cm\nSnap turn: 45 deg\nMain hand: RIGHT\nDrift: ON (keep gliding)\nMic: ON (it can hear you talk)\nVoice chat: ON (crew hear you nearby)";
+            Vector3 at = console.transform.position + console.transform.up * -0.06f;
+            Shot("58_settings_console", at - console.transform.forward * 0.85f, at, false, 80f);
+            panel.summary.text = text;
         }
 
         /// <summary>
@@ -279,7 +293,7 @@ namespace TrashAstronauts.EditorTools
                 string info = board.info.text;
                 board.status.text = "HOSTING  TUG 4821  ONLINE\nCODE  K7Q2ZD\nCREW 2/4:  ORANGE (YOU)  BLUE";
                 board.notice.text = "";
-                board.info.text = "Contracts are shared: the host launches one and the\nwhole crew rides along, with one oxygen tank and one\nlocker, one creature hunting all of you, and everyone\nis paid. In this version only the host can carry\nsalvage. Nothing from your microphone is ever sent.";
+                board.info.text = "Contracts are shared: one tank, one locker, one\ncreature hunting all of you; everyone is paid. Only\nthe host can carry salvage. While you talk, your voice\ngoes to the crew (VOICE CHAT off or MIC off stops it);\nit is never recorded.";
                 board.joinButtons[1].SetInteractable(true);
                 board.joinButtons[3].SetInteractable(true);
                 Shot("57_coop_hosting_online", new Vector3(0.7f, 1.72f, 0.22f), new Vector3(1.9f, 1.8f, 0.22f), false, 70f);

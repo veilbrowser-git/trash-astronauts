@@ -6,6 +6,7 @@ using TrashAstronauts.Core;
 using TrashAstronauts.Core.Net;
 using TrashAstronauts.Mission;
 using TrashAstronauts.Net.Online;
+using TrashAstronauts.Net.Voice;
 using TrashAstronauts.Player;
 using TrashAstronauts.World;
 using UnityEngine;
@@ -43,7 +44,10 @@ namespace TrashAstronauts.Net
     /// <see cref="CoopClientApply"/> applies what the host decided. Only the host carries salvage, and a co-op
     /// contract has no creature, blackouts or webs yet.
     ///
-    /// Nothing here reads the microphone, and no message type can carry audio, recorded phrases or profile data.
+    /// Proximity voice chat rides on the same session (VoiceChat, attached when a session starts): while a crew
+    /// member talks, their compressed voice goes to the others through the host (and Unity's Relay when online).
+    /// Nothing is sent while nobody talks, with MIC or VOICE CHAT off, or outside a crew; nothing is recorded or
+    /// stored, and recorded Mimic phrases and profile data are never sent.
     /// </summary>
     [DefaultExecutionOrder(300)] // LateUpdate after XRI, hand tracking, the gloves and the suit have posed the rig
     public sealed class NetSession : MonoBehaviour, IMissionNet
@@ -765,6 +769,7 @@ namespace TrashAstronauts.Net
             director.Net = this;
             ApplyLocalSlot(m_LocalSlot);
             Sync();
+            VoiceChat.Attach(this);
         }
 
         void StartClient(INetTransport transport, NetEndpoint host, bool online)
@@ -785,6 +790,7 @@ namespace TrashAstronauts.Net
             m_Client.Connect(host, Now);
             FlushRelay(transport);
             Sync();
+            VoiceChat.Attach(this);
         }
 
         /// <summary>LEAVE: says goodbye, closes the socket or Relay connection, removes the crew and puts the game back to single-player.</summary>

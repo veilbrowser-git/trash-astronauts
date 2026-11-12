@@ -179,7 +179,7 @@ namespace TrashAstronauts.Tests
             m_Board.Refresh();
             StringAssert.Contains("HOST ONLINE", m_Board.status.text);
             StringAssert.Contains("Unity's servers", m_Board.info.text);
-            StringAssert.Contains("No voice is ever sent", m_Board.info.text);
+            StringAssert.Contains("your voice is sent to it while you talk", m_Board.info.text.Replace("\n", " "));
             Assert.IsFalse(m_Net.HasOnlineLink, "No online link exists before an online button is pressed.");
 
             // --- HOST ONLINE: busy while the link works, then the same host session over its transport

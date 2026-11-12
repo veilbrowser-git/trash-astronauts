@@ -38,6 +38,12 @@ namespace TrashAstronauts.Net.Voice
         /// <summary>The voice chat of the open session, or null (single-player, or no session yet).</summary>
         public static VoiceChat Active { get; private set; }
 
+        /// <summary>
+        /// Jitter buffer limits over an online (Relay) link, in 20 ms frames: 100 to 200 ms, where Wi-Fi uses
+        /// VoiceJitterBuffer's own 80 to 120 ms. Internet delay varies far more than a home network's.
+        /// </summary>
+        public const int OnlineMinDelayFrames = 5, OnlineMaxDelayFrames = 10;
+
         /// <summary>Test seam: overrides the VOICE CHAT setting (null = the profile's).</summary>
         public static bool? EnabledOverride;
 
@@ -214,7 +220,13 @@ namespace TrashAstronauts.Net.Voice
                 if (r == null)
                 {
                     r = m_Remotes[slot] = new Remote { helmet = helmet };
+                    if (m_Session != null && m_Session.IsOnline)
+                    {
+                        r.stream.Jitter.minDelayFrames = OnlineMinDelayFrames;
+                        r.stream.Jitter.maxDelayFrames = OnlineMaxDelayFrames;
+                    }
                     r.playback = VoicePlayback.Create(helmet, slot);
+                    VoiceTalkLight.Attach(this, helmet, slot);
                 }
                 float frameDb = r.playback.Pump(r.stream, now);
                 if (frameDb > -90f)
@@ -246,6 +258,8 @@ namespace TrashAstronauts.Net.Voice
             Remote r = m_Remotes[slot];
             if (r == null) return;
             if (r.playback != null) Destroy(r.playback.gameObject);
+            var light = r.helmet != null ? r.helmet.GetComponent<VoiceTalkLight>() : null;
+            if (light != null) Destroy(light);
             r.stream.Clear();
             m_Remotes[slot] = null;
         }

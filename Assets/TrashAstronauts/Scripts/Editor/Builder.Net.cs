@@ -38,6 +38,11 @@ namespace TrashAstronauts.EditorTools
             context.leftHand = left;
             context.rightHand = right;
 
+            // Voice chat's talk light: a small glowing dot on top of the helmet, hidden until that player talks
+            // (VoiceTalkLight shows it). No collider, no light source: one tiny emissive sphere.
+            var talk = Prim(head.transform, Net.Voice.VoiceTalkLight.ChildName, PrimitiveType.Sphere, new Vector3(0f, 0.19f, 0.03f), Vector3.one * 0.035f, M("GlowTeal"));
+            talk.GetComponent<MeshRenderer>().enabled = false;
+
             var avatar = BuildAvatar(root.transform, "Avatar", true);
             avatar.head = head.transform;
             avatar.leftHand = left.transform;

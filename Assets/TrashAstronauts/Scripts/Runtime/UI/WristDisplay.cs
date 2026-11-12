@@ -99,6 +99,9 @@ namespace TrashAstronauts.UI
                 string label = heard ? "!! IT HEARD THAT !!" : NoiseLabel.Length > 0 ? "NOISE: " + NoiseLabel : "NOISE: quiet";
                 if (voice != null && !voice.Listening && voice.Status.Length > 0) label += "  (" + voice.Status + ")";
                 else if (voice != null && voice.CaptureActive) label += "  REC";
+                // Co-op: this player's voice is going out to the crew right now.
+                var chat = TrashAstronauts.Net.Voice.VoiceChat.Active;
+                if (chat != null && chat.IsTransmitting) label += "  MIC";
                 if (voiceText.text != label) voiceText.text = label;
             }
         }
