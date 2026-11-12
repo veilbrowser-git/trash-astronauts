@@ -7,7 +7,9 @@ using TrashAstronauts.Core.Net;
 using TrashAstronauts.Mission;
 using TrashAstronauts.World;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.TestTools;
+using UnityEngine.XR.Interaction.Toolkit.Inputs.Simulation;
 
 namespace TrashAstronauts.Tests
 {
@@ -180,6 +182,75 @@ namespace TrashAstronauts.Tests
             Run(3f);
             Assert.Greater(s.Cargo.Count, 0, "cargo drifts past again");
             s.StickOverride = null;
+        }
+
+        // ------------------------------------------------------------------ the real stick, through XRI
+
+        static IEnumerator Trigger(SimHands.Controller c, bool down)
+        {
+            c.state.trigger = down ? 1f : 0f;
+            c.state = c.state.WithButton(ControllerButton.TriggerButton, down);
+            InputSystem.QueueStateEvent(c.device, c.state);
+            yield return SimHands.Settle();
+        }
+
+        [UnityTest]
+        public IEnumerator TheStick_IsTakenWithGrip_TiltsWithTheHand_TriggerWorksTheClaw_AndItSpringsBack()
+        {
+            var s = Station();
+            yield return null;
+            s.SetPose(10f, 5f, 1.5f);
+            // Step up to the console, facing the window.
+            Assert.IsTrue(m_Player.locomotion.TeleportTo(s.standPoint.position, Quaternion.LookRotation(s.transform.forward)), "the operator spot can be teleported to");
+            yield return SimHands.Settle(5);
+            s.OperatorPresentOverride = null;
+            Assert.IsTrue(s.OperatorPresent, "standing at the console counts as operating it");
+            Vector3 knob = s.stick.interactable.transform.position;
+            Vector3 right = s.transform.right, away = s.transform.forward;
+            using (var hands = new SimHands(m_Player))
+            {
+                var c = hands.Right;
+                yield return SimHands.Pose(c, knob);
+                yield return SimHands.Grip(c, true);
+                Assert.IsTrue(s.stick.Held, "squeezing GRIP on the knob takes the stick (hovering " + c.hand.interactor.interactablesHovered.Count + ")");
+                Assert.AreSame(m_Player.rightHand, s.stick.HeldBy);
+                Assert.IsTrue(m_Player.rightHand.IsHolding, "the hand counts as holding something, so it does not grab the wall or paddle");
+                Vector3 rig = m_Player.transform.position;
+                Run(0.1f);
+                Assert.AreEqual(Vector2.zero, s.stick.Axis, "taking hold does not move it");
+
+                yield return SimHands.Pose(c, knob + right * 0.07f);
+                Run(0.1f);
+                Assert.Greater(s.stick.Axis.x, 0.5f, "moving the hand right tilts the stick right");
+                Assert.AreEqual(0f, s.stick.Axis.y, 0.15f);
+                Assert.Greater(Vector3.Angle(s.stick.pivot.up, s.stick.transform.up), 10f, "the stick visibly leans");
+                Vector3 tip = s.TipLocal;
+                Run(1f);
+                Assert.Greater(s.TipLocal.x, tip.x + 0.4f, "and the claw follows");
+
+                yield return SimHands.Pose(c, knob - away * 0.07f);
+                Run(0.1f);
+                Assert.Less(s.stick.Axis.y, -0.5f, "pulling the hand back pulls the stick back");
+                tip = s.TipLocal;
+                Run(1f);
+                Assert.Greater(s.TipLocal.y, tip.y + 0.3f, "and the claw rises");
+                Assert.Less(Vector3.Distance(m_Player.transform.position, rig), 0.02f, "working the stick does not move the player");
+
+                Assert.IsFalse(s.ClawClosed);
+                yield return Trigger(c, true);
+                Assert.IsTrue(s.ClawClosed, "the trigger on the stick hand closes the claw");
+                yield return Trigger(c, false);
+                yield return Trigger(c, true);
+                Assert.IsFalse(s.ClawClosed, "and opens it again");
+                yield return Trigger(c, false);
+
+                yield return SimHands.Grip(c, false);
+                Assert.IsFalse(s.stick.Held, "letting go releases it");
+                Run(0.5f);
+                Assert.AreEqual(Vector2.zero, s.stick.Axis, "and it springs back to centre");
+                Assert.Less(Vector3.Angle(s.stick.pivot.up, s.stick.transform.up), 1f);
+                yield return SimHands.Pose(c, m_Player.HeadPosition + new Vector3(0.2f, -0.4f, 0.3f));
+            }
         }
 
         // ------------------------------------------------------------------ playing it

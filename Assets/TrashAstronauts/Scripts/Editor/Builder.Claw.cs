@@ -47,7 +47,7 @@ namespace TrashAstronauts.EditorTools
             var strong = Lit("ClawStrongbox", new Color(0.13f, 0.13f, 0.15f), 0.6f, null, new Color(0.02f, 0.02f, 0.025f));
             var gold = Lit("ClawGold", new Color(1f, 0.78f, 0.25f), 0.7f, null, new Color(0.5f, 0.33f, 0.06f));
             var glass = Unlit("ClawGlass", new Color(0.55f, 0.75f, 0.95f, 0.07f), true);
-            var sky = Unlit("ClawSky", new Color(3.2f, 3.2f, 3.4f), false, starsTex);
+            var sky = Unlit("ClawSky", new Color(2.2f, 2.2f, 2.4f), false, starsTex);
             sky.SetTextureScale("_BaseMap", new Vector2(5f, 3.5f));
             EditorUtility.SetDirty(sky);
 
@@ -264,6 +264,11 @@ namespace TrashAstronauts.EditorTools
             Prim(backdrop, "Right", PrimitiveType.Quad, new Vector3(48f, 3f, 16f), new Vector3(32f, 66f, 1f), sky, false, new Vector3(0, 90f, 0));
             Prim(backdrop, "Top", PrimitiveType.Quad, new Vector3(0, 36f, 16f), new Vector3(96f, 32f, 1f), sky, false, new Vector3(-90f, 0, 0));
             Prim(backdrop, "Bottom", PrimitiveType.Quad, new Vector3(0, -30f, 16f), new Vector3(96f, 32f, 1f), sky, false, new Vector3(90f, 0, 0));
+            // The same pale giant the flight deck's windscreen looks out on (both windows face south), low on the left.
+            var planet = PlanetView("Claw", new Color(0.62f, 0.55f, 0.42f), new Color(0.82f, 0.74f, 0.6f), new Color(0.55f, 0.65f, 1f), 0.5f, 0.5f, 0.42f);
+            planet.SetColor("_BaseColor", sky.GetColor("_BaseColor"));
+            EditorUtility.SetDirty(planet);
+            Prim(backdrop, "Planet", PrimitiveType.Quad, new Vector3(-13f, -2.5f, 31.6f), new Vector3(24f, 24f, 1f), planet);
 
             // --- wire the station
             var station = root.AddComponent<SalvageClawStation>();
@@ -290,7 +295,31 @@ namespace TrashAstronauts.EditorTools
             station.servo = servo;
             station.cargoTemplates = new[] { crateT, scrapT, longT, boxT };
             station.cargoRoot = cargoRoot;
+            LogClawCost(t);
             return station;
+        }
+
+        /// <summary>Reports what the station costs to draw (renderers and triangles per part) in the build log.</summary>
+        static void LogClawCost(Transform root)
+        {
+            var parts = new System.Text.StringBuilder("[Builder] Salvage claw cost:");
+            int allR = 0, allT = 0;
+            foreach (Transform part in root)
+            {
+                int r = 0, tris = 0;
+                foreach (var mf in part.GetComponentsInChildren<MeshFilter>(true))
+                {
+                    if (mf.sharedMesh == null || mf.GetComponent<MeshRenderer>() == null) continue;
+                    r++;
+                    tris += mf.sharedMesh.triangles.Length / 3;
+                }
+                if (r == 0) continue;
+                parts.Append(" ").Append(part.name).Append(" ").Append(r).Append("r/").Append(tris).Append("t;");
+                if (part.name != "Cargo Templates") { allR += r; allT += tris; }
+            }
+            parts.Append(" fixed total ").Append(allR).Append(" renderers, ").Append(allT).Append(" triangles (plus TMP labels; cargo is cloned from the templates, at most ")
+                .Append(SalvageClawConfig.MaxCargo).Append(" at once)");
+            Debug.Log(parts.ToString());
         }
 
         /// <summary>

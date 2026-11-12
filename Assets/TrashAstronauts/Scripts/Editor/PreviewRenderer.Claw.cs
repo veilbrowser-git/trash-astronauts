@@ -13,6 +13,9 @@ namespace TrashAstronauts.EditorTools
             EditorSceneManager.OpenScene(Builder.ScenePath, OpenSceneMode.Single);
             Directory.CreateDirectory("Docs/Previews");
             UnityEditor.ShaderUtil.allowAsyncCompilation = false; // the first shot of a run must not catch shaders mid-compile
+            // The first render of a fresh editor comes out unlit: spend it on a throwaway frame.
+            Shot("_claw_warmup", new Vector3(-3.2f, 1.6f, -5f), new Vector3(-3.2f, 1.4f, -7f));
+            File.Delete("Docs/Previews/_claw_warmup.png");
             ClawShots();
         }
 
@@ -38,7 +41,7 @@ namespace TrashAstronauts.EditorTools
             station.PoseTo(new Vector3(0.75f, 1.6f, 5.3f));
             station.SetClawAmount(0f);
             Shot("60_claw_operator_view", W(0f, 1.62f, -1.45f), W(0.25f, 1.45f, 4f), false, 90f);
-            Shot("61_claw_arm_outside_wide", W(7.5f, 5.5f, 13f), W(-0.4f, 1.6f, 2f), false, 70f);
+            Shot("61_claw_arm_outside_wide", W(5.5f, 3.2f, 8.5f), W(-0.6f, 2.4f, 2.2f), false, 75f);
             Shot("62_claw_arm_outside_side", W(-9f, 3.0f, 8.5f), W(0f, 2.2f, 2.5f), false, 70f);
             Shot("63_claw_console", W(0.1f, 1.55f, -1.35f), W(0f, 0.95f, -0.7f), false, 75f);
 

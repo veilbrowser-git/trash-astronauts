@@ -24,7 +24,8 @@ namespace TrashAstronauts.World
         public float springRate = 14f;
 
         IXRSelectInteractor m_Interactor;
-        Vector2 m_GrabOffset;
+        Vector3 m_GrabPoint;    // the hand where it took hold, in the stick's frame
+        Vector2 m_TiltAtGrab;
         Vector2 m_Tilt; // degrees: x = sideways (+ right), y = forward (+ away from the operator)
 
         /// <summary>Raised when the trigger is pulled on the hand that holds the stick.</summary>
@@ -79,8 +80,9 @@ namespace TrashAstronauts.World
         {
             m_Interactor = args.interactorObject;
             HeldBy = (args.interactorObject as Component) != null ? ((Component)args.interactorObject).GetComponentInParent<HandRig>() : null;
-            // Wherever the hand closed on the knob counts as "centred where it is now", so taking hold never jerks the arm.
-            m_GrabOffset = HandTilt() - m_Tilt;
+            // Wherever the hand closed on the knob counts as "where the stick is now", so taking hold never jerks the arm.
+            m_GrabPoint = HandPoint();
+            m_TiltAtGrab = m_Tilt;
         }
 
         void OnSelectExited(SelectExitEventArgs args)
@@ -95,16 +97,24 @@ namespace TrashAstronauts.World
         /// <summary>Test seam: what a hand pulling the trigger on the stick does.</summary>
         public void PullTrigger() => TriggerPulled?.Invoke();
 
-        /// <summary>The tilt the holding hand asks for, before the grab offset (degrees).</summary>
-        Vector2 HandTilt()
+        /// <summary>The holding hand's grab point in the stick's frame (+X right, +Y up, +Z away from the operator).</summary>
+        Vector3 HandPoint()
         {
-            if (m_Interactor == null || pivot == null) return Vector2.zero;
+            if (m_Interactor == null || pivot == null) return Vector3.zero;
             Transform attach = m_Interactor.GetAttachTransform(interactable);
             if (attach == null) attach = m_Interactor.transform;
             Transform frame = pivot.parent != null ? pivot.parent : pivot;
-            Vector3 v = frame.InverseTransformPoint(attach.position) - pivot.localPosition;
-            float up = Mathf.Max(0.05f, v.y);
-            return new Vector2(Mathf.Atan2(v.x, up) * Mathf.Rad2Deg, Mathf.Atan2(v.z, up) * Mathf.Rad2Deg);
+            return frame.InverseTransformPoint(attach.position);
+        }
+
+        /// <summary>
+        /// The tilt for a hand that has moved by <paramref name="moved"/> (m, stick frame) since it took hold: the knob
+        /// follows the hand around the pivot, so a hand moving about 8 cm gives full deflection wherever it gripped.
+        /// </summary>
+        public Vector2 TiltFor(Vector3 moved)
+        {
+            float lever = Mathf.Max(0.08f, knobHeight);
+            return m_TiltAtGrab + new Vector2(Mathf.Atan2(moved.x, lever) * Mathf.Rad2Deg, Mathf.Atan2(moved.z, lever) * Mathf.Rad2Deg);
         }
 
         /// <summary>Moves the stick (also the test seam: the station calls it every step).</summary>
@@ -113,7 +123,7 @@ namespace TrashAstronauts.World
             float max = SalvageClawConfig.StickMaxTilt;
             if (m_Interactor != null)
             {
-                Vector2 want = HandTilt() - m_GrabOffset;
+                Vector2 want = TiltFor(HandPoint() - m_GrabPoint);
                 m_Tilt = new Vector2(Mathf.Clamp(want.x, -max, max), Mathf.Clamp(want.y, -max, max));
             }
             else
