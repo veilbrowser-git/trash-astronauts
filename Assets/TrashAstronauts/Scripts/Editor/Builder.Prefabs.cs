@@ -552,6 +552,7 @@ namespace TrashAstronauts.EditorTools
             light.range = 15f;
             light.intensity = 9f;
             light.color = new Color(1f, 0.96f, 0.88f);
+            light.cookie = FlashlightCookie(); // soft hot spot and a faint reflector ring
             light.shadows = LightShadows.None;
 
             var tool = go.AddComponent<FlashlightTool>();

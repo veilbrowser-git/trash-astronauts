@@ -63,6 +63,7 @@ namespace TrashAstronauts.EditorTools
             EnsureFolders();
             ConfigureProject();
             BuildMaterials();
+            BuildEnvironmentMaterials();
             BuildAudio();
             BuildData();
             BuildPrefabs();
@@ -462,6 +463,7 @@ namespace TrashAstronauts.EditorTools
             mesh.SetNormals(normals);
             mesh.SetUVs(0, uvs);
             mesh.SetTriangles(tris, 0);
+            mesh.RecalculateTangents(); // normal-mapped walls need tangents
             mesh.RecalculateBounds();
             s_BoxMeshes[key] = mesh;
             return mesh;

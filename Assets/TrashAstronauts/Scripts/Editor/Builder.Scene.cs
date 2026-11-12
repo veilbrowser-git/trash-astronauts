@@ -169,6 +169,7 @@ namespace TrashAstronauts.EditorTools
             // --- player
             var rig = (GameObject)PrefabUtility.InstantiatePrefab(s_RigPrefab);
             rig.transform.SetPositionAndRotation(hubSpawn.transform.position, hubSpawn.transform.rotation);
+            BuildDustMotes(rig.transform.position);
 
             // --- tutorial
             var tutorial = missionGo.AddComponent<TutorialController>();
@@ -227,6 +228,10 @@ namespace TrashAstronauts.EditorTools
             var barge = BuildOreBarge(sharedLights, sharedGlow);
             var survey = BuildSurveyShip(sharedLights, sharedGlow);
             var cave = BuildLavaTube(sharedLights, sharedGlow);
+            DressWreck(freighter, "Hauler");
+            DressWreck(barge, "Barge");
+            DressWreck(survey, "Survey");
+            DressTugView();
             foreach (var creature in creatures) creature.transform.SetPositionAndRotation(dock.transform.position, dock.transform.rotation);
             director.maps = new[] { freighter, barge, survey, cave };
             director.sharedCuttables = new[] { practicePanel };
