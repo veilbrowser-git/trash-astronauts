@@ -91,6 +91,25 @@ namespace TrashAstronauts.Mission
             if (seconds > 0f) drone.Stagger(seconds);
         }
 
+        Material m_ShardMaterial;
+        bool m_LookedForShardMaterial;
+
+        /// <summary>A damaging knock on something delicate: a few shards fly off and it cracks. Cosmetic.</summary>
+        void Crack(Vector3 point, Collision collision)
+        {
+            if (!m_LookedForShardMaterial)
+            {
+                m_LookedForShardMaterial = true;
+                var renderer = GetComponentInChildren<MeshRenderer>();
+                if (renderer != null) m_ShardMaterial = renderer.sharedMaterial;
+            }
+            Vector3 normal = collision.contactCount > 0 ? collision.GetContact(0).normal : Vector3.up;
+            // The contact normal points from the other body toward this one: shards fly back off the hit.
+            if (Vector3.Dot(normal, transform.position - point) < 0f) normal = -normal;
+            TrashAstronauts.World.ShardBurst.Emit(point, normal, m_ShardMaterial);
+            if (Sfx.Library != null) Sfx.PlayAt(Sfx.Library.impactLight, point, 0.7f, Random.Range(1.7f, 1.9f), 12f);
+        }
+
         static bool OnAClient(MissionDirector director) => director != null && director.Net != null && director.Net.IsClient;
 
         /// <summary>
@@ -141,7 +160,7 @@ namespace TrashAstronauts.Mission
             bool simulatedHere = SimulatedHere;
 
             // Delicate salvage is worth less every time it is banged into something.
-            if (m_Item != null && simulatedHere) m_Item.ApplyImpact(speed);
+            if (m_Item != null && simulatedHere && m_Item.ApplyImpact(speed) > 0) Crack(point, collision);
 
             // How hard it really was: the collision impulse (heavier things hit harder at the same speed,
             // glancing blows softer) and what it is made of (rubber thuds, bare metal clangs).

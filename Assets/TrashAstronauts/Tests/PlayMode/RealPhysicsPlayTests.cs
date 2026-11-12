@@ -801,5 +801,31 @@ namespace TrashAstronauts.Tests
             Assert.Greater(Vector3.Dot(crate.linearVelocity, dir), 0.8f, "The crate is knocked ahead of it: " + crate.linearVelocity + " body now " + CreatureBody(creature).bounds.center + " crate " + crate.position);
             Assert.Greater(Vector3.Dot(crate.position - at, dir), 0.5f);
         }
+        // ------------------------------------------------------------------ delicate things crack
+
+        [UnityTest]
+        public IEnumerator ADamagingHit_OnSomethingDelicate_ShedsAFewShardsThatFadeAway()
+        {
+            m_Director.StartMission(PlayerId.Local);
+            yield return Steps(2);
+            var board = m_Director.Items.First(i => !i.IsMounted && i.definition != null && i.definition.fragility > 0f && !i.definition.bulky);
+            int burstsBefore = ShardBurst.Bursts;
+            var noise = new float[2];
+            yield return KnockIntoAWall(board, 6f, noise);
+            Assert.Greater(board.DamageCount, 0, "Test set-up: a 6 m/s knock damages it.");
+            Assert.Greater(ShardBurst.Bursts, burstsBefore, "A damaging hit sheds shards.");
+
+            // However many hits, never more than a dozen alive, and they all fade out.
+            for (int i = 0; i < 10; i++) ShardBurst.Emit(board.transform.position, Vector3.up, null);
+            Assert.That(ShardBurst.Alive, Is.InRange(1, ShardBurst.PoolSize));
+            for (float t = 0f; t < ShardBurst.Lifetime + 0.3f; t += Time.deltaTime) yield return null;
+            Assert.AreEqual(0, ShardBurst.Alive, "They fade out.");
+
+            // A gentle bump on scrap does nothing.
+            var scrap = m_Director.Items.First(i => !i.IsMounted && i.definition != null && i.definition.fragility <= 0f && !i.definition.bulky);
+            burstsBefore = ShardBurst.Bursts;
+            yield return KnockIntoAWall(scrap, 6f, noise);
+            Assert.AreEqual(burstsBefore, ShardBurst.Bursts, "Scrap does not shatter.");
+        }
     }
 }
