@@ -240,6 +240,74 @@ namespace TrashAstronauts.EditorTools
             }
         }
 
+        // ------------------------------------------------------------------ the visor
+
+        /// <summary>
+        /// Cracks in the visor glass: a star of jagged lines from an impact point, branching as they go.
+        /// Everything else is transparent. Each stage starts somewhere else and is bigger than the last.
+        /// </summary>
+        static void PaintCracks(Color32[] px, int n, int stage)
+        {
+            var rng = new System.Random(900 + stage * 17);
+            Vector2[] impacts = { new Vector2(0.34f, 0.4f), new Vector2(0.66f, 0.58f), new Vector2(0.46f, 0.68f), new Vector2(0.56f, 0.36f) };
+            Vector2 centre = impacts[(stage - 1) % impacts.Length] * n;
+
+            void Dot(float x, float y, float radius, byte alpha)
+            {
+                int r = Mathf.CeilToInt(radius);
+                for (int dy = -r; dy <= r; dy++)
+                {
+                    for (int dx = -r; dx <= r; dx++)
+                    {
+                        int ix = Mathf.RoundToInt(x) + dx, iy = Mathf.RoundToInt(y) + dy;
+                        if (ix < 0 || iy < 0 || ix >= n || iy >= n) continue;
+                        float d = Mathf.Sqrt(dx * dx + dy * dy);
+                        if (d > radius) continue;
+                        byte a = (byte)(alpha * Mathf.Clamp01(1.2f - d / Mathf.Max(0.5f, radius)));
+                        int idx = iy * n + ix;
+                        if (a > px[idx].a) px[idx] = new Color32(235, 245, 255, a);
+                    }
+                }
+            }
+
+            void Line(Vector2 from, float angle, float length, float width, int depth)
+            {
+                Vector2 p = from;
+                float travelled = 0f;
+                while (travelled < length)
+                {
+                    angle += ((float)rng.NextDouble() - 0.5f) * 0.5f;
+                    float step = 3f + (float)rng.NextDouble() * 7f;
+                    Vector2 q = p + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * step;
+                    for (float t = 0f; t <= 1f; t += 0.34f / step)
+                        Dot(Mathf.Lerp(p.x, q.x, t), Mathf.Lerp(p.y, q.y, t), width * (1f - 0.6f * travelled / length), (byte)(230 - depth * 45));
+                    p = q;
+                    travelled += step;
+                    if (depth < 2 && rng.NextDouble() < 0.07)
+                        Line(p, angle + ((float)rng.NextDouble() < 0.5f ? 0.7f : -0.7f), (length - travelled) * 0.6f, width * 0.65f, depth + 1);
+                }
+            }
+
+            int spokes = 6 + stage * 2;
+            for (int i = 0; i < spokes; i++)
+            {
+                float angle = i * Mathf.PI * 2f / spokes + ((float)rng.NextDouble() - 0.5f) * 0.5f;
+                Line(centre, angle, n * (0.16f + 0.09f * stage) * (0.6f + 0.6f * (float)rng.NextDouble()), 1.7f + stage * 0.25f, 0);
+            }
+            // Concentric shatter rings close to the impact.
+            for (int ring = 1; ring <= 2 + stage / 2; ring++)
+            {
+                float radius = n * 0.028f * ring;
+                float start = (float)rng.NextDouble() * 6.28f;
+                for (float a = 0f; a < 6.28f; a += 0.02f)
+                {
+                    if (Mathf.Repeat(a * 3f + start, 2.2f) < 0.7f) continue; // broken arcs
+                    Dot(centre.x + Mathf.Cos(a + start) * radius, centre.y + Mathf.Sin(a + start) * radius, 1.1f, 170);
+                }
+            }
+            Dot(centre.x, centre.y, 5f + stage, 255);
+        }
+
         // ------------------------------------------------------------------ the glimpse
 
         /// <summary>A tall thin shape with two pinprick eyes: what the player sometimes sees standing at the end of a corridor.</summary>

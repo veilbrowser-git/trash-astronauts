@@ -127,11 +127,15 @@ namespace TrashAstronauts.Core
         }
 
         /// <summary>Starts a fresh run. Allowed from Hub or Results; clears every trace of the previous run.</summary>
+        /// <summary>Hazard pay: scales the contract bonus for this run. Set after <see cref="Begin"/>; reset by it.</summary>
+        public float BonusMultiplier { get; set; } = 1f;
+
         public bool Begin(int seed, int quota, float oxygenCapacitySeconds)
         {
             if (Phase == MissionPhase.Active) return false;
 
             ClearRunState();
+            BonusMultiplier = 1f;
             RunIndex++;
             Seed = seed;
             Quota = Math.Max(0, quota);
@@ -246,7 +250,7 @@ namespace TrashAstronauts.Core
         {
             if (Phase != MissionPhase.Active) return null;
             bool met = QuotaMet;
-            int bonus = met ? m_ContractBonus : 0;
+            int bonus = met ? (int)Math.Round(m_ContractBonus * Math.Max(0f, BonusMultiplier)) : 0;
             return End(met ? MissionOutcome.ContractComplete : MissionOutcome.QuotaMissed, SecuredValue + bonus, bonus);
         }
 

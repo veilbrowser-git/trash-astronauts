@@ -25,6 +25,7 @@ namespace TrashAstronauts.Tests
             MissionDirector.SeedOverride = 44;
             MissionDirector.CreatureOverride = 0;
             MissionDirector.MapOverride = 0;
+            MissionDirector.ConditionOverride = ContractCondition.Standard;
             yield return SceneManager.LoadSceneAsync("TrashAstronauts", LoadSceneMode.Single);
             yield return null;
             yield return null;
@@ -39,6 +40,7 @@ namespace TrashAstronauts.Tests
             MissionDirector.SeedOverride = null;
             MissionDirector.CreatureOverride = null;
             MissionDirector.MapOverride = null;
+            MissionDirector.ConditionOverride = null;
         }
 
         static IEnumerator Frames(int count)
@@ -249,17 +251,25 @@ namespace TrashAstronauts.Tests
             for (int i = 0; i < 200 && !creature.IsScaring && m_Director.Phase == MissionPhase.Active; i++) creature.Step(0.05f);
             Assert.IsTrue(creature.IsScaring, "It should have caught a player standing right in front of it.");
 
-            bool sawDark = false, sawFace = false, lightsWentOut = false;
+            bool sawDark = false, sawFace = false, lightsWentOut = false, sawAfter = false;
+            int mostCracks = 0;
+            float brightestFlash = 0f;
+            var visor = m_Player.visor;
+            Assert.IsNotNull(visor, "The helmet should have a visor that can crack.");
+            Assert.AreEqual(0, visor.Stage);
             float closest = float.MaxValue, darkSeconds = 0f, faceSeconds = 0f;
             var lights = m_Director.ActiveMap.lights;
-            for (float waited = 0f; waited < 5f && m_Director.Phase == MissionPhase.Active; waited += Time.unscaledDeltaTime)
+            for (float waited = 0f; waited < 9f && m_Director.Phase == MissionPhase.Active; waited += Time.unscaledDeltaTime)
             {
+                mostCracks = Mathf.Max(mostCracks, visor.Stage);
+                brightestFlash = Mathf.Max(brightestFlash, visor.FlashLevel);
+                sawAfter |= creature.ScarePhase == 3;
                 if (creature.ScarePhase == 1)
                 {
                     sawDark = true;
                     darkSeconds += Time.unscaledDeltaTime;
                     lightsWentOut |= lights.All(l => !l.enabled);
-                    Assert.Greater(Vector3.Distance(creature.transform.position, m_Player.HeadPosition), 1.5f, "It should hold back, unseen, during the dark.");
+                    Assert.Greater(Vector3.Distance(creature.transform.position, m_Player.HeadPosition), 1.0f, "It should hold back during the dark and the glimpse.");
                 }
                 else if (creature.ScarePhase == 2)
                 {
@@ -277,7 +287,12 @@ namespace TrashAstronauts.Tests
             Assert.IsTrue(lightsWentOut, "Every wreck light should go out before the strike.");
             Assert.Greater(darkSeconds, 0.3f);
             Assert.Greater(faceSeconds, 1.2f, "It should stay in the player's face long enough to register.");
-            Assert.Less(closest, 0.5f, "It should lunge to within half a metre of the player's eyes.");
+            Assert.Less(closest, 0.4f, "It should be on the visor: within 40 cm of the player's eyes.");
+            Assert.GreaterOrEqual(mostCracks, 3, "The visor should crack further with each bite.");
+            Assert.GreaterOrEqual(creature.ScareBites, 3, "It should bite several times.");
+            Assert.Greater(brightestFlash, 0.4f, "Each bite should flash the view red.");
+            Assert.IsTrue(sawAfter, "It should end in blackness before the run is over.");
+            Assert.AreEqual(0, visor.Stage, "The visor is whole again for the next contract.");
             Assert.AreEqual(MissionPhase.Results, m_Director.Phase);
             Assert.AreEqual(0, creature.ScarePhase);
             Assert.IsFalse(m_Director.blackout.IsBlackout, "The lights must be restored afterwards.");

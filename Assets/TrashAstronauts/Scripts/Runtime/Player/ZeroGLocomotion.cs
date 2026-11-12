@@ -144,6 +144,9 @@ namespace TrashAstronauts.Player
             m_Velocity = Vector3.zero;
         }
 
+        /// <summary>Loses speed at once (caught in a web). 0 = stopped dead, 1 = no effect.</summary>
+        public void Damp(float keep) => m_Velocity *= Mathf.Clamp01(keep);
+
         public void AddImpulse(Vector3 velocityChange)
         {
             m_Velocity = Vector3.ClampMagnitude(m_Velocity + velocityChange, maxSpeed);

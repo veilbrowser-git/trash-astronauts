@@ -48,6 +48,7 @@ namespace TrashAstronauts.UI
                 case NoiseKind.PanelBreak: m_EventLabel = "PANEL"; break;
                 case NoiseKind.Door: m_EventLabel = "DOOR"; break;
                 case NoiseKind.Thruster: m_EventLabel = "THRUSTER"; break;
+                case NoiseKind.Web: m_EventLabel = "WEB"; break;
                 default: m_EventLabel = "IMPACT"; break;
             }
         }

@@ -100,17 +100,20 @@ namespace TrashAstronauts.Mission
                 float phase = m_Gait + ((row + i % 2) % 2) * Mathf.PI + row * 0.35f;
                 float swing = Mathf.Sin(phase) * swingAmp;
                 float lift = Mathf.Max(0f, Mathf.Cos(phase)) * liftAmp;
+                float forward = 0f;
                 if (scaring)
                 {
                     // In the player's face: every leg thrown wide and shaking, the front pairs reaching round their head.
                     swing = Mathf.Sin(t * 47f + i * 1.3f) * 9f;
-                    lift = (row < 2 ? 30f : 12f) + Mathf.Sin(t * 53f + i * 2.1f) * 8f;
+                    lift = (row < 2 ? 22f : 10f) + Mathf.Sin(t * 53f + i * 2.1f) * 8f;
+                    // The front two pairs reach forward round the player's head, clawing at the visor.
+                    forward = row == 0 ? 46f + Mathf.Sin(t * 31f + i) * 10f : row == 1 ? 26f : 0f;
                 }
 
                 // Threat display: the first two pairs reach up and forward.
                 float rear = row == 0 ? 34f : row == 1 ? 14f : row == 3 ? -6f : 0f;
                 lift += rear * m_Aggression + m_Twitch * 10f * Mathf.Sin(i * 2.1f);
-                float forward = (row == 0 ? 20f : row == 1 ? 8f : 0f) * m_Aggression;
+                if (!scaring) forward = (row == 0 ? 20f : row == 1 ? 8f : 0f) * m_Aggression;
                 lift -= curl * 52f;
 
                 Quaternion yaw = Quaternion.AngleAxis(swing - m_LegSide[i] * forward, Vector3.up);

@@ -97,7 +97,7 @@ namespace TrashAstronauts.Mission
         [Header("Volume (kept low on purpose)")]
         [Range(0f, 1f)] public float voiceVolume = 0.35f;
         [Header("Catch jumpscare")]
-        public float scareDistance = 0.55f;
+        public float scareDistance = 0.46f;
         public float scareLungeSeconds = 0.09f;
         public float scareHoldSeconds = 0.75f;
         /// <summary>Distance to the nearest player, for wrist warnings.</summary>
@@ -131,7 +131,7 @@ namespace TrashAstronauts.Mission
             EnsureBrain();
             Brain.Sleep();
             m_Running = true;
-            m_WakeTimer = m_Tuning.wakeDelaySeconds;
+            m_WakeTimer = m_Tuning.wakeDelaySeconds * (director != null ? ContractConditions.WakeDelayMultiplier(director.Condition) : 1f);
             m_PatrolIndex = 0;
             m_HasPath = false;
             m_Target = null;
@@ -541,32 +541,46 @@ namespace TrashAstronauts.Mission
 
         [Header("Jumpscare")]
         [Tooltip("Before it strikes, every light dies and everything goes silent for this long.")]
-        public float scareDarkSeconds = 0.5f;
-        [Tooltip("How long it thrashes in the player's face after the strike.")]
-        public float scareMaulSeconds = 1.7f;
-        [Tooltip("How close its face lunges on each bite (metres from the eyes to its centre).")]
-        public float scareBiteDistance = 0.36f;
-        /// <summary>0 = not scaring, 1 = the dark beat, 2 = in the player's face.</summary>
+        public float scareDarkSeconds = 0.6f;
+        [Tooltip("A single flash in the dark shows it above the player for this long...")]
+        public float scareGlimpseSeconds = 0.14f;
+        [Tooltip("...then darkness again for this long before it lands.")]
+        public float scareSecondDarkSeconds = 0.34f;
+        [Tooltip("How long it is on the player's visor, biting.")]
+        public float scareMaulSeconds = 2.6f;
+        [Tooltip("How close its face comes on each bite (metres from the eyes to its centre).")]
+        public float scareBiteDistance = 0.3f;
+        [Tooltip("Black and silent, except for the sound of it feeding, before the run ends.")]
+        public float scareAfterSeconds = 0.9f;
+        /// <summary>0 = not scaring, 1 = the dark and the glimpse, 2 = on the player's visor, 3 = blackout afterwards.</summary>
         public int ScarePhase { get; private set; }
+        /// <summary>How many times it has bitten during the current jumpscare.</summary>
+        public int ScareBites { get; private set; }
 
         /// <summary>
-        /// The catch. First every light in the wreck dies, the flashlight with them, and the ship goes
-        /// silent: half a second of nothing. Then it is in the player's face under a red strobe, far
-        /// closer than before, shrieking, thrashing and lunging to bite, with the controllers buzzing at
-        /// full strength, until the view cuts out. The camera itself is never moved or shaken; the
-        /// creature does all the moving.
+        /// The catch, in four beats.
+        /// 1. Every light in the wreck dies, the flashlight with them, and the ship goes silent.
+        /// 2. One flash: it is right there, above and in front, legs spread. Dark again.
+        /// 3. It lands on the visor: far closer than before, under a red strobe, shrieking, its front legs
+        ///    wrapped round the player's view. It bites again and again, and with every bite the visor
+        ///    cracks further, the view flashes red and the controllers kick.
+        /// 4. Black. Only the sound of it feeding. Then the run is over.
+        /// The camera itself is never moved or shaken; the creature and the visor do all the moving.
         /// </summary>
         IEnumerator Jumpscare(PlayerContext player)
         {
             IsScaring = true;
             ScarePhase = 1;
+            ScareBites = 0;
             Transform head = player.head;
             if (voice != null) voice.Stop();
             if (hum != null) hum.Stop();
             var lib = Sfx.Library;
+            var visor = player.visor;
+            if (visor != null) visor.Clear();
 
-            // --- the dark: lights out, flashlight dead, silence
-            float total = scareDarkSeconds + scareLungeSeconds + scareMaulSeconds;
+            // --- 1. the dark
+            float total = scareDarkSeconds + scareGlimpseSeconds + scareSecondDarkSeconds + scareLungeSeconds + scareMaulSeconds + scareAfterSeconds;
             var blackout = director != null ? director.blackout : null;
             if (blackout != null) blackout.TriggerNow(total + 1f);
             Tools.FlashlightTool torch = null;
@@ -580,80 +594,149 @@ namespace TrashAstronauts.Mission
             if (torch != null && torch.beam != null) torch.beam.enabled = false;
             if (eyeLight != null) eyeLight.enabled = false;
             SetEyesDark();
-            if (lib != null) Sfx.PlayUi(lib.powerDown, 0.5f, 1.6f);
+            if (lib != null) Sfx.PlayUi(lib.powerDown, 0.55f, 1.6f);
             player.PulseBoth(0.35f, 0.12f);
 
-            // It comes round to wherever the player is looking while they cannot see it.
+            Vector3 Ahead()
+            {
+                Vector3 flat = Vector3.ProjectOnPlane(head.forward, Vector3.up);
+                return flat.sqrMagnitude < 0.001f ? Vector3.forward : flat.normalized;
+            }
+            void Hover(float distance, float rise)
+            {
+                Vector3 ahead = Ahead();
+                Vector3 at = head.position + ahead * distance + Vector3.up * rise;
+                transform.SetPositionAndRotation(at, Quaternion.LookRotation((head.position - at).normalized, Vector3.up));
+            }
+
             float t = 0f;
             while (t < scareDarkSeconds)
             {
                 t += Time.unscaledDeltaTime;
-                Vector3 behind = Vector3.ProjectOnPlane(head.forward, Vector3.up);
-                if (behind.sqrMagnitude < 0.001f) behind = Vector3.forward;
-                transform.position = head.position + behind.normalized * 2.2f + Vector3.down * 0.05f;
-                transform.rotation = Quaternion.LookRotation(-behind.normalized, Vector3.up);
+                Hover(2.2f, 0.5f);
+                // A heartbeat in the hands while there is nothing to see.
+                if (Mathf.Repeat(t, 0.3f) < Time.unscaledDeltaTime) player.PulseBoth(0.5f, 0.05f);
                 yield return null;
             }
 
-            // --- the strike
+            // --- 2. the glimpse: one flash shows it hanging there, then nothing
+            if (lib != null) Sfx.PlayUi(lib.flashlightClick, 1f, 0.7f);
+            t = 0f;
+            while (t < scareGlimpseSeconds)
+            {
+                t += Time.unscaledDeltaTime;
+                Hover(1.25f, 0.42f);
+                if (eyeLight != null)
+                {
+                    eyeLight.enabled = true;
+                    eyeLight.color = new Color(1f, 0.85f, 0.8f);
+                    eyeLight.intensity = 7f;
+                    eyeLight.range = 6f;
+                }
+                SetEyesBlazing(3f);
+                yield return null;
+            }
+            if (eyeLight != null) eyeLight.enabled = false;
+            SetEyesDark();
+            t = 0f;
+            while (t < scareSecondDarkSeconds)
+            {
+                t += Time.unscaledDeltaTime;
+                Hover(1.25f, 0.42f);
+                yield return null;
+            }
+
+            // --- 3. it lands on the visor
             ScarePhase = 2;
             if (lib != null)
             {
                 Sfx.PlayUi(lib.droneScare != null ? lib.droneScare : lib.droneCatch, 1f);
-                Sfx.PlayUi(lib.droneCatch, 0.9f, 0.75f);
+                Sfx.PlayUi(lib.droneCatch, 1f, 0.75f);
                 Sfx.PlayUi(lib.impactHeavy, 1f, 0.5f);
+                Sfx.PlayUi(lib.oxygenCritical, 0.8f, 1.2f);
             }
-            player.PulseBoth(1f, scareLungeSeconds + scareMaulSeconds);
+            player.PulseBoth(1f, scareLungeSeconds + 0.25f);
+            if (visor != null) visor.Crack(0.75f);
             Vector3 start = transform.position;
             Quaternion startRotation = transform.rotation;
             var random = new System.Random(71);
-            float shriekAt = 0.55f;
+            const float biteEvery = 0.6f;
+            int bitesDone = 0;
 
             t = 0f;
             while (t < scareLungeSeconds + scareMaulSeconds)
             {
                 t += Time.unscaledDeltaTime;
-                Vector3 flat = Vector3.ProjectOnPlane(head.forward, Vector3.up);
-                if (flat.sqrMagnitude < 0.001f) flat = Vector3.forward;
-                flat.Normalize();
-
-                // Two more lunges after the first: it snaps in to bite, hangs back, snaps in again.
+                Vector3 ahead = Ahead();
                 float maul = Mathf.Max(0f, t - scareLungeSeconds);
-                float bite = Mathf.Pow(Mathf.Abs(Mathf.Sin(maul * Mathf.PI / 0.55f)), 6f);
+
+                // It snaps in to bite, hangs back a hand's width, snaps in again.
+                float cycle = Mathf.Repeat(maul, biteEvery) / biteEvery;
+                float bite = Mathf.Pow(Mathf.Sin(cycle * Mathf.PI), 8f);
                 float distance = Mathf.Lerp(scareDistance, scareBiteDistance, bite);
-                Vector3 shake = new Vector3((float)random.NextDouble() - 0.5f, (float)random.NextDouble() - 0.5f, (float)random.NextDouble() - 0.5f) * 0.07f;
-                Vector3 target = head.position + flat * distance + Vector3.down * 0.03f + shake;
+                Vector3 shake = new Vector3((float)random.NextDouble() - 0.5f, (float)random.NextDouble() - 0.5f, (float)random.NextDouble() - 0.5f) * 0.06f;
+                Vector3 target = head.position + ahead * distance + Vector3.down * 0.03f + shake;
                 Quaternion face = Quaternion.LookRotation((head.position - target).normalized, Vector3.up)
-                    * Quaternion.Euler(((float)random.NextDouble() - 0.5f) * 14f, ((float)random.NextDouble() - 0.5f) * 14f, Mathf.Sin(maul * 31f) * 16f);
+                    * Quaternion.Euler(((float)random.NextDouble() - 0.5f) * 12f, ((float)random.NextDouble() - 0.5f) * 12f, Mathf.Sin(maul * 29f) * 14f);
                 float k = Mathf.Clamp01(t / scareLungeSeconds);
                 k = 1f - (1f - k) * (1f - k);
                 transform.SetPositionAndRotation(Vector3.Lerp(start, target, k), Quaternion.Slerp(startRotation, face, k));
 
+                // The moment each bite lands: the visor cracks, the view goes red, the hands kick, it shrieks.
+                int bitesDue = 1 + Mathf.FloorToInt((maul + biteEvery * 0.5f) / biteEvery);
+                if (maul > 0f && bitesDue > bitesDone + 1)
+                {
+                    bitesDone = bitesDue - 1;
+                    ScareBites = bitesDone;
+                    if (visor != null) visor.Crack(0.6f);
+                    player.PulseBoth(1f, 0.2f);
+                    if (lib != null)
+                    {
+                        Sfx.PlayUi(lib.panelBreak, 0.8f, 1.5f + bitesDone * 0.12f);
+                        Sfx.PlayUi(lib.droneScare != null ? lib.droneScare : lib.droneCatch, 0.9f, 1.05f + (bitesDone % 2) * 0.3f);
+                    }
+                }
+
                 // A hard red strobe from its own eyes is the only light there is.
-                bool flash = Mathf.Repeat(t * 13f, 1f) < 0.62f;
+                bool flash = Mathf.Repeat(t * 14f, 1f) < 0.6f;
                 if (eyeLight != null)
                 {
                     eyeLight.enabled = flash;
                     eyeLight.color = new Color(1f, 0.04f, 0.02f);
-                    eyeLight.intensity = 9f;
+                    eyeLight.intensity = 10f;
                     eyeLight.range = 6f;
                 }
-                SetEyesBlazing(flash ? 4f : 1.2f);
+                SetEyesBlazing(flash ? 4.5f : 1.2f);
+                yield return null;
+            }
 
-                // A second shriek on the way in for the second bite.
-                if (maul >= shriekAt && lib != null)
+            // --- 4. black, and the sound of it feeding
+            ScarePhase = 3;
+            if (eyeLight != null)
+            {
+                eyeLight.enabled = false;
+                eyeLight.range = 9f;
+            }
+            SetEyesDark();
+            if (player.fader != null) player.fader.FadeTo(1f, 0.04f);
+            t = 0f;
+            float nextCrunch = 0f;
+            while (t < scareAfterSeconds)
+            {
+                t += Time.unscaledDeltaTime;
+                if (t >= nextCrunch && lib != null)
                 {
-                    shriekAt = float.MaxValue;
-                    Sfx.PlayUi(lib.droneScare != null ? lib.droneScare : lib.droneCatch, 0.9f, 1.25f);
-                    Sfx.PlayUi(lib.panelBreak, 0.7f, 0.6f);
+                    nextCrunch = t + 0.16f + (float)random.NextDouble() * 0.14f;
+                    Sfx.PlayUi(lib.cutterSparks, 0.5f, 0.45f + (float)random.NextDouble() * 0.2f);
+                    player.PulseBoth(0.35f, 0.04f);
                 }
                 yield return null;
             }
 
             // --- over: put the world back the way it was before the run ends
-            if (eyeLight != null) eyeLight.range = 9f;
             if (torch != null && torch.beam != null) torch.beam.enabled = torch.IsOn;
             if (blackout != null) blackout.EndBlackout(true);
+            if (visor != null) visor.Clear();
             ScarePhase = 0;
             FinishCatch(player);
         }

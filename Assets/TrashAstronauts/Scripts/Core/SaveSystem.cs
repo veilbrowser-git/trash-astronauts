@@ -32,6 +32,8 @@ namespace TrashAstronauts.Core
         public bool cutterUpgrade;
         public int runsStarted;
         public int contractsCompleted;
+        /// <summary>The biggest payout from a single contract.</summary>
+        public int bestHaul;
 
         public Handedness Handedness
         {
@@ -254,10 +256,15 @@ namespace TrashAstronauts.Core
         }
 
         /// <summary>Called once per finished run by <see cref="MissionSession.BankInto"/>.</summary>
+        /// <summary>True if the run just recorded beat the best haul so far.</summary>
+        public bool LastRunWasRecord { get; private set; }
+
         public void RecordRunFinished(int payout, bool extracted)
         {
             if (payout > 0) Data.totalCredits += payout;
             if (extracted) Data.contractsCompleted++;
+            LastRunWasRecord = extracted && payout > Data.bestHaul;
+            if (LastRunWasRecord) Data.bestHaul = payout;
             NotifyChangedAndSave();
         }
 

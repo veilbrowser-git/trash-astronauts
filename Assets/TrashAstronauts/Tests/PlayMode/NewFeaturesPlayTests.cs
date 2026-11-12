@@ -27,6 +27,7 @@ namespace TrashAstronauts.Tests
             MissionDirector.SeedOverride = 99;
             MissionDirector.CreatureOverride = 0;
             MissionDirector.MapOverride = 0;
+            MissionDirector.ConditionOverride = ContractCondition.Standard;
             yield return SceneManager.LoadSceneAsync("TrashAstronauts", LoadSceneMode.Single);
             yield return null;
             yield return null;
@@ -41,6 +42,7 @@ namespace TrashAstronauts.Tests
             MissionDirector.SeedOverride = null;
             MissionDirector.CreatureOverride = null;
             MissionDirector.MapOverride = null;
+            MissionDirector.ConditionOverride = null;
         }
 
         static IEnumerator Frames(int count)
@@ -107,9 +109,11 @@ namespace TrashAstronauts.Tests
             Assert.AreEqual(1, m_Director.Profile.Data.tranqDarts);
             Assert.IsFalse(drone.IsSedated);
 
-            // Aim at it from two metres away.
-            Vector3 from = drone.transform.position + Vector3.back * 2f;
-            tranq.transform.SetPositionAndRotation(from, Quaternion.LookRotation(drone.transform.position - from));
+            // Aim at it from two metres away: at its body, wherever it is clinging (it waits on the ceiling).
+            yield return null;
+            Vector3 bodyAt = drone.GetComponentInChildren<SphereCollider>().bounds.center;
+            Vector3 from = bodyAt + Vector3.back * 2f + Vector3.down * 0.6f;
+            tranq.transform.SetPositionAndRotation(from, Quaternion.LookRotation(bodyAt - from));
             Physics.SyncTransforms();
             Assert.IsTrue(tranq.Fire(), "A dart aimed at the creature should hit it.");
             Assert.AreEqual(0, m_Director.Profile.Data.tranqDarts);

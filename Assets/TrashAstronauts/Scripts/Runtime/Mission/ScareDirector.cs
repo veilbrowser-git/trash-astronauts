@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace TrashAstronauts.Mission
 {
-    public enum ScareKind { DistantBang, HullGroan, Scuttle, BreathBehind, LightsFlicker, Glimpse, Charge, Drop }
+    public enum ScareKind { DistantBang, HullGroan, Scuttle, BreathBehind, LightsFlicker, Glimpse, Charge, Drop, DoorSlam }
 
     /// <summary>
     /// Keeps the wreck from ever feeling empty. While a contract is running and the player is out of the
@@ -90,7 +90,7 @@ namespace TrashAstronauts.Mission
             if (player.InSafeZone || Time.time < m_Next) return;
             if (director.blackout != null && director.blackout.IsBlackout) return;
             if (state == EnemyState.Chase) return; // the real thing is scary enough
-            Trigger((ScareKind)m_Random.Next(8));
+            Trigger((ScareKind)m_Random.Next(9));
         }
 
         /// <summary>Stages one event now. Returns false if it could not (for example no spot for a glimpse).</summary>
@@ -127,6 +127,9 @@ namespace TrashAstronauts.Mission
                     break;
                 case ScareKind.Glimpse:
                     done = ShowGlimpse(player, head, forward);
+                    break;
+                case ScareKind.DoorSlam:
+                    done = SlamDoor(head, forward);
                     break;
                 case ScareKind.Drop:
                     done = dropSpider != null && !IsDropping;
@@ -245,6 +248,31 @@ namespace TrashAstronauts.Mission
             m_GlimpseUntil = Time.time + 6f;
             return true;
         }
+
+        /// <summary>An open door somewhere behind the player bangs shut on its own. They will have to open it again, and that is not quiet.</summary>
+        bool SlamDoor(Vector3 head, Vector3 forward)
+        {
+            if (director.wreckDoors == null) return false;
+            World.SlidingDoor best = null;
+            float bestDistance = float.MaxValue;
+            foreach (var door in director.wreckDoors)
+            {
+                if (door == null || !door.IsOpen || door.locked || !door.gameObject.activeInHierarchy) continue;
+                Vector3 to = door.transform.position - head;
+                to.y = 0f;
+                float distance = to.magnitude;
+                if (distance < 2.5f || distance > 16f) continue;      // not on top of them, not out of earshot
+                if (Vector3.Angle(forward, to) < 70f) continue;        // behind them, where they are not looking
+                if (distance < bestDistance) { bestDistance = distance; best = door; }
+            }
+            if (best == null) return false;
+            best.SetOpen(false);
+            if (Sfx.Library != null) Sfx.PlayAt(Sfx.Library.impactHeavy, best.transform.position + Vector3.up, 1f, 0.7f, 30f);
+            LastSlammedDoor = best;
+            return true;
+        }
+
+        public World.SlidingDoor LastSlammedDoor { get; private set; }
 
         /// <summary>True while the spider on a thread is in front of the player.</summary>
         public bool IsDropping { get; private set; }

@@ -40,6 +40,8 @@ def swatch_uv(name):
 class Part:
     """One rigid piece of the spider (a leg section, the abdomen...). Vertices are kept in model space."""
 
+    low = False   # low-poly mode, for the tiny spiderlings: few sides, no rounded ends, no hair
+
     def __init__(self, name, parent, pivot, material="atlas"):
         self.name, self.parent, self.pivot, self.material = name, parent, Vector(pivot), material
         self.v, self.n, self.uv, self.t = [], [], [], []
@@ -88,11 +90,15 @@ class Part:
         ref = Vector((0, 0, 1)) if abs(a.z) < 0.9 else Vector((1, 0, 0))
         u = a.cross(ref).normalized()
         w = a.cross(u).normalized()
-        profile = [(-0.85 * r0, 0.02 * r0), (-0.6 * r0, 0.62 * r0), (-0.25 * r0, 0.93 * r0)]
-        for i in range(rings + 1):
-            t = i / rings
-            profile.append((length * t, (r0 + (r1 - r0) * t) * (1.0 + bulge * math.sin(math.pi * t))))
-        profile += [(length + 0.25 * r1, 0.93 * r1), (length + 0.6 * r1, 0.62 * r1), (length + 0.85 * r1, 0.02 * r1)]
+        if Part.low:
+            radial = 5
+            profile = [(0.0, r0), (length, max(r1, 0.0008))]
+        else:
+            profile = [(-0.85 * r0, 0.02 * r0), (-0.6 * r0, 0.62 * r0), (-0.25 * r0, 0.93 * r0)]
+            for i in range(rings + 1):
+                t = i / rings
+                profile.append((length * t, (r0 + (r1 - r0) * t) * (1.0 + bulge * math.sin(math.pi * t))))
+            profile += [(length + 0.25 * r1, 0.93 * r1), (length + 0.6 * r1, 0.62 * r1), (length + 0.85 * r1, 0.02 * r1)]
         span = profile[-1][0] - profile[0][0]
         verts, uvs, tris = [], [], []
         for i, (d, r) in enumerate(profile):
@@ -114,6 +120,8 @@ class Part:
     def ellipsoid(self, centre, radii, lump=0.0, seed=0.0, seg=26, ring=16, rect=SKIN, shape=None, mark=None, lean=None, col=0, hairy=True, uv_point=None):
         """A lumpy rounded mass. `shape(n)` can reshape it; `mark(p)` says which faces carry the marking colour."""
         centre, radii = Vector(centre), Vector(radii)
+        if Part.low:
+            seg, ring = min(seg, 8), min(ring, 5)
         verts, uvs, tris = [], [], []
         for i in range(ring + 1):
             v = i / ring
@@ -208,6 +216,11 @@ class Part:
 
 # ----------------------------------------------------------------------------- species
 SPECIES = {
+    # The young: the tarantula's shape with almost no detail, because there are dozens of them and each is thumb-sized.
+    "spiderling": dict(low=True, body=(0.13, 0.17, 0.09), abdomen=(0.15, 0.2, 0.14), leg_len=1.0, leg_r=1.3,
+                       hair=0, hair_len=(0.02, 0.04), hair_w=0.005, eye=(0.02, 0.015, 0.013, 0.014),
+                       skin=(0.2, 0.15, 0.11), hair_root=(0.1, 0.07, 0.05), hair_tip=(0.4, 0.3, 0.2),
+                       accent=(0.7, 0.3, 0.1), pale=(0.7, 0.6, 0.5), mark=(0.3, 0.2, 0.14), smoothness=0.4, marking="none"),
     # A giant tarantula: heavy, dark, densely furred, rust-orange hair on the knees.
     "janitor": dict(body=(0.13, 0.17, 0.09), abdomen=(0.16, 0.22, 0.15), leg_len=1.0, leg_r=1.25,
                     hair=5200, hair_len=(0.022, 0.055), hair_w=0.0055, eye=(0.021, 0.015, 0.013, 0.014),
@@ -240,8 +253,9 @@ LEG_ROW_LENGTH = [1.1, 0.95, 0.9, 1.15]  # first and last pairs are the longest,
 
 
 def build(species_id, spec):
-    rng = random.Random(hash(species_id) & 0xFFFF)
-    rng = random.Random({"janitor": 11, "listener": 23, "warden": 37, "mimic": 53}[species_id])
+    Part.low = spec.get("low", False)
+    low = Part.low
+    rng = random.Random({"janitor": 11, "listener": 23, "warden": 37, "mimic": 53}.get(species_id, 71))
     bx, by, bz = spec["body"]
     ax, ay, az = spec["abdomen"]
     parts = []
@@ -262,7 +276,8 @@ def build(species_id, spec):
         return p
     head.ellipsoid((0, 0, 0), (bx, by, bz), lump=0.035, seed=1.7, shape=carapace, lean=Vector((0, 0.8, -0.3)))
     # sternum / mouth parts underneath, and the pedicel to the abdomen
-    head.ellipsoid((0, -by * 0.1, -bz * 0.55), (bx * 0.55, by * 0.6, bz * 0.3), lump=0.02, seed=4.2, seg=14, ring=8, hairy=False, uv_point=swatch_uv("joint"))
+    if not low:
+        head.ellipsoid((0, -by * 0.1, -bz * 0.55), (bx * 0.55, by * 0.6, bz * 0.3), lump=0.02, seed=4.2, seg=14, ring=8, hairy=False, uv_point=swatch_uv("joint"))
     head.tube((0, by * 0.8, -0.005), (0, by * 1.02, 0.0), bx * 0.26, bx * 0.22, radial=8, rings=2, hairy=False, uv_point=swatch_uv("joint"))
 
     # --- abdomen: an egg, fattest toward the back
@@ -288,7 +303,7 @@ def build(species_id, spec):
         return False
     abdomen.ellipsoid(centre, (ax, ay, az), lump=0.05, seed=2.9, seg=30, ring=18, shape=egg, mark=mark if marking != "none" else None,
                       lean=Vector((0, 0.85, -0.25)))
-    for side in (-1, 1):                                        # spinnerets
+    for side in (() if low else (-1, 1)):                       # spinnerets
         tip = centre + Vector((side * 0.022, ay * 0.98, -az * 0.3))
         abdomen.tube(tip, tip + Vector((side * 0.006, 0.045, -0.02)), 0.014, 0.004, radial=6, rings=2, hairy=False, uv_point=swatch_uv("joint"))
 
@@ -301,7 +316,7 @@ def build(species_id, spec):
     front = max(0.24, e_ame * 1.25 / bx)
     eye_spots = [(front, -0.9, 0.62, e_ame), (max(0.58, front + (e_ame + e_ale) * 1.15 / bx), -0.78, 0.5, e_ale), (0.3, -0.66, 0.92, e_pme), (0.66, -0.5, 0.78, e_ple)]
     index = 0
-    for fx, fy, fz, size in eye_spots:
+    for fx, fy, fz, size in (eye_spots[:1] if low else eye_spots):
         for side in (-1, 1):
             p = on_carapace(side * fx * bx, fy * by, fz * bz, size * 0.25)
             eye = part("Eye_%d" % index, "Head", p, material="eye")
@@ -360,9 +375,10 @@ def build(species_id, spec):
                 target.tube(cursor, end, r0 * scale_r, r1 * scale_r, radial=10, rings=4 if length > 0.1 else 2,
                             bulge=0.16 if name in ("femur", "tibia") else 0.08, col=column)
                 # a paler membrane ring at each joint
-                target.ellipsoid(cursor, (r0 * scale_r * 0.94,) * 3, seg=10, ring=6, hairy=False, uv_point=swatch_uv("joint"))
+                if not low:
+                    target.ellipsoid(cursor, (r0 * scale_r * 0.94,) * 3, seg=10, ring=6, hairy=False, uv_point=swatch_uv("joint"))
                 cursor = end
-            for k in (-1, 1):                                    # two tarsal claws
+            for k in (() if low else (-1, 1)):                   # two tarsal claws
                 side_vec = flat.cross(Vector((0, 0, 1))) * (0.006 * k)
                 lower.tube(cursor, cursor + side_vec + flat * 0.012 + Vector((0, 0, -0.028)), 0.004 * scale_r, 0.0008, radial=6, rings=2, bulge=0.0,
                            hairy=False, uv_point=swatch_uv("claw"))

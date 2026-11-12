@@ -39,8 +39,12 @@ namespace TrashAstronauts.Mission
         public bool IsHeld => grab != null && grab.isSelected;
         public Rigidbody Body => m_Body;
         /// <summary>What it is worth now. Delicate things lose value when they are banged about.</summary>
-        public int Value => m_DamagedValue >= 0 ? m_DamagedValue : (definition != null ? definition.creditValue : 0);
-        public int FullValue => definition != null ? definition.creditValue : 0;
+        public int Value => m_DamagedValue >= 0 ? m_DamagedValue : FullValue;
+        public int FullValue => m_BaseValue >= 0 ? m_BaseValue : (definition != null ? definition.creditValue : 0);
+        int m_BaseValue = -1;
+
+        /// <summary>What it is worth undamaged on this contract (a rich wreck pays more than list price).</summary>
+        public void SetBaseValue(int value) => m_BaseValue = Mathf.Max(0, value);
         public int DamageCount { get; private set; }
         /// <summary>The suit pocket this is stowed in, if any.</summary>
         public Inventory StoredIn { get; set; }
@@ -59,7 +63,7 @@ namespace TrashAstronauts.Mission
             float severity = Mathf.Clamp01((speed - safeSpeed) / (wreckingSpeed - safeSpeed));
             if (severity <= 0f) return 0;
 
-            int full = definition.creditValue;
+            int full = FullValue;
             int floor = Mathf.CeilToInt(full / 3f);
             int loss = Mathf.Max(1, Mathf.RoundToInt(full * definition.fragility * 0.35f * (0.3f + 0.7f * severity)));
             int now = Mathf.Max(floor, Value - loss);
@@ -144,6 +148,7 @@ namespace TrashAstronauts.Mission
         {
             m_Director = director;
             m_DamagedValue = -1;
+            m_BaseValue = -1;
             DamageCount = 0;
             SalvageId = salvageId;
             if (def != null) definition = def;

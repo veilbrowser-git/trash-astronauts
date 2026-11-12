@@ -11,3 +11,6 @@
 .vs/
 .idea/
 .DS_Store
+
+# Blender backup files
+*.blend1

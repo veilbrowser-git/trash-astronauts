@@ -40,6 +40,8 @@ namespace TrashAstronauts.EditorTools
             public readonly List<Transform> palps = new List<Transform>();
             public readonly List<GameObject> eyes = new List<GameObject>();
             public int triangles, hairs;
+            /// <summary>How far below the body's centre the feet reach.</summary>
+            public float footDrop;
         }
 
         static SpiderModel LoadSpider(string id, Transform body)
@@ -79,6 +81,12 @@ namespace TrashAstronauts.EditorTools
             var skin = Lit("Spider_" + id, Color.white, info.smoothness, atlas);
 
             var model = new SpiderModel { triangles = info.triangles, hairs = info.hairs };
+            float lowest = 0f;
+            foreach (var part in info.parts)
+            {
+                for (int i = 0; i < part.vertexCount; i++) lowest = Mathf.Min(lowest, part.pivot[1] + positions[(part.vertexStart + i) * 3 + 1]);
+            }
+            model.footDrop = -lowest;
             var byName = new Dictionary<string, Transform>();
             var pivots = new Dictionary<string, Vector3>();
             foreach (var part in info.parts)
@@ -140,6 +148,62 @@ namespace TrashAstronauts.EditorTools
                 else if (part.name.StartsWith("Palp_")) model.palps.Add(t);
             }
             return model;
+        }
+
+        /// <summary>A whole spider as one static mesh (for the swarms of young: one draw each, no moving parts).</summary>
+        static Mesh LoadSpiderMerged(string id, out Material skin)
+        {
+            string jsonPath = SpiderSourceDir + "/" + id + ".mesh.json";
+            string binPath = SpiderSourceDir + "/" + id + ".mesh.bin";
+            string atlasPath = SpiderSourceDir + "/" + id + "_atlas.png";
+            if (!File.Exists(jsonPath) || !File.Exists(binPath) || !File.Exists(atlasPath))
+                throw new FileNotFoundException("Spider model '" + id + "' is missing. Run Blender on " + SpiderSourceDir + "/build_spiders.py first.");
+            var info = JsonUtility.FromJson<SpiderInfo>(File.ReadAllText(jsonPath));
+            byte[] bytes = File.ReadAllBytes(binPath);
+            int v = info.vertexTotal;
+            var positions = new float[v * 3];
+            var normals = new float[v * 3];
+            var uvs = new float[v * 2];
+            var indices = new int[info.indexTotal];
+            int offset = 0;
+            Buffer.BlockCopy(bytes, offset, positions, 0, positions.Length * 4); offset += positions.Length * 4;
+            Buffer.BlockCopy(bytes, offset, normals, 0, normals.Length * 4); offset += normals.Length * 4;
+            Buffer.BlockCopy(bytes, offset, uvs, 0, uvs.Length * 4); offset += uvs.Length * 4;
+            Buffer.BlockCopy(bytes, offset, indices, 0, indices.Length * 4);
+
+            EnsureFolder(TextureDir);
+            string texturePath = TextureDir + "/Spider_" + id + ".png";
+            File.Copy(atlasPath, texturePath, true);
+            AssetDatabase.ImportAsset(texturePath, ImportAssetOptions.ForceUpdate);
+            skin = Lit("Spider_" + id, Color.white, info.smoothness, AssetDatabase.LoadAssetAtPath<Texture2D>(texturePath));
+
+            return SaveMesh("Spider_" + id + "_Merged", () =>
+            {
+                var verts = new List<Vector3>(v);
+                var norms = new List<Vector3>(v);
+                var uv = new List<Vector2>(v);
+                var tris = new List<int>(info.indexTotal);
+                foreach (var part in info.parts)
+                {
+                    var pivot = new Vector3(part.pivot[0], part.pivot[1], part.pivot[2]);
+                    for (int i = 0; i < part.vertexCount; i++)
+                    {
+                        int k = (part.vertexStart + i) * 3;
+                        verts.Add(pivot + new Vector3(positions[k], positions[k + 1], positions[k + 2]));
+                        norms.Add(new Vector3(normals[k], normals[k + 1], normals[k + 2]));
+                        int u = (part.vertexStart + i) * 2;
+                        uv.Add(new Vector2(uvs[u], uvs[u + 1]));
+                    }
+                    for (int i = 0; i < part.indexCount; i++) tris.Add(part.vertexStart + indices[part.indexStart + i]);
+                }
+                var m = new Mesh();
+                m.SetVertices(verts);
+                m.SetNormals(norms);
+                m.SetUVs(0, uv);
+                m.SetTriangles(tris, 0);
+                m.RecalculateBounds();
+                return m;
+            });
         }
     }
 }

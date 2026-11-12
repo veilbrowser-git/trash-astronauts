@@ -349,9 +349,12 @@ namespace TrashAstronauts.EditorTools
             var rb = go.AddComponent<Rigidbody>();
             rb.isKinematic = true;
             rb.useGravity = false;
-            go.AddComponent<SphereCollider>().radius = warden ? 0.36f : 0.3f;
 
-            var body = Empty(go.transform, "Body", Vector3.zero).transform;
+            // "Surface" is moved onto the floor, wall or ceiling by SurfaceWalker; the animated body hangs
+            // from it. The collider goes with it, so a dart has to be aimed at where the spider actually is.
+            var surfaceGo = Empty(go.transform, "Surface", Vector3.zero, null, GameLayers.Enemy);
+            surfaceGo.AddComponent<SphereCollider>().radius = warden ? 0.36f : 0.3f;
+            var body = Empty(surfaceGo.transform, "Body", Vector3.zero).transform;
 
             // The model itself is built in Blender (ModelSource/Spiders/build_spiders.py): one real spider
             // species per creature, with eight segmented legs, fangs, pedipalps, eight eyes and fur.
@@ -449,6 +452,13 @@ namespace TrashAstronauts.EditorTools
             animator.spider = true;
             animator.abdomen = spider.abdomen;
             animator.palps = spider.palps.ToArray();
+
+            var walker = go.AddComponent<SurfaceWalker>();
+            walker.drone = drone;
+            walker.surface = surfaceGo.transform;
+            walker.bodyHeight = spider.footDrop * 0.92f;
+            walker.thread = MakeLine(go.transform, "Thread", 0.004f);
+            walker.thread.startColor = walker.thread.endColor = new Color(0.85f, 0.87f, 0.9f);
             return SavePrefab(go, go.name);
         }
 
@@ -753,6 +763,22 @@ namespace TrashAstronauts.EditorTools
 
             var fadeQuad = Prim(camGo.transform, "Fade Quad", PrimitiveType.Quad, new Vector3(0, 0, 0.1f), new Vector3(1.2f, 1.2f, 1f), M("Fade"));
             fadeQuad.GetComponent<MeshRenderer>().enabled = false;
+            // The visor: crack overlays and a red flash, a forearm's length in front of the eyes.
+            var visor = camGo.AddComponent<VisorDamage>();
+            var crackRenderers = new List<Renderer>();
+            for (int i = 1; i <= 4; i++)
+            {
+                var crack = Prim(camGo.transform, "Visor Crack " + i, PrimitiveType.Quad, new Vector3(0, 0, 0.3f + i * 0.0015f), new Vector3(0.98f, 0.98f, 1f), M("VisorCrack" + i));
+                var r = crack.GetComponent<MeshRenderer>();
+                r.enabled = false;
+                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                crackRenderers.Add(r);
+            }
+            var flashQuad = Prim(camGo.transform, "Visor Flash", PrimitiveType.Quad, new Vector3(0, 0, 0.29f), new Vector3(1.1f, 1.1f, 1f), M("VisorFlash"));
+            flashQuad.GetComponent<MeshRenderer>().enabled = false;
+            visor.cracks = crackRenderers.ToArray();
+            visor.flash = flashQuad.GetComponent<MeshRenderer>();
+
             var fader = camGo.AddComponent<ScreenFader>();
             fader.quad = fadeQuad.GetComponent<MeshRenderer>();
 
@@ -882,6 +908,7 @@ namespace TrashAstronauts.EditorTools
             inventory.header = invHeader;
             inventory.wristButton = invButton;
             context.inventory = inventory;
+            context.visor = visor;
 
             // --- one-way pushers: the chest shoulders floating junk aside, an open hand can swat it
             context.bumpers = new[]

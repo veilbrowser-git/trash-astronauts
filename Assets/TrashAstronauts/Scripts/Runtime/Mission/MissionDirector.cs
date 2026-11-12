@@ -38,6 +38,8 @@ namespace TrashAstronauts.Mission
         public static int? SeedOverride;
         /// <summary>Test seam: forces which wreck the next contract is on.</summary>
         public static int? MapOverride;
+        /// <summary>Test seam: forces this contract's condition.</summary>
+        public static ContractCondition? ConditionOverride;
         /// <summary>Test seam: forces which creature from the roster is aboard.</summary>
         public static int? CreatureOverride;
 
@@ -82,6 +84,8 @@ namespace TrashAstronauts.Mission
         public bool HazardsPaused => m_PauseReasons != HazardPauseReason.None;
         /// <summary>The creature aboard this contract. A different one is picked from the roster each run.</summary>
         public EnemyDrone ActiveEnemy { get; private set; }
+        /// <summary>What is unusual about the current contract.</summary>
+        public ContractCondition Condition { get; private set; }
         /// <summary>The wreck currently docked to the airlock.</summary>
         public WreckMap ActiveMap { get; private set; }
         public MissionPhase Phase => Session != null ? Session.Phase : MissionPhase.Hub;
@@ -279,7 +283,9 @@ namespace TrashAstronauts.Mission
                 Debug.LogWarning("[Mission] Not enough spawn points to guarantee the quota; lowered it to " + plan.Quota + ".");
 
             ClearRunObjects();
-            if (!Session.Begin(seed, plan.Quota, NextRunOxygenCapacity)) return false;
+            Condition = ConditionOverride ?? ContractConditions.Pick(seed);
+            if (!Session.Begin(seed, plan.Quota, NextRunOxygenCapacity * ContractConditions.OxygenMultiplier(Condition))) return false;
+            Session.BonusMultiplier = ContractConditions.BonusMultiplier(Condition);
             LastPlan = plan;
 
             Profile.Data.tutorialCompleted = true;
@@ -330,7 +336,9 @@ namespace TrashAstronauts.Mission
                     continue;
                 }
                 item.Initialize(this, assignment.salvageId, def, point.mount);
-                Session.RegisterSalvage(assignment.salvageId, def.id, def.creditValue);
+                int worth = Mathf.RoundToInt(def.creditValue * ContractConditions.ValueMultiplier(Condition));
+                item.SetBaseValue(worth);
+                Session.RegisterSalvage(assignment.salvageId, def.id, worth);
                 m_Items.Add(item);
             }
 

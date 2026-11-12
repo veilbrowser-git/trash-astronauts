@@ -31,6 +31,7 @@ namespace TrashAstronauts.Tests
             MissionDirector.SeedOverride = 20261111;
             MissionDirector.CreatureOverride = 0;
             MissionDirector.MapOverride = 0;
+            MissionDirector.ConditionOverride = ContractCondition.Standard;
             yield return SceneManager.LoadSceneAsync("TrashAstronauts", LoadSceneMode.Single);
             yield return null;
             yield return null;
@@ -46,6 +47,7 @@ namespace TrashAstronauts.Tests
             MissionDirector.SeedOverride = null;
             MissionDirector.CreatureOverride = null;
             MissionDirector.MapOverride = null;
+            MissionDirector.ConditionOverride = null;
         }
 
         static IEnumerator Frames(int count)
@@ -414,7 +416,7 @@ namespace TrashAstronauts.Tests
             Assert.IsTrue(sawChase, "The drone never spotted a player standing in the corridor.");
 
             // The catch plays a short jumpscare before the run ends: the creature lunges to the player's face.
-            for (float waited = 0f; waited < 4f && m_Director.Phase == MissionPhase.Active; waited += Time.unscaledDeltaTime)
+            for (float waited = 0f; waited < 9f && m_Director.Phase == MissionPhase.Active; waited += Time.unscaledDeltaTime)
             {
                 if (drone.IsScaring)
                 {

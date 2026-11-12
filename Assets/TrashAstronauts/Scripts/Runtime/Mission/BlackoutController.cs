@@ -81,7 +81,8 @@ namespace TrashAstronauts.Mission
         {
             var config = director.Config;
             m_Scheduled = config.blackoutsEnabled;
-            m_Countdown = UnityEngine.Random.Range(config.blackoutMinDelay, Mathf.Max(config.blackoutMinDelay, config.blackoutMaxDelay));
+            m_Countdown = UnityEngine.Random.Range(config.blackoutMinDelay, Mathf.Max(config.blackoutMinDelay, config.blackoutMaxDelay))
+                * ContractConditions.BlackoutDelayMultiplier(director.Condition);
         }
 
         void Update()

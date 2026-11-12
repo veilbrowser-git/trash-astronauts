@@ -24,6 +24,7 @@ namespace TrashAstronauts.Tests
             MissionDirector.SeedOverride = 21;
             MissionDirector.CreatureOverride = Mimic;
             MissionDirector.MapOverride = 0;
+            MissionDirector.ConditionOverride = ContractCondition.Standard;
             yield return SceneManager.LoadSceneAsync("TrashAstronauts", LoadSceneMode.Single);
             yield return null;
             yield return null;
@@ -38,6 +39,7 @@ namespace TrashAstronauts.Tests
             MissionDirector.SeedOverride = null;
             MissionDirector.CreatureOverride = null;
             MissionDirector.MapOverride = null;
+            MissionDirector.ConditionOverride = null;
         }
 
         static IEnumerator Frames(int count)
@@ -79,7 +81,7 @@ namespace TrashAstronauts.Tests
             Assert.IsTrue(mimic.IsSpeaking);
             Assert.AreEqual(voice.Recorder.Newest.Length, mimic.speaker.clip.samples, "It plays back the phrase it heard.");
             Assert.AreEqual(1f, mimic.speaker.spatialBlend);
-            Assert.Less(Vector3.Distance(mimic.speaker.transform.position, creature.transform.position), 1f, "The voice comes from the creature.");
+            Assert.Less(Vector3.Distance(mimic.speaker.transform.position, creature.GetComponent<SurfaceWalker>().surface.position), 1f, "The voice comes from the creature's body.");
             Assert.That(mimic.LastPlaybackSeconds, Is.InRange(0.85f, 1.1f), "Played a little slower and lower than it was said.");
             Assert.IsTrue(voice.IsSuppressed, "The headset microphone must not treat the Mimic's voice as the player talking.");
 

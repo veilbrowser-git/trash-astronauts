@@ -157,6 +157,7 @@ namespace TrashAstronauts.UI
                         "Secured: " + session.SecuredValue + " / " + session.Quota + " cr  (" + session.DepositedCount + " items)\n"
                         + "Oxygen: " + OxygenTank.FormatClock(session.Oxygen.Remaining) + "\n"
                         + (director.ActiveMap != null ? "Wreck: " + director.ActiveMap.displayName + "\n" : "")
+                        + "Conditions: " + ContractConditions.Title(director.Condition) + ". " + ContractConditions.Describe(director.Condition) + "\n"
                         + (director.ActiveEnemy != null ? "Aboard: " + director.ActiveEnemy.displayName + "\n  " + director.ActiveEnemy.trait + "\n\n" : "\n")
                         + (session.QuotaMet
                             ? "QUOTA MET. Extract now for the bonus,\nor risk another trip for more."
@@ -172,6 +173,7 @@ namespace TrashAstronauts.UI
                     Set(body,
                         "Salvage secured: " + result.DepositedValue + " cr  (" + result.DepositedCount + " items)\n"
                         + (result.TrickShots > 0 ? "Trick shots: " + result.TrickShots + "  (+" + result.TrickBonus + " cr)\n" : "")
+                        + (director.Profile.LastRunWasRecord ? "NEW BEST HAUL!\n" : "")
                         + "Quota: " + result.Quota + " cr\n"
                         + "Contract bonus: +" + result.Bonus + " cr\n"
                         + "PAYOUT: " + result.Payout + " cr\n"

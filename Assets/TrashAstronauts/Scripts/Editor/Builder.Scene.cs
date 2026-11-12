@@ -57,6 +57,7 @@ namespace TrashAstronauts.EditorTools
             s_WreckLights.Clear();
             s_WreckGlow.Clear();
             s_Loose = null;
+            s_SpiderlingMesh = null;
 
             // Lighting: dim flat ambient so routes stay readable with the flashlight off, dark fog for mood.
             RenderSettings.ambientMode = AmbientMode.Flat;
@@ -1219,6 +1220,13 @@ namespace TrashAstronauts.EditorTools
             Cocoon(new Vector3(6.6f, H, 9.6f), 1.2f, 54);
             EggSacs(new Vector3(-4.5f + T * 0.5f, 1.9f, 27.6f), Vector3.right, 7, 61);
             EggSacs(new Vector3(-1.3f + T * 0.5f, 2.2f, 17.4f), Vector3.right, 5, 62);
+            EggSacs(new Vector3(8.3f - T * 0.5f, 1.8f, 10.4f), Vector3.left, 6, 63);
+            Tripwire("a_corridor_mid", new Vector3(-1.2f, 1.3f, 13.5f), new Vector3(1.2f, 1.1f, 13.5f));
+            Tripwire("a_corridor_far", new Vector3(-1.2f, 0.7f, 18.2f), new Vector3(1.2f, 1.8f, 18.2f));
+            Tripwire("a_cargo_door", new Vector3(-1.7f, 1.2f, 11.2f), new Vector3(-1.7f, 1.3f, 12.8f));
+            Tripwire("a_maintenance_door", new Vector3(1.7f, 1.3f, 9.8f), new Vector3(1.7f, 1.1f, 11.2f));
+            Tripwire("a_reactor_entry", new Vector3(-0.9f, 1.2f, 22.4f), new Vector3(0.9f, 1.4f, 22.4f));
+            Tripwire("a_cargo_mid", new Vector3(-5.0f, 1.2f, 12.2f), new Vector3(-5.0f, 1.3f, 15.8f));
 
             Dust("Dust Cargo", new Vector3(-5.8f, 1.4f, 14.1f), new Vector3(8f, 2.2f, 8f), 70);
             Dust("Dust Reactor", new Vector3(0, 1.4f, 25.6f), new Vector3(8f, 2.2f, 7f), 60);

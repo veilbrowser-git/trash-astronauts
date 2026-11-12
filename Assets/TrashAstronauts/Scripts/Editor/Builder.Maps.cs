@@ -212,7 +212,54 @@ namespace TrashAstronauts.EditorTools
                 var at = new Vector3(((float)rng.NextDouble() - 0.5f) * 0.5f, ((float)rng.NextDouble() - 0.5f) * 0.4f, -r * 0.7f);
                 Part(root, "Sac", Blob("EggSac", new Vector3(r, r * 1.15f, r), r * 0.18f, seed + i % 4, 12, 8), at, M("Silk"));
             }
+
+            // The young, wandering over the wall around the sacs.
+            if (s_SpiderlingMesh == null) s_SpiderlingMesh = LoadSpiderMerged("spiderling", out s_SpiderlingSkin);
+            var young = new List<Transform>();
+            for (int i = 0; i < 8; i++)
+            {
+                var spider = Empty(root, "Spiderling " + i, Vector3.zero, null, GameLayers.Default);
+                spider.AddComponent<MeshFilter>().sharedMesh = s_SpiderlingMesh;
+                var renderer = spider.AddComponent<MeshRenderer>();
+                renderer.sharedMaterial = s_SpiderlingSkin;
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                spider.transform.localScale = Vector3.one * 0.12f;
+                young.Add(spider.transform);
+            }
+            var swarm = root.gameObject.AddComponent<SpiderlingSwarm>();
+            swarm.spiders = young.ToArray();
         }
+
+        /// <summary>A strand of web across a route. See WebTripwire: touching it slows the player and tells the spider where they are.</summary>
+        static void Tripwire(string id, Vector3 a, Vector3 b)
+        {
+            var root = Empty(s_Props, "Web Tripwire " + id, (a + b) * 0.5f, null, GameLayers.Default);
+            var endA = Empty(root.transform, "End A", root.transform.InverseTransformPoint(a));
+            var endB = Empty(root.transform, "End B", root.transform.InverseTransformPoint(b));
+            var visual = Empty(root.transform, "Strands", Vector3.zero).transform;
+            Vector3 along = (b - a).normalized;
+            Vector3 lift = Vector3.Cross(along, Vector3.Cross(Vector3.up, along)).normalized;
+            if (lift.sqrMagnitude < 0.5f) lift = Vector3.right;
+            Vector3 mid = (a + b) * 0.5f;
+            Strand(visual, a, b, 0.0035f);
+            Strand(visual, a + lift * 0.09f, mid - lift * 0.03f, 0.0025f);
+            Strand(visual, mid - lift * 0.03f, b + lift * 0.11f, 0.0025f);
+            Strand(visual, a - lift * 0.12f, mid + lift * 0.05f, 0.0025f);
+            Strand(visual, mid + lift * 0.05f, b - lift * 0.08f, 0.0025f);
+            for (int i = 1; i <= 4; i++)
+            {
+                Vector3 p = Vector3.Lerp(a, b, i / 5f);
+                Strand(visual, p + lift * 0.1f, p - lift * 0.1f, 0.002f);
+            }
+            var wire = root.AddComponent<WebTripwire>();
+            wire.wireId = id;
+            wire.endA = endA.transform;
+            wire.endB = endB.transform;
+            wire.visual = visual.gameObject;
+        }
+
+        static Mesh s_SpiderlingMesh;
+        static Material s_SpiderlingSkin;
 
         static Light RoomLight(string name, float x, float y, float z, Color color, float intensity, float range)
         {
@@ -350,6 +397,14 @@ namespace TrashAstronauts.EditorTools
             Fix(new Vector3(0, 0, 25.9f), 1.6f, "Reactor Housing", "Reactor Housing Panel", "Spawn reactor_housing");
             Fix(new Vector3(-10.3f, 0, 18.6f), 0f, "Secure Cargo Locker", "Secure Cargo Locker Panel", "Spawn cargo_locker");
             Fix(new Vector3(8.3f, 0, 12.05f), 0f, "Electronics Rack Bracket", "Rack Shelf", "Rack Back", "Spawn maint_rack");
+
+            // Egg sacs and the young on them keep their size too, set just proud of the (now thicker) wall.
+            foreach (var sacs in all.Where(t => t.name == "Egg Sacs").ToList())
+            {
+                Vector3 delta = FreighterPoint(sacs.position) - sacs.position;
+                sacs.SetParent(fixtures, true);
+                sacs.position += delta + sacs.TransformDirection(Vector3.back) * 0.06f;
+            }
 
             // Loose junk tumbles; it must not live under a stretched parent.
             foreach (var body in hull.GetComponentsInChildren<Rigidbody>(true))
@@ -510,6 +565,15 @@ namespace TrashAstronauts.EditorTools
             Cocoon(new Vector3(3.2f, AH, 23.6f), 2.3f, 73);
             Cocoon(new Vector3(-12.6f, H, 22.6f), 1.1f, 74);
             EggSacs(new Vector3(6f - T * 0.5f, 1.8f, 35.2f), Vector3.left, 8, 81);
+
+            Tripwire("b_vestibule", new Vector3(-1.8f, 1.2f, 10.6f), new Vector3(1.8f, 1.4f, 10.6f));
+            Tripwire("b_hold_west_door", new Vector3(-7.6f, 1.25f, 18.2f), new Vector3(-7.6f, 1.15f, 19.8f));
+            Tripwire("b_hold_east_door", new Vector3(7.6f, 1.3f, 18.3f), new Vector3(7.6f, 1.1f, 19.7f));
+            Tripwire("b_hold_gap", new Vector3(-1.5f, 1.2f, 16.5f), new Vector3(1.5f, 1.4f, 16.5f));
+            Tripwire("b_drive_entry", new Vector3(-0.9f, 1.2f, 27.4f), new Vector3(0.9f, 1.35f, 27.4f));
+            Tripwire("b_duct", new Vector3(-13.9f, 0.9f, 27f), new Vector3(-12.9f, 1.5f, 27f));
+            EggSacs(new Vector3(-8f + T * 0.5f, 2.0f, 23.4f), Vector3.right, 6, 82);
+            EggSacs(new Vector3(-15f + T * 0.5f, 1.7f, 19.4f), Vector3.right, 6, 83);
 
             // Signs
             Sign("ORE HOLD", new Vector3(0, 2.45f, 11.6f - T * 0.5f - 0.02f), Vector3.back, 1.4f);
@@ -717,6 +781,16 @@ namespace TrashAstronauts.EditorTools
             Cocoon(new Vector3(-3.4f, H, 18.2f), 1.2f, 93);
             Cocoon(new Vector3(-7.8f, H, 22.4f), 1.15f, 94);
             EggSacs(new Vector3(-5f + T * 0.5f, 1.9f, 22.4f), Vector3.right, 7, 95);
+
+            Tripwire("c_ring_s_west", new Vector3(-4f, 0.9f, 7.8f), new Vector3(-4f, 1.6f, 11.4f));
+            Tripwire("c_ring_s_east", new Vector3(4f, 1.5f, 7.8f), new Vector3(4f, 0.9f, 11.4f));
+            Tripwire("c_ring_west", new Vector3(-8.8f, 1.2f, 17f), new Vector3(-5.2f, 1.35f, 17f));
+            Tripwire("c_ring_east", new Vector3(5.2f, 1.2f, 22f), new Vector3(8.8f, 1.3f, 22f));
+            Tripwire("c_ring_north", new Vector3(-3f, 1.2f, 27.8f), new Vector3(-3f, 1.35f, 31.4f));
+            Tripwire("c_lab_door", new Vector3(-0.9f, 1.2f, 12f), new Vector3(0.9f, 1.3f, 12f));
+            Tripwire("c_deck_door", new Vector3(-0.8f, 1.2f, 32f), new Vector3(0.8f, 1.3f, 32f));
+            EggSacs(new Vector3(9f - T * 0.5f, 1.9f, 12.6f), Vector3.left, 6, 96);
+            EggSacs(new Vector3(-2.2f, 1.8f, 36.6f - T * 0.5f), Vector3.back, 7, 97);
 
             // Signs
             Sign("LABORATORY", new Vector3(0, 2.45f, 11.6f - T * 0.5f - 0.02f), Vector3.back, 1.4f);

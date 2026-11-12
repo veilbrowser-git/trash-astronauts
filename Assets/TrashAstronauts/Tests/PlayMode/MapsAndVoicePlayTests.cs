@@ -25,6 +25,7 @@ namespace TrashAstronauts.Tests
             MissionDirector.SeedOverride = 12;
             MissionDirector.CreatureOverride = 0;
             MissionDirector.MapOverride = null;
+            MissionDirector.ConditionOverride = ContractCondition.Standard;
             yield return SceneManager.LoadSceneAsync("TrashAstronauts", LoadSceneMode.Single);
             yield return null;
             yield return null;
@@ -39,6 +40,7 @@ namespace TrashAstronauts.Tests
             MissionDirector.SeedOverride = null;
             MissionDirector.CreatureOverride = null;
             MissionDirector.MapOverride = null;
+            MissionDirector.ConditionOverride = null;
         }
 
         static IEnumerator Frames(int count)

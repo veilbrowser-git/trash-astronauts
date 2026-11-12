@@ -36,6 +36,7 @@ namespace TrashAstronauts.UI
             var data = director.Profile.Data;
             body.text = "Launches: " + data.runsStarted + "\n"
                 + "Contracts completed: " + data.contractsCompleted + "\n"
+                + "Best haul: " + data.bestHaul + " cr\n"
                 + "Banked: " + data.totalCredits + " cr\n"
                 + "O2 tank: Mk " + (data.oxygenUpgradeLevel + 1) + "\n"
                 + "Tranq darts: " + data.tranqDarts
