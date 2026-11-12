@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 1632252810749099764}
   - component: {fileID: 1828715537561519776}
   - component: {fileID: 7218525932821924603}
-  - component: {fileID: 791211003323469570}
+  - component: {fileID: 3424375102278074647}
   - component: {fileID: 5792684012730050624}
   - component: {fileID: 3837010966919966628}
   - component: {fileID: 9168425627334216626}
@@ -91,7 +91,7 @@ CapsuleCollider:
   m_Height: 0.15
   m_Direction: 1
   m_Center: {x: 0, y: 0, z: 0}
---- !u!114 &791211003323469570
+--- !u!114 &3424375102278074647
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -100,9 +100,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 1405198423715006396}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0ad34abafad169848a38072baa96cdb2, type: 3}
+  m_Script: {fileID: 11500000, guid: b1c53c558d0394e10b80cb57f1cbfccc, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Unity.XR.Interaction.Toolkit::UnityEngine.XR.Interaction.Toolkit.Interactables.XRGrabInteractable
+  m_EditorClassIdentifier: TrashAstronauts.Runtime::TrashAstronauts.World.SalvageGrabInteractable
   m_InteractionManager: {fileID: 0}
   m_Colliders: []
   m_InteractionLayers:

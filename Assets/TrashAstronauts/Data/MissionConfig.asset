@@ -40,6 +40,7 @@ MonoBehaviour:
   scannerUpgradeRangeMultiplier: 1.6
   cutterUpgradeCost: 350
   cutterUpgradeHeatMultiplier: 1.6
+  headLampCost: 250
   trickShotDistance: 2.2
   trickShotBonusFraction: 0.25
   exertionOxygenCost: 0.4
