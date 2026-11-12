@@ -26,6 +26,8 @@ namespace TrashAstronauts.Player
         public PlayerLocomotion locomotion;
         public ScreenFader fader;
         public BodyAnchor bodyAnchor;
+        [Tooltip("The visible suit (torso, arms, legs; helmet hidden for the local player).")]
+        public PlayerAvatar avatar;
         public Transform wristDisplay;
         public SuitTool[] tools;
 

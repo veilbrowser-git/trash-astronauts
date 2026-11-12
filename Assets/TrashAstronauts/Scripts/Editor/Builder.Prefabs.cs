@@ -856,6 +856,17 @@ namespace TrashAstronauts.EditorTools
             zeroG.rightHand = context.rightHand;
             zeroG.head = camGo.transform;
 
+            // --- the suit: torso, arms and legs follow the camera and the two hands. The helmet is hidden for the
+            // wearer (it would block the view); the torso turns with the body anchor so it never covers the holsters.
+            var avatar = BuildAvatar(rig.transform, "Avatar", false);
+            avatar.head = camGo.transform;
+            avatar.leftHand = context.leftHand.transform;
+            avatar.rightHand = context.rightHand.transform;
+            avatar.yawSource = bodyGo.transform;
+            avatar.lookDownShift = 0.07f; // first person: sit the chest far enough back to see past it to the hip holsters
+            avatar.Pose(0f); // save the prefab with the arms already on the gloves, not hanging in the reference pose
+            context.avatar = avatar;
+
             // --- tools in their holsters
             var flashlight = BuildFlashlight(null);
             var scanner = BuildScanner(null);

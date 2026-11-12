@@ -1,0 +1,210 @@
+{
+ "id": "astronaut",
+ "smoothness": 0.3,
+ "vertexTotal": 7171,
+ "indexTotal": 29685,
+ "triangles": 9895,
+ "trianglesWithBothArms": 11375,
+ "rig": {
+  "headCentre": [
+   0.0,
+   0.0,
+   -0.085
+  ],
+  "neck": [
+   0.0,
+   -0.17,
+   0.0
+  ],
+  "shoulder": [
+   0.245,
+   -0.09,
+   0.0
+  ],
+  "hips": [
+   0.0,
+   -0.52,
+   0.0
+  ],
+  "upperArmLength": 0.31,
+  "forearmLength": 0.27
+ },
+ "parts": [
+  {
+   "name": "helmet",
+   "parent": "",
+   "pivot": [
+    0.0,
+    0.0,
+    -0.0
+   ],
+   "material": "suit",
+   "length": 0.0,
+   "vertexStart": 0,
+   "vertexCount": 1390,
+   "indexStart": 0,
+   "indexCount": 4767,
+   "triangles": 1589
+  },
+  {
+   "name": "helmet_visor",
+   "parent": "helmet",
+   "pivot": [
+    0.0,
+    0.0,
+    -0.0
+   ],
+   "material": "visor",
+   "length": 0.0,
+   "vertexStart": 1390,
+   "vertexCount": 88,
+   "indexStart": 4767,
+   "indexCount": 420,
+   "triangles": 140
+  },
+  {
+   "name": "helmet_accent",
+   "parent": "helmet",
+   "pivot": [
+    0.0,
+    0.0,
+    -0.0
+   ],
+   "material": "accent",
+   "length": 0.0,
+   "vertexStart": 1478,
+   "vertexCount": 51,
+   "indexStart": 5187,
+   "indexCount": 192,
+   "triangles": 64
+  },
+  {
+   "name": "torso",
+   "parent": "",
+   "pivot": [
+    0.0,
+    -0.17000000178813934,
+    -0.0
+   ],
+   "material": "suit",
+   "length": 0.0,
+   "vertexStart": 1529,
+   "vertexCount": 2181,
+   "indexStart": 5379,
+   "indexCount": 9444,
+   "triangles": 3148
+  },
+  {
+   "name": "torso_accent",
+   "parent": "torso",
+   "pivot": [
+    0.0,
+    -0.17000000178813934,
+    -0.0
+   ],
+   "material": "accent",
+   "length": 0.0,
+   "vertexStart": 3710,
+   "vertexCount": 87,
+   "indexStart": 14823,
+   "indexCount": 312,
+   "triangles": 104
+  },
+  {
+   "name": "torso_collar",
+   "parent": "torso",
+   "pivot": [
+    0.0,
+    -0.17000000178813934,
+    -0.0
+   ],
+   "material": "suit",
+   "length": 0.0,
+   "vertexStart": 3797,
+   "vertexCount": 356,
+   "indexStart": 15135,
+   "indexCount": 1026,
+   "triangles": 342
+  },
+  {
+   "name": "upperarm",
+   "parent": "",
+   "pivot": [
+    0.24500000476837158,
+    -0.25999999046325684,
+    -0.0
+   ],
+   "material": "suit",
+   "length": 0.31,
+   "vertexStart": 4153,
+   "vertexCount": 506,
+   "indexStart": 16161,
+   "indexCount": 1944,
+   "triangles": 648
+  },
+  {
+   "name": "upperarm_accent",
+   "parent": "upperarm",
+   "pivot": [
+    0.24500000476837158,
+    -0.25999999046325684,
+    -0.0
+   ],
+   "material": "accent",
+   "length": 0.31,
+   "vertexStart": 4659,
+   "vertexCount": 51,
+   "indexStart": 18105,
+   "indexCount": 192,
+   "triangles": 64
+  },
+  {
+   "name": "forearm",
+   "parent": "",
+   "pivot": [
+    0.24500000476837158,
+    -0.5699999928474426,
+    -0.0
+   ],
+   "material": "suit",
+   "length": 0.27,
+   "vertexStart": 4710,
+   "vertexCount": 513,
+   "indexStart": 18297,
+   "indexCount": 2304,
+   "triangles": 768
+  },
+  {
+   "name": "legs",
+   "parent": "",
+   "pivot": [
+    0.0,
+    -0.6899999976158142,
+    -0.0
+   ],
+   "material": "suit",
+   "length": 0.0,
+   "vertexStart": 5223,
+   "vertexCount": 1834,
+   "indexStart": 20601,
+   "indexCount": 8652,
+   "triangles": 2884
+  },
+  {
+   "name": "legs_accent",
+   "parent": "legs",
+   "pivot": [
+    0.0,
+    -0.6899999976158142,
+    -0.0
+   ],
+   "material": "accent",
+   "length": 0.0,
+   "vertexStart": 7057,
+   "vertexCount": 114,
+   "indexStart": 29253,
+   "indexCount": 432,
+   "triangles": 144
+  }
+ ]
+}

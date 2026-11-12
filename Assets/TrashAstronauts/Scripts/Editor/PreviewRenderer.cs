@@ -114,6 +114,57 @@ namespace TrashAstronauts.EditorTools
                 Object.DestroyImmediate(rig);
             }
 
+            // The player's suit as a crew mate sees it: helmet on, arms posed from the head and the two hands.
+            if (rigPrefab != null)
+            {
+                var rig = Object.Instantiate(rigPrefab, new Vector3(0f, 0f, -70f), Quaternion.identity);
+                rig.hideFlags = HideFlags.HideAndDontSave;
+                foreach (var cam in rig.GetComponentsInChildren<Camera>(true)) cam.enabled = false;
+                foreach (var listener in rig.GetComponentsInChildren<AudioListener>(true)) listener.enabled = false;
+                foreach (var l in rig.GetComponentsInChildren<Light>(true)) l.enabled = false;
+                var avatar = rig.GetComponentInChildren<TrashAstronauts.Player.PlayerAvatar>(true);
+                if (avatar != null)
+                {
+                    foreach (var hand in rig.GetComponentsInChildren<TrashAstronauts.Player.HandRig>(true))
+                    {
+                        bool left = hand.side == TrashAstronauts.Core.Handedness.Left;
+                        hand.transform.localPosition = left ? new Vector3(-0.34f, 1.02f, 0.3f) : new Vector3(0.27f, 1.36f, 0.42f);
+                        hand.transform.localRotation = Quaternion.Euler(left ? 20f : -35f, left ? 15f : -20f, 0f);
+                    }
+                    if (avatar.head != null) avatar.head.localRotation = Quaternion.Euler(4f, 12f, 0f);
+                    avatar.SetHelmetVisible(true);
+                    avatar.SetTint(TrashAstronauts.Player.PlayerAvatar.CrewColors[0]);
+                    avatar.SnapToHead();
+                    avatar.Pose(0f);
+                    foreach (var at in new[] { new Vector3(1.6f, 2.4f, -67.8f), new Vector3(-1.8f, 1.2f, -68.4f), new Vector3(-0.6f, 2.2f, -72.2f), new Vector3(1.8f, 0.9f, -71.6f) })
+                    {
+                        var suitLight = new GameObject("Suit Light") { hideFlags = HideFlags.HideAndDontSave }.AddComponent<Light>();
+                        suitLight.transform.SetParent(rig.transform);
+                        suitLight.transform.position = at;
+                        suitLight.type = LightType.Point;
+                        suitLight.range = 7f;
+                        suitLight.intensity = 5f;
+                    }
+                    Shot("32_avatar_suit", new Vector3(0.75f, 1.25f, -68.05f), new Vector3(0f, 0.92f, -70f), false, 50f);
+                    Shot("33_avatar_suit_back", new Vector3(-0.95f, 1.45f, -71.9f), new Vector3(0f, 0.92f, -70f), false, 50f);
+                    Shot("34_avatar_suit_bust", new Vector3(-0.42f, 1.5f, -69.05f), new Vector3(0f, 1.36f, -70f), false, 50f);
+                    // What the wearer sees looking down: no helmet, the chest and its holsters, arms and legs.
+                    avatar.SetHelmetVisible(false);
+                    if (avatar.head != null)
+                    {
+                        avatar.head.localRotation = Quaternion.Euler(55f, 0f, 0f);
+                        avatar.SnapToHead();
+                        avatar.Pose(0f);
+                        Shot("35_avatar_own_view_down", avatar.head.position, avatar.head.position + avatar.head.forward, false, 95f);
+                        avatar.head.localRotation = Quaternion.Euler(89f, 0f, 0f);
+                        avatar.SnapToHead();
+                        avatar.Pose(0f);
+                        Shot("36_avatar_own_view_straight_down", avatar.head.position, avatar.head.position + avatar.head.forward, false, 95f);
+                    }
+                }
+                Object.DestroyImmediate(rig);
+            }
+
             Shot("08_top_down", new Vector3(-1f, 46f, 22f), new Vector3(-1f, 0f, 22.01f), true);
             Shot("18_flight_deck", new Vector3(-0.8f, 1.6f, -3.3f), new Vector3(0.3f, 1.3f, -6.2f));
             Shot("30_supply_bay_shop", new Vector3(-2.5f, 1.6f, -4.3f), new Vector3(-5.4f, 1.3f, -4.8f));
@@ -147,13 +198,13 @@ namespace TrashAstronauts.EditorTools
             Object.DestroyImmediate(lineup);
         }
 
-        static void Shot(string name, Vector3 from, Vector3 lookAt, bool topDown = false)
+        static void Shot(string name, Vector3 from, Vector3 lookAt, bool topDown = false, float fieldOfView = 80f)
         {
             var go = new GameObject("Preview Camera") { hideFlags = HideFlags.HideAndDontSave };
             var cam = go.AddComponent<Camera>();
             cam.transform.position = from;
             cam.transform.LookAt(lookAt, topDown ? Vector3.forward : Vector3.up);
-            cam.fieldOfView = topDown ? 60f : 80f;
+            cam.fieldOfView = topDown ? 60f : fieldOfView;
             cam.nearClipPlane = 0.05f;
             cam.farClipPlane = 80f;
             cam.clearFlags = CameraClearFlags.SolidColor;
