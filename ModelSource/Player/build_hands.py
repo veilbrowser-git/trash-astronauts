@@ -160,11 +160,11 @@ FINGER_Z = [-0.025, -0.021, -0.024, -0.031]            # knuckle arch
 FINGER_Y = -0.029
 FINGER_LEN = [(0.040, 0.026, 0.022), (0.044, 0.028, 0.023), (0.041, 0.027, 0.022), (0.032, 0.021, 0.019)]
 FINGER_W = [0.0099, 0.0102, 0.0096, 0.0086]           # half widths of the proximal segment (gloved)
-FINGER_SPLAY = [-4.0, 0.0, 3.5, 8.0]                   # degrees about Y at the knuckle
-THUMB_BASE = np.array([-0.029, -0.037, -0.110])
-THUMB_DIRS = [(-0.56, -0.40, 0.72), (-0.36, -0.42, 0.83), (-0.22, -0.45, 0.86)]
+FINGER_SPLAY = [-6.0, -1.0, 4.5, 11.0]                  # degrees about Y at the knuckle
+THUMB_BASE = np.array([-0.031, -0.043, -0.112])
+THUMB_DIRS = [(-0.72, -0.36, 0.66), (-0.55, -0.38, 0.78), (-0.42, -0.40, 0.84)]   # ~45 degrees out
 THUMB_LEN = (0.042, 0.032, 0.027)
-THUMB_W = (0.0135, 0.0118, 0.0106)
+THUMB_W = (0.0150, 0.0130, 0.0118)
 
 
 def normalize(v):
@@ -283,20 +283,27 @@ def build_palm():
 
 
 def finger_segment(L, w, distal, proximal_bellows, flesh=0.0, thumb=False):
-    h = w * (0.92 if not thumb else 0.88)
-    w1, h1 = w * (0.9 if distal else 0.95), h * (0.9 if distal else 0.95)
-    z0 = -0.55 * w
-    z1 = L + (0.15 * w if distal else 0.55 * w)
+    """
+    One rigid phalanx: a round section (12 sides, a little flatter on the pad side) tapering toward the tip,
+    bulging at the knuckle it starts from and narrowing at its waist. Both ends are rounded and overlap the
+    neighbouring segment, so the joint stays closed when it bends; a distal segment ends in a domed tip.
+    """
+    h = w * (0.94 if not thumb else 0.9)
+    taper = 0.80 if distal else 0.88
+    w1, h1 = w * taper, h * taper
+    z0 = -0.6 * w
+    z1 = L + (0.35 * w if distal else 0.6 * w)
 
     def swell(t):
-        s = 1.0
+        s = 1.0 + 0.07 * gauss((t - 0.10) / 0.10)        # knuckle bulge (gloved joint) at the root
+        s -= 0.06 * gauss((t - 0.52) / 0.16)             # narrower waist between knuckles
+        if not distal:
+            s += 0.03 * gauss((t - 0.92) / 0.08)         # the next knuckle starts to swell
         if proximal_bellows:
-            s += 0.07 * gauss((t - 0.16) / 0.09)          # convolute bellows ring over the knuckle
-        if distal:
-            s += 0.04 * gauss((t - 0.70) / 0.18)          # fingertip cap is a little fuller
+            s += 0.03 * gauss((t - 0.2) / 0.05)          # fabric bellows ring over the knuckle
         return s
 
-    pos, tris, luv = capsule(z0, z1, w, h, w1, h1, n=10, rings=10, p=2.5, e=0.5, pad=flesh, swell=swell)
+    pos, tris, luv = capsule(z0, z1, w, h, w1, h1, n=12, rings=11, p=2.0, e=0.72 if distal else 0.62, pad=-0.12 + flesh, swell=swell)
     chunk = Chunk(pos, tris, luv, "fabric")
     chunk.drop_degenerate()
     chunk.orient_outward()
@@ -327,7 +334,7 @@ def build_parts():
         for k in range(3):
             L = FINGER_LEN[i][k]
             w = FINGER_W[i] * (1.0, 0.93, 0.87)[k]
-            chunk = finger_segment(L, w, distal=(k == 2), proximal_bellows=(k > 0), flesh=0.12)
+            chunk = finger_segment(L, w, distal=(k == 2), proximal_bellows=(k > 0), flesh=0.04)
             seg = "%s_%d" % (name, k + 1)
             parts.append(Part(seg, parent, pivot, rotation, L, [chunk]))
             parent, pivot, rotation = seg, np.array([0.0, 0.0, L]), np.eye(3)
@@ -337,7 +344,7 @@ def build_parts():
     parent, parent_world, pivot = "palm", np.eye(3), THUMB_BASE
     for k in range(3):
         L, w = THUMB_LEN[k], THUMB_W[k]
-        chunk = finger_segment(L, w, distal=(k == 2), proximal_bellows=(k > 0), flesh=0.18, thumb=True)
+        chunk = finger_segment(L, w, distal=(k == 2), proximal_bellows=(k > 0), flesh=0.10, thumb=True)
         rotation = parent_world.T @ worlds[k]
         seg = "thumb_%d" % (k + 1)
         parts.append(Part(seg, parent, pivot, rotation, L, [chunk]))

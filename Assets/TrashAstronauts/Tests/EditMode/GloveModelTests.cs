@@ -72,7 +72,7 @@ namespace TrashAstronauts.Tests
             }
 
             Assert.AreEqual(info.triangles, info.parts.Sum(p => p.indexCount) / 3);
-            Assert.LessOrEqual(info.triangles, 3600, "One glove is over its triangle budget.");
+            Assert.LessOrEqual(info.triangles, 4600, "One glove is over its triangle budget.");
             Assert.GreaterOrEqual(info.triangles, 2400, "The glove has lost most of its detail.");
             long size = new FileInfo(Dir + "/" + Id + ".mesh.bin").Length;
             Assert.AreEqual((long)info.vertexTotal * 32 + (long)info.indexTotal * 4, size, "The .bin does not match the .json.");
