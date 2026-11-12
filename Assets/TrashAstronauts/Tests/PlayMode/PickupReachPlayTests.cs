@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using NUnit.Framework;
 using TrashAstronauts.Core;
+using TrashAstronauts.Core.Net;
 using TrashAstronauts.Mission;
 using TrashAstronauts.Player;
 using TrashAstronauts.World;
@@ -656,6 +657,72 @@ namespace TrashAstronauts.Tests
             Assert.AreEqual(replicaGrabs + 1, grab.ReplicaGrabs, "The co-op grab rules ran: the replica became simulated here as it was taken.");
             Assert.IsTrue(item.SimulatedHere && !item.Body.isKinematic);
             Assert.Greater(seconds[0], 0f, "It arrives in the palm like any other." + Report(m_Right, item));
+            yield return Grip(m_Right, false);
+        }
+
+        CoopClientRig m_CoopRig;
+
+        [TearDown]
+        public void DisposeCoopRig()
+        {
+            if (m_CoopRig != null) m_CoopRig.Dispose();
+            m_CoopRig = null;
+        }
+
+        /// <summary>
+        /// In a co-op session as a client (a real NetSessionClient, CoopItemClient and ItemSync, against a scripted host):
+        /// the reach assist's pickup ends in the ordinary selection, so it goes through the same ownership request as a
+        /// direct grab: GrabRequest is sent and the host grants it.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator ReachAssist_AsACoopClient_SendsTheGrabRequest_AndTheHostGrantsIt()
+        {
+            MissionDirector.MapOverride = MapIndex("freighter");
+            MissionDirector.SeedOverride = 5;
+            m_Director.CoopRideAlong = true;
+            var run = m_Director.BuildRunParams();
+            m_Director.CoopRideAlong = false;
+            run.runIndex = 3;
+            run.planHash = run.ComputePlanHash();
+
+            m_CoopRig = new CoopClientRig(m_Director, m_Player);
+            m_CoopRig.StartPump();
+            m_CoopRig.JoinScene();
+            m_CoopRig.StartRun(in run);
+            Assert.AreEqual(MissionPhase.Active, m_Director.Phase);
+            Assert.IsNotNull(m_CoopRig.Items, "the client's item code exists");
+            m_Director.keepPlayersInHub = false;
+            Vector3 feet = new Vector3(0f, 0f, 9.2f);
+            Assert.IsTrue(m_Player.locomotion.TeleportTo(feet, Quaternion.identity));
+            yield return Settle(2);
+            m_Player.locomotion.zeroG.Stop();
+            Assert.IsTrue(Physics.Raycast(feet + Vector3.up * 0.6f, Vector3.down, out RaycastHit hit, 2f, GameLayers.EnvironmentMask, QueryTriggerInteraction.Ignore));
+            m_Floor = hit.point;
+            yield return Settle(4);
+
+            var item = m_Director.RunItems.First(i => i != null && i.definition != null && !i.IsMounted && i.Body.mass <= 2f);
+            byte id = (byte)item.NetIndex;
+            Assert.IsFalse(item.SimulatedHere, "set-up: the host simulates it; here it is a replica");
+            int n = 0;
+            foreach (var other in m_Director.RunItems)
+            {
+                if (other == null || other == item) continue;
+                Vector3 away = new Vector3(40f + (n % 10) * 1.5f, 40f + (n / 10) * 1.5f, -40f);
+                n++;
+                other.transform.position = away;
+                other.Body.position = away;
+            }
+            Physics.SyncTransforms();
+            yield return MoveTo(m_Right, At(0.2f, 1.0f, 0.2f), Vector3.forward);
+            yield return LayOnFloor(item, 0.2f, 0.75f);
+
+            var seconds = new float[1];
+            yield return TakeFromLowReach(m_Right, item, seconds);
+            for (int i = 0; i < 120 && !m_CoopRig.Scripted.GrantedItems.Contains(id); i++) yield return null;
+            Assert.AreEqual(1, m_CoopRig.Count("grab " + id), "the assisted pickup sent one GrabRequest");
+            Assert.Contains(id, m_CoopRig.Scripted.GrantedItems, "and the host granted it");
+            Assert.IsTrue(item.SimulatedHere, "simulated here while in this hand");
+            Assert.IsTrue(item.grab.isSelected);
             yield return Grip(m_Right, false);
         }
 

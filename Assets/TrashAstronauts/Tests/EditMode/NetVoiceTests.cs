@@ -57,7 +57,7 @@ namespace TrashAstronauts.Tests
         [Test]
         public void Protocol_IsVersion2_AndAVersion1BuildIsRefused()
         {
-            Assert.GreaterOrEqual(NetProtocol.Version, 2, "Voice changed the message set"); Assert.AreEqual(3, NetProtocol.Version, "voice (2) and suit colour (2) together are 3: each refuses the others");
+            Assert.GreaterOrEqual(NetProtocol.Version, 2, "Voice changed the message set"); Assert.AreEqual(4, NetProtocol.Version, "voice and suit colour (3), then everyone grabs and the helmet lamp bit (4): each refuses the others");
             NetTestRig.Member old = m_Rig.AddClient(protocol: 1);
             Assert.IsTrue(m_Rig.StepUntil(() => old.Session.State == ClientState.Ended, 3.0));
             Assert.AreEqual(RefuseReason.VersionMismatch, old.Session.LastRefusal);

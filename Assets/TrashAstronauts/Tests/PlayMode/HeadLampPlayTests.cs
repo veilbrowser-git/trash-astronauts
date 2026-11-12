@@ -410,9 +410,9 @@ namespace TrashAstronauts.Tests
                 yield return null;
                 if (!creature.IsScaring) break;
                 framesWatched++;
-                // (When the catch comes within a second of the chase starting, as here, ScareDirector's chase flicker ends on
-                // the blackout and hands the torch back mid-scare. That is the existing jumpscare's business and is not
-                // changed here; the lamp stays dark throughout either way.)
+                // The catch comes within a second of the chase starting, as here: ScareDirector's chase flicker ends on the
+                // jumpscare's blackout, and used to hand the torch back mid-scare. Now the scare's darkness holds.
+                Assert.IsFalse(torch.beam.enabled, "The torch stays dark for the whole jumpscare, even after a chase-start flicker.");
                 Assert.IsFalse(m_Lamp.beam.enabled, "...and the helmet lamp is dark for the whole jumpscare: the dark is unchanged.");
                 Assert.IsTrue(m_Lamp.IsOn, "The switch is not touched.");
             }
@@ -422,6 +422,45 @@ namespace TrashAstronauts.Tests
             Assert.AreEqual(torch.IsOn, torch.beam.enabled, "The flashlight comes back as it was...");
             Assert.AreEqual(m_Lamp.IsOn, m_Lamp.beam.enabled, "...and so does the lamp.");
             Assert.IsTrue(m_Lamp.beam.enabled);
+        }
+
+        [UnityTest]
+        public IEnumerator ACatchRightAfterAChaseStarts_KeepsTheTorchDarkThroughTheJumpscare_ThenGivesItBack()
+        {
+            m_Director.StartMission(PlayerId.Local);
+            yield return Frames(2);
+            m_Player.locomotion.TeleportTo(MapPoints.Freighter(0f, 0f, 19.6f));
+            yield return Frames(4);
+            var torch = m_Player.tools.OfType<FlashlightTool>().First();
+            torch.SetOn(true, false);
+            yield return null;
+            Assert.IsTrue(torch.beam.enabled);
+            var creature = m_Director.ActiveEnemy;
+            creature.WakeNow();
+            foreach (var door in m_Director.wreckDoors) door.SetOpen(true, true);
+            Physics.SyncTransforms();
+            Vector3 head = m_Player.HeadPosition;
+            // The chase-start flicker (ScareDirector's own 1.1 s one, started exactly as a chase starts it)...
+            var scares = Object.FindAnyObjectByType<ScareDirector>();
+            typeof(ScareDirector).GetMethod("Flicker", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .Invoke(scares, new object[] { m_Player, 1.1f });
+            yield return Frames(2);
+            // ...and well within it the creature catches the player.
+            creature.transform.position = new Vector3(head.x, creature.hoverHeight, head.z + 1.6f);
+            creature.transform.rotation = Quaternion.LookRotation(Vector3.back);
+            for (int i = 0; i < 200 && !creature.IsScaring && m_Director.Phase == MissionPhase.Active; i++) creature.Step(0.05f);
+            Assert.IsTrue(creature.IsScaring);
+            int frames = 0;
+            for (float waited = 0f; waited < 9f && creature.IsScaring; waited += Time.unscaledDeltaTime)
+            {
+                yield return null;
+                if (!creature.IsScaring) break;
+                frames++;
+                Assert.IsFalse(torch.beam.enabled, "the jumpscare's darkness holds: the torch is not lit through it");
+            }
+            Assert.Greater(frames, 10);
+            yield return Frames(2);
+            Assert.IsTrue(torch.beam.enabled, "the scare's own end gives the torch back");
         }
 
         // ------------------------------------------------------------------ co-op

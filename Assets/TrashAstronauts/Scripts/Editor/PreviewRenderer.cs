@@ -338,6 +338,12 @@ namespace TrashAstronauts.EditorTools
                 s.rightHandRotation = TrashAstronauts.Net.NetUnity.ToNet(face * Quaternion.Euler(p.wave ? -70f : 10f, -10f, 0f));
                 s.leftGripCurl = p.wave ? 0.2f : 1f;
                 s.leftIndexCurl = p.wave ? 0.1f : 1f;
+                // The waving one has everything at once: helmet lamp on, a tool drawn, a chosen colour, talking.
+                if (p.wave)
+                {
+                    s.flags |= TrashAstronauts.Core.Net.AvatarFlags.HeadLampOn;
+                    s.leftTool = TrashAstronauts.Net.AvatarSampler.Flashlight;
+                }
                 remote.Apply(in s);
                 remote.leftGlove.Apply(s.leftIndexCurl, s.leftGripCurl);
                 remote.rightGlove.Apply(0f, 0f);
@@ -346,6 +352,7 @@ namespace TrashAstronauts.EditorTools
                 {
                     var talk = remote.head.Find(TrashAstronauts.Net.Voice.VoiceTalkLight.ChildName);
                     if (talk != null) talk.GetComponent<Renderer>().enabled = true;
+                    TrashAstronauts.Net.CrewLook.ApplyLook(remote, p.slot, 6);
                 }
                 else TrashAstronauts.Net.CrewLook.ApplyLook(remote, p.slot, 9);
                 remote.suit.SnapToHead();
