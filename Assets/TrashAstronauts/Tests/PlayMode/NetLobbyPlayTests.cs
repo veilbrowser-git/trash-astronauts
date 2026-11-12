@@ -14,7 +14,7 @@ namespace TrashAstronauts.Tests
     /// <summary>
     /// The CO-OP CREW panel in the tug, pressed the way the other tests press PushButtons: HOST CO-OP, FIND CREW
     /// with a JOIN per result, ENTER CODE on the keypad, LEAVE, the words shown for every refusal, and the
-    /// mission board refusing a contract while the crew is linked. In-memory network, fake session clock.
+    /// mission board offering the shared contract once the crew is linked. In-memory network, fake session clock.
     /// </summary>
     public class NetLobbyPlayTests : NetPlayFixture
     {
@@ -75,13 +75,11 @@ namespace TrashAstronauts.Tests
             Assert.IsFalse(m_Board.hostButton.Interactable);
             Assert.IsTrue(m_Board.leaveButton.Interactable);
 
-            // The mission board will not start a contract while the crew is linked, and says why.
+            // The mission board offers the shared contract and says what co-op shares in this version.
             m_Mission.Refresh();
-            Assert.AreEqual("CO-OP CREW LINKED", m_Mission.title.text);
-            StringAssert.Contains("LEAVE", m_Mission.body.text);
-            Assert.IsFalse(m_Mission.primaryButton.Interactable);
-            Assert.IsFalse(m_Mission.primaryButton.Press(null));
-            Assert.IsFalse(m_Director.StartMission(PlayerId.Local));
+            Assert.AreEqual("CO-OP CONTRACT", m_Mission.title.text);
+            StringAssert.Contains("Only the host can carry salvage", m_Mission.body.text);
+            Assert.IsTrue(m_Mission.primaryButton.Interactable, "The host's START launches the contract for the crew.");
             Assert.AreEqual(MissionPhase.Hub, m_Director.Phase);
 
             var bot = AddBot(m_Net.Transport.Local);
@@ -118,8 +116,12 @@ namespace TrashAstronauts.Tests
             StringAssert.Contains("ORANGE (HOST)  BLUE (YOU)", Status);
             Assert.AreSame(m_Net, m_Director.Net);
             m_Mission.Refresh();
-            Assert.IsFalse(m_Mission.primaryButton.Interactable, "A joined crew member cannot start a contract either.");
-            Assert.IsFalse(m_Director.StartMission(m_Director.LocalPlayerId));
+            Assert.IsTrue(m_Mission.primaryButton.Interactable, "A joined crew member's START asks the host.");
+            StringAssert.Contains("START asks the host", m_Mission.body.text);
+            Assert.IsFalse(m_Director.StartMission(m_Director.LocalPlayerId), "...it never starts one itself.");
+            yield return Until(() => host.World.Calls[NetMsg.StartRequest] > 0);
+            Assert.AreEqual(1, host.World.Calls[NetMsg.StartRequest]);
+            Assert.AreEqual(MissionPhase.Hub, m_Director.Phase);
 
             yield return Press(m_Board.leaveButton);
             Assert.AreEqual(LobbyMode.Offline, m_Net.Mode);

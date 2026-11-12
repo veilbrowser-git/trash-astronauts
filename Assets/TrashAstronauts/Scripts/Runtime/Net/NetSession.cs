@@ -1,29 +1,49 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using TrashAstronauts.Core;
 using TrashAstronauts.Core.Net;
 using TrashAstronauts.Mission;
+using TrashAstronauts.Net.Online;
 using TrashAstronauts.Player;
 using TrashAstronauts.World;
 using UnityEngine;
 
 namespace TrashAstronauts.Net
 {
+    /// <summary>What the online half of the crew panel is waiting for.</summary>
+    public enum OnlineStep : byte
+    {
+        None = 0,
+        /// <summary>HOST ONLINE pressed: signing in, Relay allocation, lobby listing.</summary>
+        Hosting = 1,
+        /// <summary>FIND ONLINE pressed: signing in, reading the lobby list.</summary>
+        Finding = 2,
+        /// <summary>JOIN on an online game: reading its code, connecting through Relay.</summary>
+        Joining = 3,
+    }
+
     /// <summary>
-    /// The one co-op MonoBehaviour, on the Mission object. Offline by default: it opens no socket and starts no
-    /// timer or buffer until the crew panel (NetLobbyBoard) or a test calls <see cref="Host"/>, <see cref="Find"/>,
-    /// <see cref="EnterCode"/> or <see cref="Join"/>. Single-player never gets further than that.
+    /// The one co-op MonoBehaviour, on the Mission object. Offline by default: it opens no socket, contacts no
+    /// service and starts no timer or buffer until the crew panel (NetLobbyBoard) or a test calls one of the
+    /// panel actions (<see cref="Host"/>, <see cref="Find"/>, <see cref="EnterCode"/>, <see cref="Join"/>,
+    /// <see cref="HostOnline"/>, <see cref="FindOnline"/>, <see cref="JoinOnline"/>). Single-player never gets
+    /// further than that.
     ///
     /// While a session is open it owns the pure C# session (NetSessionHost or NetSessionClient) and its
-    /// transport, pumps it (receive in Update, the 20 Hz send tick in LateUpdate after the rig has been posed),
-    /// implements <see cref="IMissionNet"/> for the game, and keeps one RemoteAvatar per other crew member.
+    /// transport: a UDP socket on the same Wi-Fi, or a Unity Relay connection for an online game (the session
+    /// code is the same for both). It pumps the session (receive in Update, the 20 Hz send tick in LateUpdate
+    /// after the rig has been posed), implements <see cref="IMissionNet"/> for the game, and keeps one
+    /// RemoteAvatar per other crew member.
     ///
-    /// Stage 1 shares presence only: everyone sees everyone's head, body and hands in the tug. Contracts are
-    /// blocked on every headset while a link is open (<see cref="MissionDirector.ContractStartBlocked"/>), so none
-    /// of the shared-contract messages can occur yet; their handlers are marked no-ops in SceneHostWorld /
-    /// SceneClientWorld.
+    /// The shared contract (co-op stage 2, "ride-along"): on the host a <see cref="CoopHostRules"/> decides every
+    /// crew request with the game's own rules and its broadcasts go out through the host session; the send tick
+    /// carries the mission clock (2 Hz) and the poses of the salvage the host simulates. On a client a
+    /// <see cref="CoopClientApply"/> applies what the host decided. Only the host carries salvage, and a co-op
+    /// contract has no creature, blackouts or webs yet.
     ///
-    /// Nothing here reads the microphone, and no message type can carry audio or recorded phrases.
+    /// Nothing here reads the microphone, and no message type can carry audio, recorded phrases or profile data.
     /// </summary>
     [DefaultExecutionOrder(300)] // LateUpdate after XRI, hand tracking, the gloves and the suit have posed the rig
     public sealed class NetSession : MonoBehaviour, IMissionNet
@@ -37,9 +57,16 @@ namespace TrashAstronauts.Net
         public static Func<double> ClockOverride;
         /// <summary>Test seam: this device's LAN address given the transport just opened (0 = unknown). Null = ask the OS.</summary>
         public static Func<INetTransport, uint> LocalAddressOverride;
+        /// <summary>
+        /// Test seam: makes the online link the first time an online button is pressed. Null = the real
+        /// <see cref="OnlineLink"/> (Unity Relay + Lobby + anonymous sign-in on <see cref="OnlineServices.Shared"/>).
+        /// </summary>
+        public static Func<IOnlineLink> OnlineLinkFactory;
 
         /// <summary>Seconds a closed host keeps answering stragglers with "the host left" before its socket closes.</summary>
         public const double HostLingerSeconds = 1.5;
+        /// <summary>The mission clock and shared tank go to the crew this often.</summary>
+        public const double ClockInterval = 0.5;
 
         public MissionDirector director;
         [Tooltip("Stand-in for another crew member (Builder.Net builds it).")]
@@ -47,7 +74,7 @@ namespace TrashAstronauts.Net
 
         static readonly List<NetSession> s_Live = new List<NetSession>();
 
-        readonly LobbyState m_Lobby = new LobbyState();
+        readonly LobbyState m_Lobby = new LobbyState { ContractsEnabled = true };
         readonly RemoteAvatar[] m_Crew = new RemoteAvatar[NetProtocol.MaxPlayers];
         readonly bool[] m_Present = new bool[NetProtocol.MaxPlayers];
 
@@ -65,13 +92,34 @@ namespace TrashAstronauts.Net
         bool m_AppPaused;
         bool m_LocalAway;
 
+        // the shared contract
+        CoopHostRules m_Rules;
+        CoopClientApply m_Apply;
+        readonly ItemPoseEntry[] m_Poses = new ItemPoseEntry[CoopItemSampler.MaxMovingPerTick + 1];
+        double m_LastPoseTick = double.NegativeInfinity;
+        double m_NextClock;
+
+        // online
+        IOnlineLink m_Link;
+        Task<OnlineHostResult> m_HostTask;
+        Task<OnlineFindResult> m_FindTask;
+        Task<OnlineJoinResult> m_JoinTask;
+        readonly List<OnlineGame> m_OnlineGames = new List<OnlineGame>(OnlineConfig.MaxListed);
+        bool m_OnlineListShown;
+        bool m_Online;
+        OnlineProblem m_OnlineProblem;
+        string m_OnlineCode;
+        bool m_OnlineListed;
+        int m_ReportedCount = -1;
+        MissionPhase m_ReportedPhase;
+
         // ================================================================== state for the board and tests
 
-        /// <summary>The lobby state machine behind the crew panel.</summary>
+        /// <summary>The lobby state machine behind the crew panel (same-Wi-Fi and online sessions alike).</summary>
         public LobbyState Lobby => m_Lobby;
         public LobbyMode Mode => m_Lobby.Mode;
-        /// <summary>True when no socket of any kind is open (single-player).</summary>
-        public bool IsOffline => m_Host == null && m_Client == null && m_SearchTransport == null && m_Lingering == null;
+        /// <summary>True when no socket or Relay connection of any kind is open and no online step is running (single-player).</summary>
+        public bool IsOffline => m_Host == null && m_Client == null && m_SearchTransport == null && m_Lingering == null && OnlineBusy == OnlineStep.None;
         /// <summary>Hosts answering FIND CREW (null before the first search).</summary>
         public HostList FoundHosts => m_Discovery != null ? m_Discovery.Hosts : null;
         /// <summary>True for the 3 s a FIND CREW search is probing.</summary>
@@ -98,8 +146,29 @@ namespace TrashAstronauts.Net
         public RemoteAvatar Crew(int slot) => slot >= 0 && slot < m_Crew.Length ? m_Crew[slot] : null;
         public NetSessionHost HostSession => m_Host;
         public NetSessionClient ClientSession => m_Client;
+        /// <summary>The host's contract rules while hosting (null otherwise).</summary>
+        public CoopHostRules HostRules => m_Rules;
         /// <summary>The transport currently in use (host, client or search), for tests.</summary>
         public INetTransport Transport => m_Host != null ? m_Host.Transport : m_Client != null ? m_Client.Transport : m_SearchTransport;
+
+        /// <summary>The online step in flight (None when nothing is being waited for).</summary>
+        public OnlineStep OnlineBusy => m_HostTask != null ? OnlineStep.Hosting : m_JoinTask != null ? OnlineStep.Joining : m_FindTask != null ? OnlineStep.Finding : OnlineStep.None;
+        /// <summary>True while the session (hosting or joined) runs over the online link instead of the local Wi-Fi.</summary>
+        public bool IsOnline => m_Online && (m_Host != null || m_Client != null);
+        /// <summary>True after FIND ONLINE until LEAVE or another choice: the panel lists <see cref="OnlineGames"/>.</summary>
+        public bool OnlineListShown => m_OnlineListShown;
+        /// <summary>The last FIND ONLINE answer: at most 5 games of this build, newest first.</summary>
+        public IReadOnlyList<OnlineGame> OnlineGames => m_OnlineGames;
+        /// <summary>Why the last online step did not work (None when it did, or none ran).</summary>
+        public OnlineProblem OnlineProblem => m_OnlineProblem;
+        /// <summary>Hosting online: the 6-character Relay code a friend can type.</summary>
+        public string OnlineCode => m_OnlineCode;
+        /// <summary>Hosting online: the game is in the lobby list (false: only the code works).</summary>
+        public bool OnlineListed => m_OnlineListed;
+        /// <summary>The online link's own one-line status, or "" before any online button was pressed.</summary>
+        public string OnlineLinkStatus => m_Link != null ? m_Link.StatusText : "";
+        /// <summary>True once an online button was pressed in this scene (the link exists).</summary>
+        public bool HasOnlineLink => m_Link != null;
 
         /// <summary>The session clock.</summary>
         public static double Now => ClockOverride != null ? ClockOverride() : Time.realtimeSinceStartupAsDouble;
@@ -110,16 +179,46 @@ namespace TrashAstronauts.Net
         public bool IsHost => m_Host != null;
         public int LocalSlot => m_LocalSlot;
 
-        // Stage 1: contracts are blocked while a link is open (MissionDirector.ContractStartBlocked), so the
-        // game never reaches the request gates below except for presence. Each says the stage that fills it.
-        public void RequestStart() { /* Stage 2: m_Client.SendStartRequest + Flush. */ }
-        public void RequestExtract() { /* Stage 2 */ }
-        public void RequestDoor(SlidingDoor door, bool desiredOpen) { /* Stage 2: every door in the hub is locked. */ }
-        public void ReportPointCut(Cuttable panel, int pointIndex) { /* Stage 2 */ }
-        public void ReportSalvageDamage(SalvageItem item, int newValue) { /* Stage 3 */ }
-        public void ReportWire(WebTripwire wire, WireChange change) { /* Stage 4 */ }
-        public void ReportTranqHit(Vector3 origin, Vector3 hitPoint) { /* Stage 4 */ }
-        public void ForwardNoise(in NoiseEvent noise) { /* Stage 4 */ }
+        /// <summary>START on a client's mission board: the host decides, and answers with RunStart for everyone.</summary>
+        public void RequestStart()
+        {
+            if (m_Client == null || !m_Client.Welcomed) return;
+            m_Client.SendStartRequest();
+            FlushClient();
+        }
+
+        /// <summary>EXTRACT (confirmed) on a client: the host checks that everyone is aboard.</summary>
+        public void RequestExtract()
+        {
+            if (m_Client == null || !m_Client.Welcomed) return;
+            m_Client.SendExtractRequest();
+            FlushClient();
+        }
+
+        public void RequestDoor(SlidingDoor door, bool desiredOpen)
+        {
+            if (m_Client == null || !m_Client.Welcomed || door == null || director == null) return;
+            int id = director.NetIds.Doors.IndexOf(door.doorId);
+            if (id < 0 || id > 255) return;
+            m_Client.SendDoorRequest((byte)id, desiredOpen);
+            FlushClient();
+        }
+
+        public void ReportPointCut(Cuttable panel, int pointIndex)
+        {
+            if (m_Client == null || !m_Client.Welcomed || panel == null || director == null) return;
+            int id = director.NetIds.Panels.IndexOf(panel.panelId);
+            if (id < 0 || id > 255 || pointIndex < 0 || pointIndex > 255) return;
+            m_Client.SendPointCutReport((byte)id, (byte)pointIndex);
+            FlushClient();
+        }
+
+        // Stage 3: a client never simulates salvage in this version (every item is HOST ONLY), so it has no damage to report.
+        public void ReportSalvageDamage(SalvageItem item, int newValue) { }
+        // Stage 4: a co-op contract has no creature and no armed webs yet, so there is nothing to report or to hear.
+        public void ReportWire(WebTripwire wire, WireChange change) { }
+        public void ReportTranqHit(Vector3 origin, Vector3 hitPoint) { }
+        public void ForwardNoise(in NoiseEvent noise) { }
 
         public void ReportPause(bool paused)
         {
@@ -128,14 +227,15 @@ namespace TrashAstronauts.Net
         }
 
         /// <summary>
-        /// Away = the app is paused OR the hazard pause is on (headset off, tracking or focus lost). Both sources
-        /// are combined here, so resuming the app while tracking is still lost does not report "back".
-        /// A client tells the host (PauseNotice). A host shows it through the Away bit of its own avatar, which
-        /// the crew's panels show as AWAY; pausing the shared game for everyone (HostPause) is stage 2.
+        /// Away = the app is paused OR this headset's own hazard pause is on (headset off, tracking or focus lost).
+        /// Both sources are combined here, so resuming the app while tracking is still lost does not report "back".
+        /// The host's pause reaching a client is not this headset going away. A client tells the host
+        /// (PauseNotice). A host shows it through the Away bit of its own avatar; its hazard pause also goes to
+        /// the crew as HostPause (CoopHostRules).
         /// </summary>
         void RefreshAway()
         {
-            m_LocalAway = m_AppPaused || (director != null && director.HazardsPaused);
+            m_LocalAway = m_AppPaused || (director != null && director.PausedHere);
             if (m_Client != null) m_Client.SetAway(m_LocalAway, Now);
         }
 
@@ -170,7 +270,7 @@ namespace TrashAstronauts.Net
         void OnDestroy()
         {
             s_Live.Remove(this);
-            // Best-effort goodbye, then every socket closed. The director may be going away too.
+            // Best-effort goodbye, then every socket closed and every online step cancelled. The director may be going away too.
             double now = Now;
             if (m_Client != null) m_Client.Leave(now);
             if (m_Host != null) m_Host.Close(now);
@@ -191,7 +291,7 @@ namespace TrashAstronauts.Net
 
         void OnHazardPauseChanged(bool paused)
         {
-            // Headset off or tracking lost: the crew sees this player as away (and later stages stop counting them).
+            // Headset off or tracking lost: the crew sees this player as away (and stops counting them).
             RefreshAway();
         }
 
@@ -210,23 +310,30 @@ namespace TrashAstronauts.Net
             TransportFactory = null;
             ClockOverride = null;
             LocalAddressOverride = null;
+            OnlineLinkFactory = null;
         }
 
-        /// <summary>Closes every socket at once, with no goodbye and no change to the game. For OnDestroy and test tear-down.</summary>
+        /// <summary>
+        /// Closes every socket and Relay connection at once and cancels any online step, with no goodbye and no
+        /// change to the game beyond ending the host's contract rules. For OnDestroy and test tear-down.
+        /// </summary>
         public void ShutDown()
         {
+            CancelOnline();
+            DisposeContract();
             if (m_Client != null) { m_Client.Dispose(); m_Client = null; }
             if (m_Host != null) { m_Host.Dispose(); m_Host = null; }
             if (m_Lingering != null) { m_Lingering.Dispose(); m_Lingering = null; }
             CloseSearch();
         }
 
-        // ================================================================== crew panel actions
+        // ================================================================== crew panel actions: same Wi-Fi
 
         /// <summary>HOST CO-OP: binds port 47800 and waits for crew. Only from the hub or the results screen.</summary>
         public bool Host()
         {
             m_OwnNotice = LobbyNotice.None;
+            if (OnlineBusy != OnlineStep.None) return false;
             MissionPhase phase = director.Phase;
             if (!m_Lobby.CanHost(phase)) return m_Lobby.Host(phase, false, 0u, 0); // NotInHub, or not from this mode
             DisposeLingering();
@@ -253,22 +360,8 @@ namespace TrashAstronauts.Net
                 Sync();
                 return false;
             }
-
-            director.ResetForSession(true);
-            var config = new NetHostConfig
-            {
-                contentHash = ContentHash,
-                tugNumber = tug,
-                handedness = LocalHandedness(),
-                seed = Environment.TickCount,
-            };
-            m_Host = new NetSessionHost(transport, new SceneHostWorld(this, director), config);
-            m_LocalSlot = NetProtocol.HostSlot;
-            ClearCrew();
-            m_Present[m_LocalSlot] = true;
-            director.Net = this;
-            ApplyLocalSlot(m_LocalSlot);
-            Sync();
+            ForgetOnline();
+            StartHosting(transport, tug, false);
             return true;
         }
 
@@ -276,6 +369,7 @@ namespace TrashAstronauts.Net
         public bool Find()
         {
             m_OwnNotice = LobbyNotice.None;
+            if (OnlineBusy != OnlineStep.None) return false;
             MissionPhase phase = director.Phase;
             if (!LobbyState.PhaseAllowsSession(phase)) return m_Lobby.Find(phase, 0u, Now);
             if (m_Lobby.Mode != LobbyMode.Offline && m_Lobby.Mode != LobbyMode.Searching && m_Lobby.Mode != LobbyMode.EnteringCode) return false;
@@ -298,6 +392,7 @@ namespace TrashAstronauts.Net
             }
             bool newSearch = m_Lobby.Mode != LobbyMode.Searching;
             if (!m_Lobby.Find(phase, address, now)) return false;
+            ForgetOnline();
             if (m_Discovery == null) m_Discovery = new Discovery(NetProtocol.Version, NewSeed());
             // Results of an earlier search are not joinable any more: only tugs that answer this one are listed.
             if (newSearch) m_Discovery.Hosts.Clear();
@@ -310,6 +405,7 @@ namespace TrashAstronauts.Net
         public bool EnterCode()
         {
             m_OwnNotice = LobbyNotice.None;
+            if (OnlineBusy != OnlineStep.None) return false;
             MissionPhase phase = director.Phase;
             if (!LobbyState.PhaseAllowsSession(phase)) return m_Lobby.EnterCode(phase, 0u);
             if (m_Lobby.Mode != LobbyMode.Offline && m_Lobby.Mode != LobbyMode.Searching && m_Lobby.Mode != LobbyMode.EnteringCode) return false;
@@ -321,6 +417,7 @@ namespace TrashAstronauts.Net
                 if (wasOffline && m_Lobby.Mode == LobbyMode.Offline) CloseSearch();
                 return false;
             }
+            ForgetOnline();
             if (m_Discovery != null) m_Discovery.Stop();
             Sync();
             return true;
@@ -346,11 +443,11 @@ namespace TrashAstronauts.Net
             return Join(hosts[index].endpoint);
         }
 
-        /// <summary>Starts joining a host. The game becomes part of the session when its Welcome arrives.</summary>
+        /// <summary>Starts joining a host on the local network. The game becomes part of the session when its Welcome arrives.</summary>
         public bool Join(NetEndpoint host)
         {
             m_OwnNotice = LobbyNotice.None;
-            if (m_Host != null || m_Client != null) return false;
+            if (m_Host != null || m_Client != null || OnlineBusy != OnlineStep.None) return false;
             if (!m_Lobby.Join(director.Phase, host)) return false;
             if (m_Discovery != null) m_Discovery.Stop();
             INetTransport transport = m_SearchTransport ?? Open(0);
@@ -362,40 +459,303 @@ namespace TrashAstronauts.Net
                 Sync();
                 return false;
             }
+            ForgetOnline();
+            StartClient(transport, host, false);
+            return true;
+        }
+
+        // ================================================================== crew panel actions: online
+
+        /// <summary>
+        /// HOST ONLINE: signs in anonymously, opens a Relay allocation and lists the game as "TUG n" in the lobby,
+        /// all in the background. When the link is ready the same host session as on Wi-Fi runs over it. Only from
+        /// the hub or the results screen. False if the press was refused (the notice says why).
+        /// </summary>
+        public bool HostOnline()
+        {
+            m_OwnNotice = LobbyNotice.None;
+            if (OnlineBusy != OnlineStep.None || m_Host != null || m_Client != null) return false;
+            MissionPhase phase = director.Phase;
+            if (!m_Lobby.CanHost(phase)) return m_Lobby.Host(phase, false, 0u, 0); // NotInHub, or not from this mode
+            DisposeLingering();
+            LeaveLocalSearch();
+            ForgetOnline();
+            ushort tug = JoinCode.MakeTugNumber(NewSeed());
+            m_HostTask = Link.HostAsync(tug, VersionKey, phase, 1);
+            Sync();
+            PollOnline();
+            return true;
+        }
+
+        /// <summary>FIND ONLINE: lists up to 5 online games of this build (newest first) in the background.</summary>
+        public bool FindOnline()
+        {
+            m_OwnNotice = LobbyNotice.None;
+            if (OnlineBusy != OnlineStep.None || m_Host != null || m_Client != null) return false;
+            if (m_Lobby.Mode != LobbyMode.Offline && m_Lobby.Mode != LobbyMode.Searching && m_Lobby.Mode != LobbyMode.EnteringCode) return false;
+            if (!LobbyState.PhaseAllowsSession(director.Phase))
+            {
+                m_OwnNotice = LobbyNotice.NotInHub;
+                return false;
+            }
+            LeaveLocalSearch();
+            ForgetOnline();
+            m_OnlineListShown = true;
+            m_FindTask = Link.FindAsync(VersionKey);
+            Sync();
+            PollOnline();
+            return true;
+        }
+
+        /// <summary>JOIN next to an online game (0 = the top line): reads its code through the lobby and connects through Relay.</summary>
+        public bool JoinOnline(int index)
+        {
+            if (!m_OnlineListShown || index < 0 || index >= m_OnlineGames.Count) return false;
+            return StartOnlineJoin(m_OnlineGames[index], null);
+        }
+
+        /// <summary>Joins an online game by the host's 6-character code (no lobby involved). There is no keypad for it on the panel.</summary>
+        public bool JoinOnlineCode(string code) => StartOnlineJoin(null, code ?? "");
+
+        bool StartOnlineJoin(OnlineGame game, string code)
+        {
+            m_OwnNotice = LobbyNotice.None;
+            if (OnlineBusy != OnlineStep.None || m_Host != null || m_Client != null) return false;
+            if (m_Lobby.Mode != LobbyMode.Offline) return false;
+            if (!LobbyState.PhaseAllowsSession(director.Phase))
+            {
+                m_OwnNotice = LobbyNotice.NotInHub;
+                return false;
+            }
+            m_OnlineProblem = OnlineProblem.None;
+            m_OnlineListShown = false;
+            m_JoinTask = game != null ? Link.JoinAsync(game) : Link.JoinByCodeAsync(code);
+            Sync();
+            PollOnline();
+            return true;
+        }
+
+        IOnlineLink Link => m_Link ?? (m_Link = OnlineLinkFactory != null ? OnlineLinkFactory() : new OnlineLink());
+
+        /// <summary>Only games of this exact build are listed, so players who would refuse each other never see each other.</summary>
+        string VersionKey => OnlineConfig.VersionKey(NetProtocol.Version, ContentHash);
+
+        /// <summary>Applies whichever online step has finished. Main thread, from Update; never waits.</summary>
+        void PollOnline()
+        {
+            if (m_HostTask != null && m_HostTask.IsCompleted)
+            {
+                var task = m_HostTask;
+                m_HostTask = null;
+                ApplyHostResult(task.Status == TaskStatus.RanToCompletion ? task.Result : new OnlineHostResult { Problem = OnlineProblem.Failed });
+            }
+            if (m_FindTask != null && m_FindTask.IsCompleted)
+            {
+                var task = m_FindTask;
+                m_FindTask = null;
+                ApplyFindResult(task.Status == TaskStatus.RanToCompletion ? task.Result : new OnlineFindResult { Problem = OnlineProblem.Failed });
+            }
+            if (m_JoinTask != null && m_JoinTask.IsCompleted)
+            {
+                var task = m_JoinTask;
+                m_JoinTask = null;
+                ApplyJoinResult(task.Status == TaskStatus.RanToCompletion ? task.Result : new OnlineJoinResult { Problem = OnlineProblem.Failed });
+            }
+        }
+
+        void ApplyHostResult(OnlineHostResult result)
+        {
+            if (!result.Ok || result.Transport == null)
+            {
+                SetOnlineProblem(result.Ok ? OnlineProblem.Failed : result.Problem);
+                Sync();
+                return;
+            }
+            // HOST ONLINE blocked contracts while it ran, so the hub (or results) is still where the tug is.
+            if (!m_Lobby.Host(director.Phase, true, RelayTransport.HostEndpoint.address, result.TugNumber))
+            {
+                result.Transport.Dispose();
+                if (m_Link != null) m_Link.Leave();
+                Sync();
+                return;
+            }
+            m_OnlineCode = result.Code;
+            m_OnlineListed = result.Listed;
+            StartHosting(result.Transport, result.TugNumber, true);
+        }
+
+        void ApplyFindResult(OnlineFindResult result)
+        {
+            m_OnlineGames.Clear();
+            if (!result.Ok)
+            {
+                SetOnlineProblem(result.Problem);
+                return;
+            }
+            if (result.Games == null) return;
+            for (int i = 0; i < result.Games.Count && m_OnlineGames.Count < OnlineConfig.MaxListed; i++)
+            {
+                if (result.Games[i] != null) m_OnlineGames.Add(result.Games[i]);
+            }
+        }
+
+        void ApplyJoinResult(OnlineJoinResult result)
+        {
+            if (!result.Ok || result.Transport == null)
+            {
+                SetOnlineProblem(result.Ok ? OnlineProblem.Failed : result.Problem);
+                Sync();
+                return;
+            }
+            if (!m_Lobby.Join(director.Phase, result.Host))
+            {
+                result.Transport.Dispose();
+                if (m_Link != null) m_Link.Leave();
+                Sync();
+                return;
+            }
+            StartClient(result.Transport, result.Host, true);
+        }
+
+        void SetOnlineProblem(OnlineProblem problem)
+        {
+            m_OnlineProblem = problem == OnlineProblem.Cancelled ? OnlineProblem.None : problem;
+        }
+
+        /// <summary>Closes a same-Wi-Fi search or keypad before an online step takes over the panel.</summary>
+        void LeaveLocalSearch()
+        {
+            CloseSearch();
+            if (m_Lobby.Mode == LobbyMode.Searching || m_Lobby.Mode == LobbyMode.EnteringCode) m_Lobby.Leave();
+        }
+
+        /// <summary>Clears the online list and the last online problem (a new choice was made on the panel).</summary>
+        void ForgetOnline()
+        {
+            m_OnlineListShown = false;
+            m_OnlineGames.Clear();
+            m_OnlineProblem = OnlineProblem.None;
+        }
+
+        /// <summary>
+        /// Stops every online step: the link unlists a hosted game and gives up anything in flight. A step that
+        /// still finishes later has its Relay connection closed as soon as it does (on the main thread), whether or
+        /// not this scene still exists. Does not touch a session already running (its owner disposes the transport).
+        /// </summary>
+        void CancelOnline()
+        {
+            if (m_Link != null) m_Link.Leave();
+            DisposeWhenDone(m_HostTask);
+            DisposeWhenDone(m_JoinTask);
+            m_HostTask = null;
+            m_JoinTask = null;
+            m_FindTask = null;
+            m_Online = false;
+            m_OnlineCode = null;
+            m_OnlineListed = false;
+            m_ReportedCount = -1;
+            ForgetOnline();
+        }
+
+        static TaskScheduler MainThreadScheduler()
+        {
+            return SynchronizationContext.Current != null ? TaskScheduler.FromCurrentSynchronizationContext() : TaskScheduler.Default;
+        }
+
+        static void DisposeWhenDone(Task<OnlineHostResult> task)
+        {
+            if (task == null) return;
+            if (task.IsCompleted) DisposeHostResult(task);
+            else task.ContinueWith(DisposeHostResult, CancellationToken.None, TaskContinuationOptions.None, MainThreadScheduler());
+        }
+
+        static void DisposeWhenDone(Task<OnlineJoinResult> task)
+        {
+            if (task == null) return;
+            if (task.IsCompleted) DisposeJoinResult(task);
+            else task.ContinueWith(DisposeJoinResult, CancellationToken.None, TaskContinuationOptions.None, MainThreadScheduler());
+        }
+
+        static void DisposeHostResult(Task<OnlineHostResult> task)
+        {
+            if (task.Status == TaskStatus.RanToCompletion && task.Result.Ok && task.Result.Transport != null) task.Result.Transport.Dispose();
+        }
+
+        static void DisposeJoinResult(Task<OnlineJoinResult> task)
+        {
+            if (task.Status == TaskStatus.RanToCompletion && task.Result.Ok && task.Result.Transport != null) task.Result.Transport.Dispose();
+        }
+
+        // ================================================================== starting and ending sessions
+
+        void StartHosting(INetTransport transport, ushort tug, bool online)
+        {
+            director.ResetForSession(true);
+            var config = new NetHostConfig
+            {
+                contentHash = ContentHash,
+                tugNumber = tug,
+                handedness = LocalHandedness(),
+                seed = Environment.TickCount,
+            };
+            DisposeContract();
+            m_Rules = new CoopHostRules(director, new HostBroadcast(this));
+            m_Host = new NetSessionHost(transport, new SceneHostWorld(this, director, m_Rules), config);
+            m_Online = online;
+            m_LastPoseTick = double.NegativeInfinity;
+            m_NextClock = 0.0;
+            m_ReportedCount = -1;
+            m_LocalSlot = NetProtocol.HostSlot;
+            ClearCrew();
+            m_Present[m_LocalSlot] = true;
+            director.Net = this;
+            ApplyLocalSlot(m_LocalSlot);
+            Sync();
+        }
+
+        void StartClient(INetTransport transport, NetEndpoint host, bool online)
+        {
             var config = new NetClientConfig
             {
                 contentHash = ContentHash,
                 handedness = LocalHandedness(),
                 seed = NewSeed(),
             };
-            m_Client = new NetSessionClient(transport, new SceneClientWorld(this), config);
+            DisposeContract();
+            m_Apply = new CoopClientApply(director);
+            m_Client = new NetSessionClient(transport, new SceneClientWorld(this, m_Apply), config);
+            m_Online = online;
             m_ClientEnded = false;
             HostSilent = false;
             m_Client.Connect(host, Now);
+            FlushRelay(transport);
             Sync();
-            return true;
         }
 
-        /// <summary>LEAVE: says goodbye, closes the socket, removes the crew and puts the game back to single-player.</summary>
+        /// <summary>LEAVE: says goodbye, closes the socket or Relay connection, removes the crew and puts the game back to single-player.</summary>
         public bool Leave()
         {
             m_OwnNotice = LobbyNotice.None;
-            bool wasOpen = !IsOffline || m_Lobby.Mode != LobbyMode.Offline;
+            bool wasOpen = !IsOffline || m_Lobby.Mode != LobbyMode.Offline || m_OnlineListShown || m_OnlineProblem != OnlineProblem.None;
             double now = Now;
+            CancelOnline();
             if (m_Client != null)
             {
                 m_Client.Leave(now);
+                FlushRelay(m_Client.Transport);
                 m_Client.Dispose();
                 m_Client = null;
             }
             if (m_Host != null)
             {
                 m_Host.Close(now); // tells every client; removes their stand-ins through OnPlayerLeft
+                FlushRelay(m_Host.Transport);
                 DisposeLingering();
                 m_Lingering = m_Host;
                 m_LingerUntil = now + HostLingerSeconds;
                 m_Host = null;
             }
+            DisposeContract();
             CloseSearch();
             ClearCrew();
             HostSilent = false;
@@ -404,10 +764,18 @@ namespace TrashAstronauts.Net
             return wasOpen;
         }
 
+        void DisposeContract()
+        {
+            if (m_Rules != null) m_Rules.Dispose();
+            m_Rules = null;
+            m_Apply = null;
+        }
+
         // ================================================================== pump
 
         void Update()
         {
+            PollOnline();
             if (IsOffline) return;
             double now = Now;
 
@@ -421,6 +789,7 @@ namespace TrashAstronauts.Net
             {
                 m_Host.Poll(now);
                 RenderCrew(now - SnapshotBuffer<AvatarSnapshot>.InterpolationDelay);
+                if (m_Online && m_Link != null) KeepListing();
             }
 
             if (m_Client != null)
@@ -438,6 +807,18 @@ namespace TrashAstronauts.Net
             m_Lobby.OnRoster(PlayerCount);
         }
 
+        /// <summary>Hosting online: the lobby heartbeat, and the listing's crew count and phase (so FIND shows "ON CONTRACT").</summary>
+        void KeepListing()
+        {
+            m_Link.Tick();
+            int count = PlayerCount;
+            MissionPhase phase = director != null ? director.Phase : MissionPhase.Hub;
+            if (count == m_ReportedCount && phase == m_ReportedPhase) return;
+            m_ReportedCount = count;
+            m_ReportedPhase = phase;
+            m_Link.UpdateHosting(count, phase);
+        }
+
         void LateUpdate()
         {
             if (m_Host == null && m_Client == null) return;
@@ -451,8 +832,44 @@ namespace TrashAstronauts.Net
                 if (m_Host != null) m_Host.SetLocalAvatar(in m_LocalAvatar);
                 if (m_Client != null) m_Client.SetLocalAvatar(in m_LocalAvatar);
             }
-            if (m_Host != null) m_Host.SendTick(now);
-            if (m_Client != null) m_Client.SendTick(now);
+            if (m_Host != null)
+            {
+                if (m_Rules != null) QueueContractStreams(now);
+                m_Host.SendTick(now);
+                FlushRelay(m_Host.Transport);
+            }
+            if (m_Client != null)
+            {
+                m_Client.SendTick(now);
+                FlushRelay(m_Client.Transport);
+            }
+        }
+
+        /// <summary>
+        /// The host's part of the send tick during a contract: rest detection, the clock and shared tank at 2 Hz,
+        /// and on each 20 Hz tick the poses of the items the host simulates (held or moving ones, nearest the crew
+        /// first, plus one resting item in turn). Same phase rule as NetSessionHost.SendTick, so a batch is
+        /// queued on exactly the frames a datagram goes out. No allocation.
+        /// </summary>
+        void QueueContractStreams(double now)
+        {
+            m_Rules.Tick(Time.deltaTime);
+            if (director.Phase != MissionPhase.Active) return;
+            if (now >= m_NextClock)
+            {
+                m_NextClock = now + ClockInterval;
+                m_Rules.ReadClock(out float elapsed, out float oxygen, out byte flags);
+                m_Host.SetClock(elapsed, oxygen, flags);
+            }
+            if (now - m_LastPoseTick < NetProtocol.SendInterval - 1e-6) return;
+            m_LastPoseTick += NetProtocol.SendInterval;
+            if (!(now - m_LastPoseTick < NetProtocol.SendInterval)) m_LastPoseTick = now;
+            int count = m_Rules.CollectItemPoses(m_Poses);
+            for (int i = 0; i < count; i++)
+            {
+                ItemPoseEntry pose = m_Poses[i];
+                m_Host.QueueItemPose(pose.itemId, pose.position, pose.rotation, pose.held, pose.atRest);
+            }
         }
 
         void RenderCrew(double renderTime)
@@ -461,6 +878,20 @@ namespace TrashAstronauts.Net
             {
                 if (m_Crew[i] != null) m_Crew[i].Render(renderTime);
             }
+        }
+
+        /// <summary>Input-like requests go out on the frame they happen, not at the next send tick.</summary>
+        void FlushClient()
+        {
+            if (m_Client == null) return;
+            m_Client.Flush(Now);
+            FlushRelay(m_Client.Transport);
+        }
+
+        /// <summary>A Relay connection queues what is sent until the driver's next update; put it on the wire now.</summary>
+        static void FlushRelay(INetTransport transport)
+        {
+            if (transport is RelayTransport relay) relay.Flush();
         }
 
         // ================================================================== called by the scene worlds
@@ -551,10 +982,72 @@ namespace TrashAstronauts.Net
                 m_Client.Dispose();
                 m_Client = null;
             }
+            if (m_Online)
+            {
+                if (m_Link != null) m_Link.Leave();
+                m_Online = false;
+            }
+            DisposeContract();
             ClearCrew();
             HostSilent = false;
             m_Lobby.OnSessionEnded(m_ClientEndReason, refusal);
             BackToSinglePlayer();
+        }
+
+        // ================================================================== the host's broadcasts
+
+        /// <summary>
+        /// The host's game to the crew: each <see cref="ICoopBroadcast"/> call goes to the NetSessionHost Send*
+        /// method of the same name. An extraction refusal for the host's own slot is shown on this headset.
+        /// </summary>
+        sealed class HostBroadcast : ICoopBroadcast
+        {
+            readonly NetSession m_Net;
+
+            public HostBroadcast(NetSession net) { m_Net = net; }
+
+            NetSessionHost Host => m_Net.m_Host;
+
+            public void RunStart(in RunStartParams parameters)
+            {
+                var host = Host;
+                if (host != null && !host.SendRunStart(in parameters))
+                    Debug.LogError("[Net] The contract has more items than a co-op contract can carry; the crew was not told.");
+            }
+
+            public void WorldState(in WorldStateMsg state)
+            {
+                var host = Host;
+                if (host != null) host.SendWorldState(in state);
+            }
+
+            public void ExtractRefused(byte slot, byte missingSlotsMask)
+            {
+                if (slot == NetProtocol.HostSlot)
+                {
+                    if (m_Net.director != null) m_Net.director.ApplyExtractRefused(missingSlotsMask);
+                    return;
+                }
+                var host = Host;
+                if (host != null) host.SendExtractRefused(slot, missingSlotsMask);
+            }
+
+            public void RunEnded(in RunEndedMsg result)
+            {
+                var host = Host;
+                if (host != null) host.SendRunEnded(in result);
+            }
+
+            public void ReturnedToHub() => Host?.SendReturnedToHub();
+            public void HostPause(bool on) => Host?.SendHostPause(on);
+            public void ItemCollected(byte itemId, byte by) => Host?.SendItemCollected(itemId, by);
+            public void ItemValue(byte itemId, int value) => Host?.SendItemValue(itemId, value);
+            public void ItemDeposited(byte itemId, byte by, int finalValue, int trickBonus, byte lockerSlot) => Host?.SendItemDeposited(itemId, by, finalValue, trickBonus, lockerSlot);
+            public void ItemRecovered(byte itemId, NetVec3 position) => Host?.SendItemRecovered(itemId, position);
+            public void ItemRest(byte itemId, NetVec3 position, NetQuat rotation) => Host?.SendItemRest(itemId, position, rotation);
+            public void DoorState(byte doorId, bool open) => Host?.SendDoorState(doorId, open);
+            public void PointCut(byte panel, byte index) => Host?.SendPointCut(panel, index);
+            public void PanelOpened(byte panel, byte by, NetVec3 plateImpulse, NetVec3 plateTorque) => Host?.SendPanelOpened(panel, by, plateImpulse, plateTorque);
         }
 
         // ================================================================== helpers
@@ -586,10 +1079,14 @@ namespace TrashAstronauts.Net
             }
         }
 
-        /// <summary>Keeps the director's contract block in step with the lobby (blocked while any link is open).</summary>
+        /// <summary>
+        /// Contracts are shared while hosting or joined. They are blocked only between pressing JOIN (or HOST
+        /// ONLINE) and being let in, so nobody walks into a solo contract mid-handshake.
+        /// </summary>
         void Sync()
         {
-            if (director != null) director.ContractStartBlocked = m_Lobby.BlocksContractStart;
+            if (director != null)
+                director.ContractStartBlocked = m_Lobby.Mode == LobbyMode.Connecting || m_HostTask != null || m_JoinTask != null;
         }
 
         bool EnsureSearchTransport()

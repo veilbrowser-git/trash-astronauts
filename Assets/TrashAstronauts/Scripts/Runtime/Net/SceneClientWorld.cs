@@ -4,24 +4,33 @@ using TrashAstronauts.Core.Net;
 namespace TrashAstronauts.Net
 {
     /// <summary>
-    /// The real scene as a joined client sees it. Stage 1 (presence) implements the Welcome (reset, take the
-    /// slot, make stand-ins for the crew already there), the roster, the avatars, the host's silence and the end
-    /// of the session. Everything else is a deliberate no-op until the stage that shares it, and says which.
-    /// The host cannot send any of those messages in a stage 1 session (contracts are blocked), so ignoring
-    /// them is exact, not lossy.
+    /// The real scene as a joined client sees it. Presence (stage 1): the Welcome (reset, take the slot, make
+    /// stand-ins for the crew already there), the roster, the avatars, the host's silence and the end of the
+    /// session. The shared ride-along contract (stage 2): every host decision is handed to the session's
+    /// <see cref="CoopClientApply"/>, which applies it to the director's idempotent mirror.
+    /// Item ownership (stage 3) and the creature and its hazards (stage 4) are deliberate no-ops: a stage 2 host
+    /// never grants a grab and never runs a creature, blackout or web in a co-op contract.
     /// </summary>
     public sealed class SceneClientWorld : IClientWorld
     {
         readonly NetSession m_Net;
+        readonly CoopClientApply m_Apply;
 
-        public SceneClientWorld(NetSession net)
+        public SceneClientWorld(NetSession net, CoopClientApply apply)
         {
             m_Net = net;
+            m_Apply = apply;
         }
 
-        // ------------------------------------------------------------------ stage 1: presence
+        public CoopClientApply Apply => m_Apply;
 
-        public void OnWelcome(byte localSlot, in WelcomeMsg welcome) => m_Net.ApplyWelcome(localSlot, in welcome);
+        // ------------------------------------------------------------------ presence
+
+        public void OnWelcome(byte localSlot, in WelcomeMsg welcome)
+        {
+            m_Net.ApplyWelcome(localSlot, in welcome);
+            m_Apply.ApplyWorldState(in welcome.world);
+        }
 
         public void OnRosterChanged(byte slot, RosterChange change, byte handedness)
         {
@@ -35,53 +44,59 @@ namespace TrashAstronauts.Net
             }
         }
 
-        public void OnHostSilent(bool silent) => m_Net.HostSilent = silent;
+        public void OnHostSilent(bool silent)
+        {
+            m_Net.HostSilent = silent;
+            m_Apply.ApplyHostSilent(silent);
+        }
 
         public void OnSessionEnded(SessionEndReason reason) => m_Net.QueueClientEnded(reason);
 
         public void OnRemoteAvatar(byte slot, in AvatarSnapshot avatar, double hostTime) => m_Net.PushCrewAvatar(slot, hostTime, in avatar);
 
-        // ------------------------------------------------------------------ stage 2: the shared contract
+        // ------------------------------------------------------------------ the shared contract
 
-        public void OnWorldState(in WorldStateMsg state) { /* Stage 2: doors, panels, welds, wires. Empty in a stage 1 hub. */ }
+        public void OnWorldState(in WorldStateMsg state) => m_Apply.ApplyWorldState(in state);
 
-        public void OnHostPause(bool on) { /* Stage 2: HOST PAUSED overlay and frozen oxygen. */ }
+        public void OnHostPause(bool on) => m_Apply.ApplyHostPause(on);
 
-        public void OnClock(float elapsedSeconds, float oxygenRemainingSeconds, byte flags) { /* Stage 2 */ }
+        public void OnClock(float elapsedSeconds, float oxygenRemainingSeconds, byte flags) => m_Apply.ApplyClock(elapsedSeconds, oxygenRemainingSeconds, flags);
 
-        public void OnRunStart(in RunStartParams parameters) { /* Stage 2: MissionDirector.BeginRun after RunStartCodec.IsPlanHashValid. */ }
+        public void OnRunStart(in RunStartParams parameters) => m_Apply.ApplyRunStart(in parameters);
 
-        public void OnExtractRefused(byte missingSlotsMask) { /* Stage 2 */ }
+        public void OnExtractRefused(byte missingSlotsMask) => m_Apply.ApplyExtractRefused(missingSlotsMask);
 
-        public void OnRunEnded(in RunEndedMsg result) { /* Stage 2: MissionDirector.ApplyRunEnded. */ }
+        public void OnRunEnded(in RunEndedMsg result) => m_Apply.ApplyRunEnded(in result);
 
-        public void OnReturnedToHub() { /* Stage 2 */ }
+        public void OnReturnedToHub() => m_Apply.ApplyReturnedToHub();
+
+        public void OnItemPose(in ItemPoseEntry pose, double hostTime) => m_Apply.ApplyItemPose(in pose, hostTime);
+
+        public void OnItemCollected(byte itemId, byte by) => m_Apply.ApplyItemCollected(itemId, by);
+
+        public void OnItemRest(byte itemId, byte epoch, NetVec3 position, NetQuat rotation) => m_Apply.ApplyItemRest(itemId, epoch, position, rotation);
+
+        public void OnItemValue(byte itemId, int value) => m_Apply.ApplyItemValue(itemId, value);
+
+        public void OnItemDeposited(byte itemId, byte by, int finalValue, int trickBonus, byte lockerSlot) => m_Apply.ApplyItemDeposited(itemId, by, finalValue, trickBonus, lockerSlot);
+
+        public void OnItemRecovered(byte itemId, NetVec3 position) => m_Apply.ApplyItemRecovered(itemId, position);
+
+        public void OnDoorState(byte doorId, bool open) => m_Apply.ApplyDoorState(doorId, open);
+
+        public void OnPointCut(byte panel, byte index) => m_Apply.ApplyPointCut(panel, index);
+
+        public void OnPanelOpened(byte panel, byte by, NetVec3 plateImpulse, NetVec3 plateTorque) => m_Apply.ApplyPanelOpened(panel, by, plateImpulse, plateTorque);
 
         // ------------------------------------------------------------------ stage 3: items
 
-        public void OnItemPose(in ItemPoseEntry pose, double hostTime) { /* Stage 2/3 */ }
+        /// <summary>
+        /// Stage 3. In this version the host only ever names itself (it locks deposited items, which the
+        /// ItemDeposited that follows applies in full), so there is nothing to act on here.
+        /// </summary>
+        public void OnItemOwner(byte itemId, byte ownerSlot, byte epoch, bool held, bool denied) { }
 
-        public void OnItemOwner(byte itemId, byte ownerSlot, byte epoch, bool held, bool denied) { /* Stage 3: ItemAuthority; GrantedNotHeld -> ItemReleased. */ }
-
-        public void OnItemCollected(byte itemId, byte by) { /* Stage 2 */ }
-
-        public void OnItemRest(byte itemId, byte epoch, NetVec3 position, NetQuat rotation) { /* Stage 2 */ }
-
-        public void OnItemValue(byte itemId, int value) { /* Stage 2 */ }
-
-        public void OnItemDeposited(byte itemId, byte by, int finalValue, int trickBonus, byte lockerSlot) { /* Stage 2 */ }
-
-        public void OnItemRecovered(byte itemId, NetVec3 position) { /* Stage 2 */ }
-
-        // ------------------------------------------------------------------ stage 2: world
-
-        public void OnDoorState(byte doorId, bool open) { /* Stage 2: SlidingDoor.ApplyReplicated. */ }
-
-        public void OnPointCut(byte panel, byte index) { /* Stage 2 */ }
-
-        public void OnPanelOpened(byte panel, byte by, NetVec3 plateImpulse, NetVec3 plateTorque) { /* Stage 2 */ }
-
-        // ------------------------------------------------------------------ stage 4: creature and hazards
+        // ------------------------------------------------------------------ stage 4: creature and hazards (none in co-op yet)
 
         public void OnCreatureState(in CreatureSnapshot creature, double hostTime) { /* Stage 4 */ }
 

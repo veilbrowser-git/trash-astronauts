@@ -30,7 +30,7 @@ namespace TrashAstronauts.Net.Online
     /// The returned transport belongs to the caller (hand it to a session, which disposes it, or Dispose it).
     /// After a successful Host or Join, poll the transport every frame: Relay drops a silent connection.
     /// </summary>
-    public sealed class OnlineLink
+    public sealed class OnlineLink : IOnlineLink
     {
         readonly OnlineServices m_Services;
         readonly IRelayConnector m_Relay;

@@ -85,8 +85,9 @@ namespace TrashAstronauts.Mission
         public IMissionNet Net { get; set; }
 
         /// <summary>
-        /// Co-op stage 1: while a crew link is open (hosting, joining or joined) no contract may start on any
-        /// headset, because contracts are not shared yet. Set by NetSession; always false in single-player.
+        /// Co-op: true only while this headset is between pressing JOIN (or HOST ONLINE) and being let in, so
+        /// it cannot wander off into a solo contract mid-handshake. Hosting or joined, contracts are shared and
+        /// this is false. Set by NetSession; always false in single-player.
         /// </summary>
         public bool ContractStartBlocked { get; set; }
 
@@ -113,6 +114,10 @@ namespace TrashAstronauts.Mission
         /// <summary>False on a contract that was started with no creature (it stays dormant at its dock).</summary>
         public bool CreatureAboard { get; private set; }
         public bool HazardsPaused => m_PauseReasons != HazardPauseReason.None;
+        /// <summary>Co-op client: the hazards are paused because the host paused (not because of this headset).</summary>
+        public bool HostPaused => (m_PauseReasons & HazardPauseReason.HostPaused) != 0;
+        /// <summary>The hazards are paused for a reason of this headset's own (headset off, tracking or focus lost, scripted).</summary>
+        public bool PausedHere => (m_PauseReasons & ~HazardPauseReason.HostPaused) != 0;
         /// <summary>The creature aboard this contract. A different one is picked from the roster each run.</summary>
         public EnemyDrone ActiveEnemy { get; private set; }
         /// <summary>What is unusual about the current contract.</summary>
@@ -814,7 +819,13 @@ namespace TrashAstronauts.Mission
                 Net.RequestExtract();
                 return null;
             }
-            if (MissingAboardMask() != 0) return null;
+            int missing = MissingAboardMask();
+            if (missing != 0)
+            {
+                // In a session the host's own board names who is missing, like a client's does.
+                if (Net != null) ApplyExtractRefused(missing);
+                return null;
+            }
 
             var result = Session.Extract(by);
             if (result != null) FinishRun(result);
@@ -960,15 +971,19 @@ namespace TrashAstronauts.Mission
 
         /// <summary>
         /// Back to single-player: called by NetSession after LEAVE, a refused or lost link, or the host closing.
-        /// A contract still running is abandoned with nothing banked (one cannot run in a stage 1 session, but
-        /// a later stage relies on this), the local rig takes slot 0 and its own colour again, and
-        /// <see cref="Net"/> is cleared. The session has already destroyed the other crew members' stand-ins.
+        /// A shared contract still running is abandoned with nothing banked, on the host as on a client (the
+        /// ride-along contract has no creature, so it is not handed over as a solo run), the local rig takes
+        /// slot 0 and its own colour again, every Away reason and the host's pause and silence are forgotten,
+        /// and <see cref="Net"/> is cleared. The session has already destroyed the other crew members' stand-ins.
         /// </summary>
         public void LeaveSession()
         {
             if (Session.Phase == MissionPhase.Active) AbortRun();
             Net = null;
             ContractStartBlocked = false;
+            ClearLocalAway();
+            ApplyHostSilent(false);
+            SetHazardPause(HazardPauseReason.HostPaused, false);
             var local = LocalPlayer;
             if (local != null)
             {
