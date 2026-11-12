@@ -221,6 +221,10 @@ Everything loose is a real mass obeying Newton's laws, tuned to stay comfortable
 - **Weight in the hand.** Anything up to 2 kg follows your hand exactly. Heavier things trail it slightly and swing a little past it when you stop. The reactor core lags most, by several centimetres in a brisk move, and settles within about a second. A held object still collides with walls and other objects. If you pull your hand more than about 45 cm from where the object is stuck, your grip slips and the controller ticks. A throw keeps your hand's real speed and spin, up to what an arm could give that mass: about 14 m/s for the duck, 10 m/s for the relay and 4 m/s for the core.
 - **Contacts.** How loud a knock is, both to you and to the spider, depends on how hard it really was (the collision impulse) and on what the object is made of. A 40 kg core slamming into a wall is nearly twice as loud as the 3.5 kg relay at the same speed. The duck bumping a wall is not a noise the spider hears. A closing door gently pushes loose objects out of the doorway, to whichever side they are on, and waits until the doorway is clear. As before, it never closes on the player.
 
+## Sound
+
+- **Breathing and heartbeat.** Your breathing inside the helmet quickens and grows louder when you work hard (pulling, thrusting) and when you are afraid (the spider close by, or chasing you), and it settles back over several seconds once things calm down. A soft heartbeat fades in only when the spider is chasing or very near, and beats faster the more frightened you are. In the tug, with no creature awake, both stay calm. The logic is in `Scripts/Runtime/Player/SuitAudio.cs`.
+
 ## Known limitations
 
 - Controller-relative offsets (glove, grab point, wrist display, holsters) were set by reasoning, not by trying them on. Expect to tune them on the first headset session.
