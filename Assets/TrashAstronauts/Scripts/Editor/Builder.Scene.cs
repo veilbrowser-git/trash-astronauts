@@ -64,7 +64,7 @@ namespace TrashAstronauts.EditorTools
 
             // Lighting: dim flat ambient so routes stay readable with the flashlight off, dark fog for mood.
             RenderSettings.ambientMode = AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.095f, 0.11f, 0.145f); // darker than before: the flashlight matters now
+            RenderSettings.ambientLight = new Color(0.085f, 0.1f, 0.14f); // darker than before: the flashlight matters now
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.ExponentialSquared;
             RenderSettings.fogColor = new Color(0.015f, 0.02f, 0.03f);
