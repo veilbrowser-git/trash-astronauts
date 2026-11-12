@@ -193,6 +193,7 @@ namespace TrashAstronauts.EditorTools
             Shot("18_flight_deck", new Vector3(-0.8f, 1.6f, -3.3f), new Vector3(0.3f, 1.3f, -6.2f));
             Shot("30_supply_bay_shop", new Vector3(-2.5f, 1.6f, -4.3f), new Vector3(-5.4f, 1.3f, -4.8f));
             Shot("31_supply_bay_from_flight_deck", new Vector3(0.8f, 1.6f, -4.4f), new Vector3(-5f, 1.2f, -4.9f));
+            ClawShots();
             Shot("19_cabin_to_flight_deck", new Vector3(0.6f, 1.6f, 1.2f), new Vector3(-0.8f, 1.3f, -5f));
 
             // The other two wrecks: dock each in turn.
