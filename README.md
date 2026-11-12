@@ -2,11 +2,11 @@
 
 This branch holds only the built APK, so the `main` branch stays source-only.
 
-- `TrashAstronauts.apk` - version 0.11.2, built from commit d9bb8ab on `main`
+- `TrashAstronauts.apk` - version 0.11.3, built from commit 0e74e05 on `main`
 - Meta Quest 3 / 3S, ARM64, OpenXR, minimum Android API 32
 - Signed with the Android debug key (fine for sideloading, not for a store)
-- SHA-256: `8fb6d96cc538e1e4f3d4322970c17c489d5a0b491cd76dbd6b298a01b48d1172`
-- 0.11.2: the spider is now in co-op contracts: one for the whole crew, it can hunt anyone, anyone's tranquilizer works on it, and being caught fails the contract for everyone. Shared blackouts. A dropped online player no longer closes the host's game. Only the host can carry salvage. Tested with simulated players only.
+- SHA-256: `5a108b48a04833ffe80bff3436e5691ddc8f5110d221309da643dcb05d66f28e`
+- 0.11.3: proximity voice chat in co-op. You hear crew members from their helmets, fading with distance and muffled by walls, on Wi-Fi and online. Voice is sent only while you speak and only to your crew; VOICE CHAT or MIC off stops it. Includes the co-op spider from 0.11.2. Only the host can carry salvage. Voice tested with synthetic audio only.
 
 Install with developer mode on and the headset connected by USB:
 
