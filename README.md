@@ -2,11 +2,11 @@
 
 This branch holds only the built APK, so the `main` branch stays source-only.
 
-- `TrashAstronauts.apk` - version 0.6.0, built from commit 5b4eb4b on `main`
+- `TrashAstronauts.apk` - version 0.6.0 (build 2), built from commit 8880478 on `main`
 - Meta Quest 3 / 3S, ARM64, OpenXR, minimum Android API 32
 - Signed with the Android debug key (fine for sideloading, not for a store)
-- SHA-256: `67b72d684a0fa84fc8980bdb11ec4058cb9ede6ed7d52e7328452cb9718ad0c5`
-- 0.6.0: adds the Mimic, a fourth creature that plays your own voice back at you (phrases are held in memory only while it is aboard, never saved or sent). Also in this build from 0.5.0: the creature hears your voice (asks for microphone permission; MIC off in the suit menu), three wrecks picked at random, bigger maps, a flight deck, all sound effects redone. Not yet run on a headset.
+- SHA-256: `78f361b91e4448adeaa714df475f8ebfa447839553b031cd9a2b8b6942aecda8`
+- 0.6.0 build 2: realistic furred spiders modelled in Blender (four species), creatures that actually hunt you down, a fix for spawning outside the lobby, a far more intense jumpscare, a noise meter on the wrist, delicate salvage that loses value when banged, staged scares. Also: the Mimic (plays your voice back), voice detection, three wrecks. Not yet run on a headset.
 
 Install with developer mode on and the headset connected by USB:
 
