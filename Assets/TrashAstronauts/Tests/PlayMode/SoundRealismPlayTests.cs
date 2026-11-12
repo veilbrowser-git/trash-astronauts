@@ -1,5 +1,6 @@
 using System.Collections;
 using NUnit.Framework;
+using TrashAstronauts.Audio;
 using TrashAstronauts.Core;
 using TrashAstronauts.Mission;
 using TrashAstronauts.Player;
@@ -121,8 +122,72 @@ namespace TrashAstronauts.Tests
             Assert.Less(suit.heartbeat.volume, 0.01f);
             Assert.Less(suit.BreathRate, suit.clipBreathsPerMinute * 1.1f, "Resting breath in the tug.");
 
-        }
+            foreach (var enemy in MissionDirector.Active.enemies)
+            {
+                Assert.IsNotNull(enemy.hum.GetComponent<SoundOcclusion>(), enemy.name + " hum");
+                Assert.IsNotNull(enemy.voice.GetComponent<SoundOcclusion>(), enemy.name + " voice");
+                var walker = enemy.GetComponent<SurfaceWalker>();
+                if (walker != null) Assert.IsNotNull(walker.steps.GetComponent<SoundOcclusion>(), enemy.name + " footsteps");
+            }
         }
 
+        [Test]
+        public void SoundBehindAWall_IsMuffledAndQuieter_ClearInLineOfSight()
+        {
+            var listener = new GameObject("Test Listener").transform;
+            listener.position = new Vector3(200f, 200f, 200f);
+            var sourceGo = new GameObject("Test Source");
+            sourceGo.transform.position = listener.position + new Vector3(0f, 0f, 6f);
+            var source = sourceGo.AddComponent<AudioSource>();
+            source.spatialBlend = 1f; source.maxDistance = 15f;
+            var lowPass = sourceGo.AddComponent<AudioLowPassFilter>();
+            var occ = sourceGo.AddComponent<SoundOcclusion>();
+            occ.lowPass = lowPass;
+            occ.listenerOverride = listener;
+            occ.enabled = false; // stepped by hand
+            var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            wall.layer = GameLayers.Environment;
+            wall.transform.position = listener.position + new Vector3(0f, 0f, 3f);
+            wall.transform.localScale = new Vector3(4f, 4f, 0.2f);
+            try
+            {
+                Physics.SyncTransforms();
+                const float dt = 1f / 72f;
+                for (int i = 0; i < 72; i++) occ.Step(dt);
+                Assert.IsTrue(occ.Blocked);
+                Assert.Greater(occ.Occlusion, 0.95f);
+                Assert.Less(occ.Cutoff, 1500f, "Muffled behind the wall.");
+                Assert.Less(occ.VolumeFactor, 0.6f, "Quieter behind the wall.");
+                Assert.IsTrue(lowPass.enabled);
+                Assert.Less(lowPass.cutoffFrequency, 1500f);
+
+                // Smooth: a quarter of the way back after a couple of frames, never a jump.
+                wall.SetActive(false);
+                Physics.SyncTransforms();
+                occ.Check();
+                float before = occ.Occlusion;
+                occ.Step(dt);
+                Assert.Less(before - occ.Occlusion, 0.15f, "Occlusion changes smoothly.");
+                for (int i = 0; i < 72; i++) occ.Step(dt);
+                Assert.IsFalse(occ.Blocked);
+                Assert.Less(occ.Occlusion, 0.01f);
+                Assert.Greater(occ.Cutoff, 18000f, "Clear in line of sight.");
+                Assert.Greater(occ.VolumeFactor, 0.99f);
+                Assert.IsFalse(lowPass.enabled);
+
+                // A wall on another layer (a crate, the player) does not count.
+                wall.SetActive(true);
+                wall.layer = GameLayers.Salvage;
+                Physics.SyncTransforms();
+                for (int i = 0; i < 72; i++) occ.Step(dt);
+                Assert.IsFalse(occ.Blocked);
+            }
+            finally
+            {
+                Object.Destroy(wall);
+                Object.Destroy(sourceGo);
+                Object.Destroy(listener.gameObject);
+            }
+        }
     }
 }

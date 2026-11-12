@@ -390,6 +390,8 @@ namespace TrashAstronauts.EditorTools
             ConfigureSpatial(hum, s_Audio != null ? s_Audio.droneHum : null, true, 0.26f, 1.2f, 12f);
             var voice = Empty(go.transform, "Voice", Vector3.zero).AddComponent<AudioSource>();
             ConfigureSpatial(voice, null, true, 0.32f, 1.5f, 16f);
+            AddOcclusion(hum);
+            AddOcclusion(voice);
 
             var drone = go.AddComponent<EnemyDrone>();
             drone.eye = eyePoint.transform;
@@ -469,6 +471,7 @@ namespace TrashAstronauts.EditorTools
             walker.thread.startColor = walker.thread.endColor = new Color(0.85f, 0.87f, 0.9f);
             var stepSource = Empty(surfaceGo.transform, "Footsteps", Vector3.zero).AddComponent<AudioSource>();
             ConfigureSpatial(stepSource, null, true, 0f, 1.2f, warden ? 18f : 15f);
+            AddOcclusion(stepSource);
             walker.steps = stepSource;
             walker.stepVolume = listener ? 0.35f : warden ? 0.75f : mimic ? 0.4f : 0.55f;
             return SavePrefab(go, go.name);
@@ -485,6 +488,18 @@ namespace TrashAstronauts.EditorTools
             source.minDistance = minDistance;
             source.maxDistance = maxDistance;
             source.dopplerLevel = 0f;
+        }
+
+        /// <summary>Muffles a positional source when a wall stands between it and the listener.</summary>
+        static SoundOcclusion AddOcclusion(AudioSource source)
+        {
+            var lowPass = source.gameObject.AddComponent<AudioLowPassFilter>();
+            lowPass.cutoffFrequency = 22000f;
+            lowPass.lowpassResonanceQ = 1f;
+            lowPass.enabled = false;
+            var occlusion = source.gameObject.AddComponent<SoundOcclusion>();
+            occlusion.lowPass = lowPass;
+            return occlusion;
         }
 
         // ------------------------------------------------------------------ tools
