@@ -143,6 +143,8 @@ namespace TrashAstronauts.Tests
             public void CatchStarted(byte victimSlot) => log.Add("catch " + victimSlot);
             public void BlackoutStarted(float seconds) { blackouts.Add(seconds); log.Add("blackout on"); }
             public void BlackoutEnded(bool instant) => log.Add("blackout off " + instant);
+            public bool LocalGrab(byte itemId) => true;
+            public void LocalRelease(byte itemId) { }
         }
 
         Recorder Host(bool creature = true)

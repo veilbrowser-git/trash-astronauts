@@ -207,8 +207,19 @@ namespace TrashAstronauts.Mission
             {
                 foreach (var l in near) if (l != null) l.enabled = true;
             }
-            if (torchWasOn && torch != null && torch.beam != null) torch.beam.enabled = torch.IsOn;
+            // A jumpscare that began during the flicker owns the darkness: its own end turns the torch back on.
+            // Re-lighting it here would light the torch through the scare.
+            if (torchWasOn && torch != null && torch.beam != null && !ScareInProgress()) torch.beam.enabled = torch.IsOn;
             m_Flicker = null;
+        }
+
+        bool ScareInProgress()
+        {
+            var enemies = director != null ? director.enemies : null;
+            if (enemies == null) return false;
+            for (int i = 0; i < enemies.Length; i++)
+                if (enemies[i] != null && enemies[i].IsScaring) return true;
+            return false;
         }
 
         // ------------------------------------------------------------------ the glimpse

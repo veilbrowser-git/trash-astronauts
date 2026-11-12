@@ -97,6 +97,14 @@ namespace TrashAstronauts.Net
                     m_SlowFor[i] = RestSeconds;
                     continue;
                 }
+                if (!item.SimulatedHere)
+                {
+                    // A crew member holds or flies it and streams it themselves; when it comes back it is
+                    // streamed again until it settles here.
+                    m_Resting[i] = false;
+                    m_SlowFor[i] = 0f;
+                    continue;
+                }
                 float speed = Speed(item, out float spin);
                 bool still = !item.IsHeld && speed < StillSpeed && spin < StillSpin;
                 if (!still)
@@ -159,7 +167,7 @@ namespace TrashAstronauts.Net
             for (int i = 0; i < items.Count; i++)
             {
                 var item = items[i];
-                if (!Streamable(item) || m_Resting[i]) continue;
+                if (!Streamable(item) || m_Resting[i] || !item.SimulatedHere) continue;
                 float speed = Speed(item, out _);
                 float distance = 0f;
                 if (m_Viewers.Count > 0)
@@ -188,7 +196,7 @@ namespace TrashAstronauts.Net
                 {
                     int i = m_RoundRobin;
                     m_RoundRobin = (m_RoundRobin + 1) % items.Count;
-                    if (!Streamable(items[i]) || !m_Resting[i]) continue;
+                    if (!Streamable(items[i]) || !m_Resting[i] || !items[i].SimulatedHere) continue;
                     output[written++] = Entry(i, items[i], true);
                     break;
                 }

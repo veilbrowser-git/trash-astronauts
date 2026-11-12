@@ -7,9 +7,10 @@ namespace TrashAstronauts.Core.Net
     {
         /// <summary>
         /// 2: proximity voice chat (the Voice stream message) in one line of builds, suit colour (in the settings
-        /// byte and the Welcome roster) in another. 3: both. Each of 1, 2 and 3 refuses the others.
+        /// byte and the Welcome roster) in another. 3: both. 4: everyone grabs (item ownership in use) and the
+        /// helmet lamp's HeadLampOn avatar bit (an older build masks it off). Each version refuses every other.
         /// </summary>
-        public const byte Version = 3;
+        public const byte Version = 4;
         /// <summary>The host's UDP port. Clients bind an ephemeral port.</summary>
         public const ushort HostPort = 47800;
         public const int MaxDatagram = 1200;

@@ -55,6 +55,7 @@ namespace TrashAstronauts.Net
                 }
             }
 
+            if (HeadLamp.IsOnFor(player)) flags |= AvatarFlags.HeadLampOn;
             // The session owns the Away bit (SetAway); keep whatever it is not ours to set.
             snapshot.flags = (byte)(flags | (snapshot.flags & AvatarFlags.Away));
             var zeroG = player.locomotion != null ? player.locomotion.zeroG : null;

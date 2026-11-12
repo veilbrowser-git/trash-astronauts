@@ -12,7 +12,7 @@ hunting anyone, with the crew's noises and darts reported to the host; being cau
 all; blackouts are the host's. Proximity voice chat (protocol 2): a talking player's compressed voice
 goes to the host, which relays it to the other clients (never back to the talker), played from each helmet
 in 3D; `Runtime/Net/Voice` (VoiceChat attached by NetSession, VoicePlayback, VoiceTalkLight), codec and
-jitter buffer in `Core/Voice`; see `Docs/VOICE_CHAT_NOTES.md`. Not yet: only the host can carry salvage (stage 3), and no webs in co-op. Adapters: `Runtime/Net/NetSession.cs` (the one MonoBehaviour),
+jitter buffer in `Core/Voice`; see `Docs/VOICE_CHAT_NOTES.md`. Everyone grabs (stage 3): `CoopItemHost` on the host and `CoopItemClient` / `ItemSync` on clients, wired by NetSession (see `Docs/GRAB_NOTES.md`). Not yet: no webs in co-op. Adapters: `Runtime/Net/NetSession.cs` (the one MonoBehaviour),
 `SceneHostWorld` + `CoopHostRules` on the host, `SceneClientWorld` + `CoopClientApply` on a client.
 Nothing opens a socket or contacts a service until one of the panel's buttons is pressed; single-player
 opens none. The notes below are the original seam survey and are kept for reference.

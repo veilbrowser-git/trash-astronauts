@@ -205,6 +205,9 @@ namespace TrashAstronauts.Tests
             public void CatchStarted(byte victimSlot) => log.Add("catch " + victimSlot);
             public void BlackoutStarted(float seconds) => log.Add("blackout on");
             public void BlackoutEnded(bool instant) => log.Add("blackout off");
+            // Stage 3: the host player's own hand (these tests have no crew grabs: the host always gets it).
+            public bool LocalGrab(byte itemId) => true;
+            public void LocalRelease(byte itemId) { }
 
             public readonly List<(byte panel, byte by, NetVec3 impulse, NetVec3 torque)> panelsOpened = new List<(byte, byte, NetVec3, NetVec3)>();
 
@@ -677,10 +680,12 @@ namespace TrashAstronauts.Tests
             mirror.RunStart(in run);
             Assert.AreEqual(SessionDigest.Describe(mirror.Session), SessionDigest.Describe(m_Director.Session));
 
-            // The scanner says why it cannot be picked up.
+            // The scanner shows what it is; the stage 2 "HOST ONLY" hint is gone (stage 3 shares grabbing through
+            // CoopItemClient; this session has none, so the items simply stay with the host).
             var scrap = m_Director.RunItems.First(i => !i.IsMounted && i.definition.category == SalvageCategory.SmallScrap);
             scrap.ShowScan(2f);
-            StringAssert.Contains("HOST ONLY", scrap.scanTag.text.text);
+            StringAssert.Contains(scrap.definition.displayName, scrap.scanTag.text.text);
+            StringAssert.DoesNotContain("HOST ONLY", scrap.scanTag.text.text);
 
             // The same message again changes nothing; a corrupted one is refused.
             var items = m_Director.RunItems.ToList();

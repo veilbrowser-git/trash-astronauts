@@ -481,7 +481,7 @@ namespace TrashAstronauts.Tests
             for (int i = 0; i < run.items.Length; i++)
             {
                 Assert.AreEqual(m_Director.NetIds.SalvageIdFor(7, run.items[i]), m_Director.RunItems[i].SalvageId);
-                Assert.IsTrue(m_Director.RunItems[i].HostOnly, "Only the host carries salvage in this version.");
+                Assert.IsFalse(m_Director.RunItems[i].HostOnly, "Everyone can grab salvage: nothing is HOST ONLY.");
                 Assert.IsFalse(m_Director.RunItems[i].SimulatedHere);
             }
             Assert.IsFalse(m_Director.CreatureAboard);

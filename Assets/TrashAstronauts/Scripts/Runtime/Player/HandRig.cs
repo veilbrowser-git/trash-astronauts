@@ -40,6 +40,8 @@ namespace TrashAstronauts.Player
         [Range(0f, 1f)] public float grabHaptic = 0.35f;
 
         public PlayerContext Player { get; private set; }
+        /// <summary>This hand's reach assist (picking things up from beyond the fingertips), or null.</summary>
+        public ReachAssist Reach { get; private set; }
         public bool IsHolding => interactor != null && interactor.hasSelection;
         /// <summary>True while this hand's pointer is on a button (so its trigger means "press", not "thrust").</summary>
         public bool IsPointingAtButton { get; set; }
@@ -72,6 +74,7 @@ namespace TrashAstronauts.Player
         void Awake()
         {
             Player = GetComponentInParent<PlayerContext>();
+            Reach = GetComponent<ReachAssist>();
         }
 
         void OnEnable()

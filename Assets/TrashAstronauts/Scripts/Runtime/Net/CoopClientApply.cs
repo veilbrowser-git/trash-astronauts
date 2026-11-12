@@ -171,5 +171,17 @@ namespace TrashAstronauts.Net
             return m_Director.ApplyPanelOpened(m_Director.PanelAt(panel), Who(by),
                 CoopConvert.ToUnity(plateImpulse), CoopConvert.ToUnity(plateTorque));
         }
+
+        // ------------------------------------------------------------------ items in everyone's hands (stage 3)
+
+        /// <summary>
+        /// IClientWorld.OnItemOwner: who simulates an item now, handed to the session's <see cref="CoopItemClient"/>
+        /// (MissionDirector.ItemClient). None when there is none (a session without item sync, whose items stay host-only).
+        /// </summary>
+        public ItemAuthorityEvent ApplyItemOwner(byte itemId, byte ownerSlot, byte epoch, bool held, bool denied)
+        {
+            var items = m_Director.ItemClient;
+            return items != null ? items.ApplyItemOwner(itemId, ownerSlot, epoch, held, denied) : ItemAuthorityEvent.None;
+        }
     }
 }

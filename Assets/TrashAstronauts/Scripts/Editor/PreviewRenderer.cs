@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -9,7 +10,7 @@ namespace TrashAstronauts.EditorTools
     /// Renders a few still images of the generated scene to Docs/Previews so the level can be eyeballed
     /// without a headset. Menu: Trash Astronauts > Advanced > Render Preview Images.
     /// </summary>
-    public static class PreviewRenderer
+    public static partial class PreviewRenderer
     {
         [MenuItem("Trash Astronauts/Advanced/Render Preview Images", priority = 60)]
         public static void RenderPreviews()
@@ -186,6 +187,7 @@ namespace TrashAstronauts.EditorTools
             SettingsShot();
             SuitColourShots();
             RemoteToolShots();
+            HeadLampShots(); // PreviewRenderer.HeadLamp.cs
 
             Shot("08_top_down", new Vector3(-1f, 46f, 22f), new Vector3(-1f, 0f, 22.01f), true);
             Shot("18_flight_deck", new Vector3(-0.8f, 1.6f, -3.3f), new Vector3(0.3f, 1.3f, -6.2f));
@@ -225,8 +227,10 @@ namespace TrashAstronauts.EditorTools
                     Shot("41_cave_drill_chamber", new Vector3(-0.4f, 1.7f, 34.0f), new Vector3(2f, 1.4f, 41f));
                     Shot("42_cave_back_passage", new Vector3(-8.1f, 1.6f, 28.4f), new Vector3(-8.1f, 1.2f, 38f));
                     Shot("43_cave_top_down", new Vector3(-1f, 46f, 24f), new Vector3(-1f, 0f, 24.01f), true);
+                    PickupReachShot("44_pickup_reach_cave", new Vector3(0f, 0f, 24f), "Salvage_NavBoard");
                 }
                 Dock(0);
+                PickupReachShot("45_pickup_reach_ship", new Vector3(0f, 0f, 9.2f), "Salvage_NavBoard");
                 mapDirector.enemies[0].gameObject.SetActive(true);
             }
             Object.DestroyImmediate(lineup);
@@ -295,7 +299,7 @@ namespace TrashAstronauts.EditorTools
                 string info = board.info.text;
                 board.status.text = "HOSTING  TUG 4821  ONLINE\nCODE  K7Q2ZD\nCREW 2/4:  ORANGE (YOU)  BLUE";
                 board.notice.text = "";
-                board.info.text = "Contracts are shared: one tank, one locker, one\ncreature hunting all of you; everyone is paid. Only\nthe host can carry salvage. While you talk, your voice\ngoes to the crew (VOICE CHAT off or MIC off stops it);\nit is never recorded.";
+                board.info.text = "Contracts are shared: one tank, one locker, one\ncreature hunting all of you, and everyone is paid.\nEveryone can carry salvage. While you talk, your\nvoice goes to the crew (VOICE CHAT or MIC off stops\nit); it is never recorded.";
                 board.joinButtons[1].SetInteractable(true);
                 board.joinButtons[3].SetInteractable(true);
                 Shot("57_coop_hosting_online", new Vector3(0.7f, 1.72f, 0.22f), new Vector3(1.9f, 1.8f, 0.22f), false, 70f);
@@ -334,6 +338,12 @@ namespace TrashAstronauts.EditorTools
                 s.rightHandRotation = TrashAstronauts.Net.NetUnity.ToNet(face * Quaternion.Euler(p.wave ? -70f : 10f, -10f, 0f));
                 s.leftGripCurl = p.wave ? 0.2f : 1f;
                 s.leftIndexCurl = p.wave ? 0.1f : 1f;
+                // The waving one has everything at once: helmet lamp on, a tool drawn, a chosen colour, talking.
+                if (p.wave)
+                {
+                    s.flags |= TrashAstronauts.Core.Net.AvatarFlags.HeadLampOn;
+                    s.leftTool = TrashAstronauts.Net.AvatarSampler.Flashlight;
+                }
                 remote.Apply(in s);
                 remote.leftGlove.Apply(s.leftIndexCurl, s.leftGripCurl);
                 remote.rightGlove.Apply(0f, 0f);
@@ -342,6 +352,7 @@ namespace TrashAstronauts.EditorTools
                 {
                     var talk = remote.head.Find(TrashAstronauts.Net.Voice.VoiceTalkLight.ChildName);
                     if (talk != null) talk.GetComponent<Renderer>().enabled = true;
+                    TrashAstronauts.Net.CrewLook.ApplyLook(remote, p.slot, 6);
                 }
                 else TrashAstronauts.Net.CrewLook.ApplyLook(remote, p.slot, 9);
                 remote.suit.SnapToHead();
@@ -573,6 +584,91 @@ namespace TrashAstronauts.EditorTools
             Object.DestroyImmediate(go);
         }
     
+        /// <summary>
+        /// The reach assist from the player's eyes: a standing player, the right hand open and low (0.75 m above
+        /// the floor) pointing at a nav board on the floor ahead; the board glows with its hover highlight and the
+        /// faint line runs from the palm to it, as in the game before the squeeze.
+        /// </summary>
+        static void PickupReachShot(string name, Vector3 feet, string itemPrefabName)
+        {
+            var rigPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(Builder.PrefabDir + "/PlayerRig.prefab");
+            var itemPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(Builder.PrefabDir + "/" + itemPrefabName + ".prefab");
+            if (rigPrefab == null || itemPrefab == null) return;
+            Physics.SyncTransforms();
+            if (!Physics.Raycast(feet + Vector3.up * 0.6f, Vector3.down, out RaycastHit floorHit, 2f, TrashAstronauts.World.GameLayers.EnvironmentMask, QueryTriggerInteraction.Ignore)) return;
+            Vector3 floor = floorHit.point;
+
+            var rig = Object.Instantiate(rigPrefab, floor, Quaternion.identity);
+            rig.hideFlags = HideFlags.HideAndDontSave;
+            foreach (var cam in rig.GetComponentsInChildren<Camera>(true)) cam.enabled = false;
+            foreach (var listener in rig.GetComponentsInChildren<AudioListener>(true)) listener.enabled = false;
+            foreach (var l in rig.GetComponentsInChildren<Light>(true)) l.enabled = false;
+
+            var item = Object.Instantiate(itemPrefab, floor + new Vector3(0.45f, 0.5f, 1.0f), Quaternion.Euler(0f, 18f, 0f));
+            item.hideFlags = HideFlags.HideAndDontSave;
+            Physics.SyncTransforms();
+            float bottom = float.MaxValue;
+            foreach (var c in item.GetComponentsInChildren<Collider>()) if (!c.isTrigger) bottom = Mathf.Min(bottom, c.bounds.min.y);
+            item.transform.position += Vector3.up * (floor.y - bottom);
+            Physics.SyncTransforms();
+            Vector3 target = item.transform.position;
+
+            Vector3 eye = floor + new Vector3(0f, 1.62f, 0f);
+            Vector3 palm = floor + new Vector3(0.32f, 0.75f, 0.32f);
+            foreach (var hand in rig.GetComponentsInChildren<TrashAstronauts.Player.HandRig>(true))
+            {
+                bool left = hand.side == TrashAstronauts.Core.Handedness.Left;
+                if (left)
+                {
+                    hand.transform.position = floor + new Vector3(-0.28f, 0.95f, 0.12f);
+                    hand.transform.rotation = Quaternion.Euler(60f, 10f, 0f);
+                }
+                else
+                {
+                    Vector3 grabOffset = hand.transform.InverseTransformPoint(hand.interactor.transform.position);
+                    Quaternion rotation = Quaternion.LookRotation(target - palm, Vector3.up);
+                    hand.transform.rotation = rotation;
+                    hand.transform.position = palm - rotation * grabOffset;
+                }
+                hand.GetComponentInChildren<TrashAstronauts.Player.GloveVisual>(true).Apply(0.1f, 0.1f);
+            }
+            var avatar = rig.GetComponentInChildren<TrashAstronauts.Player.PlayerAvatar>(true);
+            if (avatar != null && avatar.head != null)
+            {
+                avatar.head.SetPositionAndRotation(eye, Quaternion.LookRotation(Vector3.Lerp(palm, target, 0.7f) - eye, Vector3.up));
+                avatar.SnapToHead();
+                avatar.Pose(0f);
+            }
+
+            // The cue exactly as the game draws it: the item's hover glow and the reach line.
+            var salvage = item.GetComponent<TrashAstronauts.Mission.SalvageItem>();
+            var right = rig.GetComponentsInChildren<TrashAstronauts.Player.HandRig>(true).First(h => h.side == TrashAstronauts.Core.Handedness.Right);
+            var reach = right.GetComponent<TrashAstronauts.Player.ReachAssist>();
+            if (reach != null && salvage != null) reach.ShowCueForPreview(salvage);
+            var highlight = item.GetComponent<TrashAstronauts.World.HoverHighlight>();
+            if (highlight != null)
+            {
+                var block = new MaterialPropertyBlock();
+                foreach (var r in item.GetComponentsInChildren<MeshRenderer>())
+                {
+                    r.GetPropertyBlock(block);
+                    block.SetColor("_EmissionColor", highlight.hoverEmission);
+                    r.SetPropertyBlock(block);
+                }
+            }
+            // The suit's own helmet lamp stands in as a soft fill (the map's lights may be off in this room).
+            var fill = new GameObject("Preview Fill") { hideFlags = HideFlags.HideAndDontSave }.AddComponent<Light>();
+            fill.type = LightType.Point;
+            fill.transform.position = eye + new Vector3(0.1f, 0.2f, 0.2f);
+            fill.range = 4f;
+            fill.intensity = 2.5f;
+
+            Shot(name, eye, Vector3.Lerp(palm, target, 0.7f), false, 90f);
+            Object.DestroyImmediate(fill.gameObject);
+            Object.DestroyImmediate(item);
+            Object.DestroyImmediate(rig);
+        }
+
         /// <summary>Stands a spider instance on whatever is under its feet (or on its own plane) with the planted-foot IK.</summary>
         static void PlantPreviewSpider(GameObject instance)
         {

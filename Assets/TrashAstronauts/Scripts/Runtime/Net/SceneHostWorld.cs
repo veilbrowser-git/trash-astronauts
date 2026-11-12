@@ -9,20 +9,21 @@ namespace TrashAstronauts.Net
     /// leave. The shared ride-along contract (stage 2): every request from the crew goes to the session's
     /// <see cref="CoopHostRules"/>, which decides it with the game's own rules exactly as if the host had
     /// pressed the button, and whose broadcasts go back out through NetSessionHost.
-    /// Item grabs (stage 3) and the creature and its hazards (stage 4) are still deliberate no-ops, each
-    /// marked with its stage: in this version only the host carries salvage and there is no creature in co-op.
+    /// Item grabs, carries, throws and hand-backs (stage 3) go to the session's <see cref="CoopItemHost"/>.
     /// </summary>
     public sealed class SceneHostWorld : IHostWorld
     {
         readonly NetSession m_Net;
         readonly MissionDirector m_Director;
         readonly CoopHostRules m_Rules;
+        readonly CoopItemHost m_Items;
 
-        public SceneHostWorld(NetSession net, MissionDirector director, CoopHostRules rules)
+        public SceneHostWorld(NetSession net, MissionDirector director, CoopHostRules rules, CoopItemHost items)
         {
             m_Net = net;
             m_Director = director;
             m_Rules = rules;
+            m_Items = items;
         }
 
         public CoopHostRules Rules => m_Rules;
@@ -73,22 +74,22 @@ namespace TrashAstronauts.Net
             if (m_Rules != null) m_Rules.HostPointCutReport(panel, index, slot);
         }
 
-        // ------------------------------------------------------------------ stage 3: items (only the host carries in this version)
+        // ------------------------------------------------------------------ items: everyone grabs (stage 3)
 
-        /// <summary>No crew member can pick anything up yet: every client's items are "HOST ONLY".</summary>
-        public bool CanGrabItem(byte itemId, byte slot) => false;
+        public bool CanGrabItem(byte itemId, byte slot) => m_Items != null && m_Items.CanGrabItem(itemId, slot);
 
-        public void OnItemGranted(byte itemId, byte slot, byte hand) { /* Stage 3: never granted (CanGrabItem is false). */ }
+        public void OnItemGranted(byte itemId, byte slot, byte hand) { if (m_Items != null) m_Items.OnItemGranted(itemId, slot, hand); }
 
-        public void OnItemPose(byte itemId, byte slot, NetVec3 position, NetQuat rotation, bool held, double hostTime) { /* Stage 3 */ }
+        public void OnItemPose(byte itemId, byte slot, NetVec3 position, NetQuat rotation, bool held, double hostTime) { if (m_Items != null) m_Items.OnItemPose(itemId, slot, position, rotation, held, hostTime); }
 
-        public void OnItemReleased(byte itemId, byte slot, NetVec3 position, NetQuat rotation, NetVec3 releasePosition) { /* Stage 3 */ }
+        public void OnItemReleased(byte itemId, byte slot, NetVec3 position, NetQuat rotation, NetVec3 releasePosition) { if (m_Items != null) m_Items.OnItemReleased(itemId, slot, position, rotation, releasePosition); }
 
-        public void OnItemThrown(byte itemId, byte slot, NetVec3 linearVelocity, NetVec3 angularVelocity, float throwSpeed, bool wasThrown) { /* Stage 3 */ }
+        public void OnItemThrown(byte itemId, byte slot, NetVec3 linearVelocity, NetVec3 angularVelocity, float throwSpeed, bool wasThrown) { if (m_Items != null) m_Items.OnItemThrown(itemId, slot, linearVelocity, angularVelocity, throwSpeed, wasThrown); }
 
-        public void OnItemReturned(in ItemReturn item) { /* Stage 3: no client ever owns an item in this version. */ }
+        /// <summary>The host simulates the item again (handoff, backstop, owner away or gone); may arrive for an item the host still had as held.</summary>
+        public void OnItemReturned(in ItemReturn item) { if (m_Items != null) m_Items.OnItemReturned(in item); }
 
-        public void OnItemDamageReport(byte itemId, byte slot, int newValue) { /* Stage 3: a client never simulates an item, so never reports damage. */ }
+        public void OnItemDamageReport(byte itemId, byte slot, int newValue) { if (m_Items != null) m_Items.OnItemDamageReport(itemId, slot, newValue); }
 
         // ------------------------------------------------------------------ creature and hazards
 
