@@ -926,6 +926,13 @@ namespace TrashAstronauts.Core.Net
                     m_World.OnWireReport(slot, m.index, m.change);
                     break;
                 }
+                case NetMsg.ReviveHold:
+                {
+                    if (!ReviveHoldMsg.Read(ref r, out ReviveHoldMsg m)) { m_Stats.malformed++; return; }
+                    if (m.slot == slot) { m_Stats.rejected++; return; } // nobody revives themselves
+                    m_World.OnReviveHold(slot, m.slot, m.on);
+                    break;
+                }
                 default:
                     m_Stats.unknownMessages++;
                     break;
@@ -1385,6 +1392,30 @@ namespace TrashAstronauts.Core.Net
             var w = new NetWriter(m_Small);
             new BlackoutEndedMsg { instant = instant }.Write(ref w);
             Broadcast(NetMsg.BlackoutEnded, ref w);
+        }
+
+        /// <summary>Co-op revive: this crew member is downed where they were caught.</summary>
+        public void SendPlayerDowned(byte slot, NetVec3 position)
+        {
+            var w = new NetWriter(m_Small);
+            new PlayerDownedMsg { slot = slot, position = position }.Write(ref w);
+            Broadcast(NetMsg.PlayerDowned, ref w);
+        }
+
+        /// <summary>Co-op revive: this crew member is up again (by = the rescuer, 255 = nobody named).</summary>
+        public void SendPlayerRevived(byte slot, byte by)
+        {
+            var w = new NetWriter(m_Small);
+            new PlayerRevivedMsg { slot = slot, by = by }.Write(ref w);
+            Broadcast(NetMsg.PlayerRevived, ref w);
+        }
+
+        /// <summary>Co-op revive: how far this downed crew member's ring is and who holds it. Throttled by the game (about 5 a second while it moves).</summary>
+        public void SendReviveProgress(byte slot, float progress, byte rescuerSlot)
+        {
+            var w = new NetWriter(m_Small);
+            new ReviveProgressMsg { slot = slot, progress = progress, rescuerSlot = rescuerSlot }.Write(ref w);
+            Broadcast(NetMsg.ReviveProgress, ref w);
         }
 
         public void SendWireChanged(byte index, NetWireChange change, byte by)

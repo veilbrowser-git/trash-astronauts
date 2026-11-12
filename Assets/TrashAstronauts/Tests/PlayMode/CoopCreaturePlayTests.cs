@@ -143,6 +143,10 @@ namespace TrashAstronauts.Tests
             public void CatchStarted(byte victimSlot) => log.Add("catch " + victimSlot);
             public void BlackoutStarted(float seconds) { blackouts.Add(seconds); log.Add("blackout on"); }
             public void BlackoutEnded(bool instant) => log.Add("blackout off " + instant);
+            public readonly List<(byte slot, float progress, byte rescuer)> progress = new List<(byte, float, byte)>();
+            public void PlayerDowned(byte slot, NetVec3 position) => log.Add("downed " + slot);
+            public void PlayerRevived(byte slot, byte by) => log.Add("revived " + slot + " by " + by);
+            public void ReviveProgress(byte slot, float progress, byte rescuerSlot) { this.progress.Add((slot, progress, rescuerSlot)); log.Add("progress " + slot); }
             public bool LocalGrab(byte itemId) => true;
             public void LocalRelease(byte itemId) { }
         }
@@ -271,7 +275,7 @@ namespace TrashAstronauts.Tests
         }
 
         [UnityTest]
-        public IEnumerator Host_ItHuntsAndCatchesACrewMembersStandIn_WhileTheHostIsSafeInTheTug_AndTheRunEndsWithTheJumpscare()
+        public IEnumerator Host_ItHuntsAndCatchesACrewMembersStandIn_WhileTheHostIsSafeInTheTug_AndTheJumpscareEndsWithThemDowned()
         {
             var rec = Host();
             Assert.IsTrue(m_Director.StartMission(m_Director.LocalPlayerId));
@@ -334,19 +338,21 @@ namespace TrashAstronauts.Tests
             Assert.IsFalse(creature.Stagger(1f));
             Assert.IsFalse(creature.Tranquilize(5f));
 
+            // Co-op revive: the host is still up, so when the jumpscare is over the crew member is downed, not the run.
             float endedAt = -1f;
             for (float waited = 0f; waited < 10f; waited += Time.unscaledDeltaTime)
             {
-                if (m_Director.Phase != MissionPhase.Active) { endedAt = Time.unscaledTime; break; }
+                if (crew.IsDowned || m_Director.Phase != MissionPhase.Active) { endedAt = Time.unscaledTime; break; }
                 Assert.AreEqual(ui, Sfx.UiPlayCount, "Nothing in the host's ears while someone else is caught.");
                 Assert.AreEqual(0f, m_Player.fader.Alpha);
                 yield return null;
             }
-            Assert.AreEqual(MissionPhase.Results, m_Director.Phase);
-            Assert.AreEqual(MissionOutcome.FailedCaught, m_Director.Session.Result.Outcome);
-            Assert.That(endedAt - caughtAt, Is.InRange(creature.ScareTotalSeconds - 0.05f, creature.ScareTotalSeconds + 0.75f), "The run ends when the jumpscare does.");
-            Assert.AreEqual(1, rec.Count("runended FailedCaught"));
-            Assert.Less(rec.log.IndexOf("catch 1"), rec.log.IndexOf("runended FailedCaught"));
+            Assert.IsTrue(crew.IsDowned, "Caught with the host still up: downed.");
+            Assert.AreEqual(MissionPhase.Active, m_Director.Phase, "The contract goes on.");
+            Assert.That(endedAt - caughtAt, Is.InRange(creature.ScareTotalSeconds - 0.05f, creature.ScareTotalSeconds + 0.75f), "Downed when the jumpscare ends.");
+            Assert.AreEqual(1, rec.Count("downed 1"));
+            Assert.AreEqual(0, rec.Count("runended"));
+            Assert.Less(rec.log.IndexOf("catch 1"), rec.log.IndexOf("downed 1"));
             Assert.AreEqual(0, rec.Count("blackout"));
             Assert.IsFalse(m_Director.blackout.IsBlackout);
             Object.Destroy(crew.gameObject);

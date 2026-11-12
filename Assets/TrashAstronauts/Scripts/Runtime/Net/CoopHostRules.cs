@@ -59,6 +59,8 @@ namespace TrashAstronauts.Net
         public CoopItemSampler Sampler => m_Sampler;
         /// <summary>The creature, its noise and darts, and the blackouts (stage 4).</summary>
         public CoopCreatureHost Creature { get; }
+        /// <summary>Co-op revive: downing instead of failing, the rings, and who is down (protocol 5).</summary>
+        public CoopReviveHost Revive { get; }
 
         /// <summary>
         /// Stage 4 switch: contracts started from now on carry the creature (never the Mimic) and blackouts.
@@ -91,6 +93,7 @@ namespace TrashAstronauts.Net
             if (m_Locker != null) m_Locker.Accepted += OnLockerAccepted;
             m_Sampler.CameToRest += OnCameToRest;
             Creature = new CoopCreatureHost(director, broadcast);
+            Revive = new CoopReviveHost(director, broadcast);
 
             var ids = director.NetIds;
             for (int i = 0; i < ids.Doors.Count; i++)
@@ -130,6 +133,7 @@ namespace TrashAstronauts.Net
             if (m_Locker != null) m_Locker.Accepted -= OnLockerAccepted;
             m_Sampler.CameToRest -= OnCameToRest;
             Creature.Dispose();
+            Revive.Dispose();
             foreach (var door in m_Doors)
             {
                 if (door != null) door.Changed -= OnDoorChanged;
@@ -268,6 +272,12 @@ namespace TrashAstronauts.Net
             return false;
         }
 
+        /// <summary>A crew member's hand on or off a downed crew mate's beacon (IHostWorld.OnReviveHold): see <see cref="CoopReviveHost.HostReviveHold"/>.</summary>
+        public void HostReviveHold(byte slot, byte targetSlot, bool on) => Revive.HostReviveHold(slot, targetSlot, on);
+
+        /// <summary>A crew member left the session (IHostWorld.OnPlayerLeft): their revive holds end.</summary>
+        public void HostPlayerLeft(byte slot) => Revive.HostPlayerLeft(slot);
+
         /// <summary>A crew member's noise (IHostWorld.OnNoise): see <see cref="CoopCreatureHost.HostNoise"/>.</summary>
         public bool HostNoise(NetVec3 position, float loudness, NoiseKind kind, byte bySlot) => Creature.HostNoise(position, loudness, kind, bySlot);
 
@@ -308,6 +318,8 @@ namespace TrashAstronauts.Net
                 if (wire.Burnt) state.wireBurntMask |= 1u << i;
                 else if (wire.Snapped) state.wireSnappedMask |= 1u << i;
             }
+            // Who is down and where: part of the world (a late joiner would see the bodies).
+            Revive.FillWorldState(ref state);
         }
 
         /// <summary>What the Clock message carries (2 Hz): mission time, the shared tank, and whether hazards are paused.</summary>

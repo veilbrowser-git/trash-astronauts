@@ -113,6 +113,51 @@ namespace TrashAstronauts.UI
             return first ? "Everyone is aboard." : text.ToString();
         }
 
+        /// <summary>The help line on the board in a crew session (co-op revive).</summary>
+        public const string ReviveHelpLine = "CAUGHT CREW CAN BE REVIVED: HOLD THEIR CHEST BEACON";
+
+        /// <summary>
+        /// Co-op revive, before the crew extracts: who is down right now and what leaving them costs ("" when nobody is).
+        /// "DOWN: CREW 2, 3 - extracting now leaves them behind (-35% of their pay)".
+        /// </summary>
+        string DownedLine()
+        {
+            var text = new System.Text.StringBuilder();
+            var players = director.Players;
+            for (int i = 0; i < players.Count; i++)
+            {
+                var player = players[i];
+                if (player == null || !player.IsDowned) continue;
+                text.Append(text.Length == 0 ? "\nDOWN: CREW " : ", ").Append(player.Id.Value + 1);
+            }
+            if (text.Length == 0) return "";
+            text.Append(" - extracting now leaves them\nbehind (-").Append(Mathf.RoundToInt(ReviveRules.LeftBehindPenalty * 100f)).Append("% of their pay).");
+            return text.ToString();
+        }
+
+        /// <summary>
+        /// Co-op revive on the results screen: one line per crew member who was downed or left behind, with what it cost
+        /// them, then this player's own share when it is not the full payout. "" when nobody was downed.
+        /// </summary>
+        public static string RevivePenaltyLines(MissionResult result, int localSlot)
+        {
+            if (result == null || !result.AnyRevivePenalty) return "";
+            var text = new System.Text.StringBuilder();
+            for (int slot = 0; slot < 4; slot++)
+            {
+                int downs = result.DownsOf(slot);
+                bool left = result.WasLeftBehind(slot);
+                if (downs == 0 && !left) continue;
+                text.Append("CREW ").Append(slot + 1).Append(':');
+                if (downs > 0) text.Append(" downed ").Append(downs).Append('x');
+                if (left) text.Append(downs > 0 ? "," : "").Append(" LEFT BEHIND, recovered by the company");
+                text.Append("  -").Append(ReviveRules.PenaltyPercent(downs, left)).Append("%\n");
+            }
+            if (localSlot >= 0 && result.PayoutFor(localSlot) != result.Payout)
+                text.Append("YOUR SHARE: ").Append(result.PayoutFor(localSlot)).Append(" cr\n");
+            return text.ToString();
+        }
+
         /// <summary>The co-op client's line about the host's state, or "" when the host is there and playing.</summary>
         string HostStateLine()
         {
@@ -184,8 +229,9 @@ namespace TrashAstronauts.UI
                         + "Quota: " + config.quotaCredits + " cr     Bonus: +" + config.contractBonusCredits + " cr\n"
                         + "One shared oxygen tank (the host's).\n\n"
                         + "ONE THING aboard for the whole crew. It can hunt\n"
-                        + "anyone; if it catches one of you, the contract\n"
-                        + "fails for all. Anyone's tranquilizer works on it.\n"
+                        + "anyone. Anyone's tranquilizer works on it.\n"
+                        + ReviveHelpLine + "\n"
+                        + "(about 5 s). Nobody left up: the contract fails.\n"
                         + "Everyone can carry salvage. Everyone must be\n"
                         + "inside the tug to extract. Everyone is paid.\n\n"
                         + (client ? "START asks the host to launch.\n" : "")
@@ -218,7 +264,7 @@ namespace TrashAstronauts.UI
                             ? "QUOTA MET. Extract now for the bonus,\nor risk another trip for more."
                             : "Quota NOT met. Extracting now pays only\nfor what is already secured.")
                         + "\n\nRunning out of oxygen or getting caught\nforfeits everything from this run."
-                        + (coop ? "\n\nCo-op: everyone must be inside the tug." : "")
+                        + (coop ? "\n\nCo-op: everyone who is up must be inside the tug.\n" + ReviveHelpLine + DownedLine() : "")
                         + (confirming ? "\n\n> Press again to confirm extraction." : "") + hostLine + notice);
                     SetPrimary(confirming ? "CONFIRM EXTRACT" : "EXTRACT", true);
                     break;
@@ -233,6 +279,7 @@ namespace TrashAstronauts.UI
                         + "Quota: " + result.Quota + " cr\n"
                         + "Contract bonus: +" + result.Bonus + " cr\n"
                         + "PAYOUT: " + result.Payout + " cr\n"
+                        + RevivePenaltyLines(result, coop ? director.LocalPlayerId.Value : -1)
                         + "Banked credits: " + profile.totalCredits + " cr\n\n"
                         + Quip(result, session.RunIndex)
                         + (client ? "\n\nNEXT CONTRACT asks the host to launch." : "") + hostLine + notice);

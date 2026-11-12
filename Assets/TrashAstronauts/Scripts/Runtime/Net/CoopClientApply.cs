@@ -21,19 +21,26 @@ namespace TrashAstronauts.Net
         {
             m_Director = director;
             Creature = new CoopCreatureClient(director);
+            Revive = new CoopReviveClient(director);
         }
 
         public MissionDirector Director => m_Director;
         /// <summary>The host's creature and blackouts on this client (stage 4).</summary>
         public CoopCreatureClient Creature { get; }
+        /// <summary>Co-op revive on this client: who is down, the rings, and this player's hand on a beacon.</summary>
+        public CoopReviveClient Revive { get; }
 
         /// <summary>A wire slot as a player id (255 = nobody).</summary>
         public static PlayerId Who(byte slot) => slot == 255 ? PlayerId.None : new PlayerId(slot);
 
         // ------------------------------------------------------------------ session
 
-        /// <summary>IClientWorld.OnWorldState.</summary>
-        public void ApplyWorldState(in WorldStateMsg state) => m_Director.ApplyWorldState(in state);
+        /// <summary>IClientWorld.OnWorldState (the downed crew included).</summary>
+        public void ApplyWorldState(in WorldStateMsg state)
+        {
+            m_Director.ApplyWorldState(in state);
+            Revive.ApplyWorldState(in state);
+        }
 
         /// <summary>IClientWorld.OnHostPause.</summary>
         public void ApplyHostPause(bool on) => m_Director.ApplyHostPause(on);
@@ -156,6 +163,20 @@ namespace TrashAstronauts.Net
 
         /// <summary>IClientWorld.OnBlackoutEnded.</summary>
         public bool ApplyBlackoutEnded(bool instant) => Creature.ApplyBlackoutEnded(instant);
+
+        // ------------------------------------------------------------------ co-op revive
+
+        /// <summary>IClientWorld.OnPlayerDowned (held while a jumpscare plays here).</summary>
+        public bool ApplyPlayerDowned(byte slot, NetVec3 position) => Revive.ApplyPlayerDowned(slot, position);
+
+        /// <summary>IClientWorld.OnPlayerRevived.</summary>
+        public bool ApplyPlayerRevived(byte slot, byte by) => Revive.ApplyPlayerRevived(slot, by);
+
+        /// <summary>IClientWorld.OnReviveProgress.</summary>
+        public bool ApplyReviveProgress(byte slot, float progress, byte rescuerSlot) => Revive.ApplyReviveProgress(slot, progress, rescuerSlot);
+
+        /// <summary>A crew member left (RosterChanged Left).</summary>
+        public void ApplyPlayerLeft(byte slot) => Revive.PlayerLeft(slot);
 
         // ------------------------------------------------------------------ world
 

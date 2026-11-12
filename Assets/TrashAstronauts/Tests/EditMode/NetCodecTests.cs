@@ -1138,7 +1138,7 @@ namespace TrashAstronauts.Tests
             Add(NetMsg.ExtractRequest, (ref NetWriter w) => { }, (ref NetReader r) => !r.Failed);
             Add(NetMsg.RunStart, (ref NetWriter w) => RunStartCodec.Write(ref w, in run), (ref NetReader r) => RunStartCodec.Read(ref r, out _));
             Add(NetMsg.ExtractRefused, (ref NetWriter w) => new ExtractRefusedMsg { missingSlotsMask = 15 }.Write(ref w), (ref NetReader r) => ExtractRefusedMsg.Read(ref r, out _));
-            Add(NetMsg.RunEnded, (ref NetWriter w) => new RunEndedMsg { outcome = MissionOutcome.FailedCaught, quota = int.MaxValue, depositedValue = int.MaxValue, depositedCount = int.MaxValue, trickBonus = int.MaxValue, trickShots = int.MaxValue, bonus = int.MaxValue, payout = int.MaxValue, oxygenRemainingSeconds = float.MaxValue, elapsedSeconds = float.MaxValue }.Write(ref w),
+            Add(NetMsg.RunEnded, (ref NetWriter w) => new RunEndedMsg { outcome = MissionOutcome.FailedCaught, quota = int.MaxValue, depositedValue = int.MaxValue, depositedCount = int.MaxValue, trickBonus = int.MaxValue, trickShots = int.MaxValue, bonus = int.MaxValue, payout = int.MaxValue, oxygenRemainingSeconds = float.MaxValue, elapsedSeconds = float.MaxValue, crewDowns = 0xFFFFFFFFu, leftBehindMask = 15 }.Write(ref w),
                 (ref NetReader r) => RunEndedMsg.Read(ref r, out _));
             Add(NetMsg.ReturnedToHub, (ref NetWriter w) => { }, (ref NetReader r) => !r.Failed);
 
@@ -1170,6 +1170,11 @@ namespace TrashAstronauts.Tests
             Add(NetMsg.BlackoutEnded, (ref NetWriter w) => new BlackoutEndedMsg { instant = true }.Write(ref w), (ref NetReader r) => BlackoutEndedMsg.Read(ref r, out _));
             Add(NetMsg.WireReport, (ref NetWriter w) => new WireReportMsg { index = 31, change = NetWireChange.Burnt }.Write(ref w), (ref NetReader r) => WireReportMsg.Read(ref r, out _));
             Add(NetMsg.WireChanged, (ref NetWriter w) => new WireChangedMsg { index = 31, change = NetWireChange.Burnt, by = 3 }.Write(ref w), (ref NetReader r) => WireChangedMsg.Read(ref r, out _));
+
+            Add(NetMsg.PlayerDowned, (ref NetWriter w) => new PlayerDownedMsg { slot = 3, position = far }.Write(ref w), (ref NetReader r) => PlayerDownedMsg.Read(ref r, out _));
+            Add(NetMsg.PlayerRevived, (ref NetWriter w) => new PlayerRevivedMsg { slot = 3, by = 255 }.Write(ref w), (ref NetReader r) => PlayerRevivedMsg.Read(ref r, out _));
+            Add(NetMsg.ReviveProgress, (ref NetWriter w) => new ReviveProgressMsg { slot = 3, progress = 1f, rescuerSlot = 2 }.Write(ref w), (ref NetReader r) => ReviveProgressMsg.Read(ref r, out _));
+            Add(NetMsg.ReviveHold, (ref NetWriter w) => new ReviveHoldMsg { slot = 3, on = true }.Write(ref w), (ref NetReader r) => ReviveHoldMsg.Read(ref r, out _));
             return samples;
         }
 
@@ -1191,7 +1196,7 @@ namespace TrashAstronauts.Tests
             }
             Assert.AreEqual(NetMsg.All.Length, samples.Count, "a sample for a message that is not in NetMsg.All");
             Assert.AreEqual(-1, NetMsg.MaxSize(250));
-            Assert.AreEqual(53, NetMsg.All.Length, "7 connectionless + 7 streams + 39 reliable");
+            Assert.AreEqual(57, NetMsg.All.Length, "7 connectionless + 7 streams + 43 reliable (the four revive messages of protocol 5 included)");
 
             // every reliable message plus its overhead and the datagram header fits one datagram: no fragmentation
             Assert.LessOrEqual(DatagramHeader.Size + ReliableChannel.Overhead + NetProtocol.MaxMessageBytes, NetProtocol.MaxDatagram);

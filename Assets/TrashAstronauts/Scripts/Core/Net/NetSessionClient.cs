@@ -423,6 +423,14 @@ namespace TrashAstronauts.Core.Net
             Enqueue(NetMsg.TranqHitReport, ref w);
         }
 
+        /// <summary>Co-op revive: this player's hand closed on (on) or let go of the beacon of the downed crew member in <paramref name="targetSlot"/>.</summary>
+        public void SendReviveHold(byte targetSlot, bool on)
+        {
+            var w = new NetWriter(m_Small);
+            new ReviveHoldMsg { slot = targetSlot, on = on }.Write(ref w);
+            Enqueue(NetMsg.ReviveHold, ref w);
+        }
+
         public void SendWireReport(byte index, NetWireChange change)
         {
             var w = new NetWriter(m_Small);
@@ -953,6 +961,26 @@ namespace TrashAstronauts.Core.Net
                 {
                     if (!WireChangedMsg.Read(ref r, out WireChangedMsg m)) return false;
                     m_World.OnWireChanged(m.index, m.change, m.by);
+                    return true;
+                }
+
+                // ---------------- co-op revive
+                case NetMsg.PlayerDowned:
+                {
+                    if (!PlayerDownedMsg.Read(ref r, out PlayerDownedMsg m)) return false;
+                    m_World.OnPlayerDowned(m.slot, m.position);
+                    return true;
+                }
+                case NetMsg.PlayerRevived:
+                {
+                    if (!PlayerRevivedMsg.Read(ref r, out PlayerRevivedMsg m)) return false;
+                    m_World.OnPlayerRevived(m.slot, m.by);
+                    return true;
+                }
+                case NetMsg.ReviveProgress:
+                {
+                    if (!ReviveProgressMsg.Read(ref r, out ReviveProgressMsg m)) return false;
+                    m_World.OnReviveProgress(m.slot, m.progress, m.rescuerSlot);
                     return true;
                 }
                 default:

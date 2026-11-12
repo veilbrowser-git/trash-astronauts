@@ -145,5 +145,16 @@ namespace TrashAstronauts.Core.Net
 
         /// <summary>WebTripwire.ApplyState.</summary>
         void OnWireChanged(byte index, NetWireChange change, byte by);
+
+        // ---------------------------------------------------------------- co-op revive (protocol 5)
+
+        /// <summary>The crew member in <paramref name="slot"/> was caught and is downed at <paramref name="position"/> (the local slot: this player). After their jumpscare.</summary>
+        void OnPlayerDowned(byte slot, NetVec3 position);
+
+        /// <summary>The crew member in <paramref name="slot"/> is up again, revived by <paramref name="by"/> (255 = nobody named).</summary>
+        void OnPlayerRevived(byte slot, byte by);
+
+        /// <summary>How far a downed crew member's revive ring is (0..1) and who is holding it (255 = nobody).</summary>
+        void OnReviveProgress(byte slot, float progress, byte rescuerSlot);
     }
 }

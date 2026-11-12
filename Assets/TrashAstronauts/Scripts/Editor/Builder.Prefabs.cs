@@ -838,6 +838,11 @@ namespace TrashAstronauts.EditorTools
             flashQuad.GetComponent<MeshRenderer>().enabled = false;
             visor.cracks = crackRenderers.ToArray();
             visor.flash = flashQuad.GetComponent<MeshRenderer>();
+            // Co-op revive: the dimmed view while downed (DownedLock switches it on), between the fade and the visor.
+            var downed = Prim(camGo.transform, DownedLock.VignetteName, PrimitiveType.Quad, new Vector3(0, 0, 0.2f), new Vector3(1.15f, 1.15f, 1f), M("DownedVignette"));
+            var downedRenderer = downed.GetComponent<MeshRenderer>();
+            downedRenderer.enabled = false;
+            downedRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
             var fader = camGo.AddComponent<ScreenFader>();
             fader.quad = fadeQuad.GetComponent<MeshRenderer>();
@@ -954,6 +959,9 @@ namespace TrashAstronauts.EditorTools
             display.noiseBar = noiseScale.transform;
             display.noiseBarRenderer = noiseFill.GetComponent<MeshRenderer>();
             display.voiceText = Text(wrist.transform, "Voice", "NOISE: quiet", new Vector3(0, -0.063f, -0.001f), Quaternion.identity, 0.055f, new Vector2(0.12f, 0.012f), new Color(0.6f, 1f, 0.7f));
+            // Co-op revive, on a strip above the readout: DOWNED - CREW MUST REVIVE YOU, or CREW 2 DOWN 12 m (empty otherwise).
+            Prim(wrist.transform, "Crew Back", PrimitiveType.Cube, new Vector3(0, 0.064f, 0.004f), new Vector3(0.125f, 0.032f, 0.006f), M("Screen"));
+            display.crewText = Text(wrist.transform, "Crew", "", new Vector3(0, 0.064f, -0.001f), Quaternion.identity, 0.06f, new Vector2(0.12f, 0.03f), new Color(1f, 0.62f, 0.45f));
             context.wristDisplay = wrist.transform;
             BuildHeadLamp(context, camGo.transform, wrist.transform); // helmet lamp + LAMP wrist button (Builder.HeadLamp.cs)
 

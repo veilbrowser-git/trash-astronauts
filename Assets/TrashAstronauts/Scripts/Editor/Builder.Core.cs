@@ -232,6 +232,8 @@ namespace TrashAstronauts.EditorTools
                 Unlit("VisorCrack" + stage, Color.white, true, crackTexture);
             }
             Unlit("VisorFlash", new Color(0.85f, 0.02f, 0.02f, 0f), true);
+            // Co-op revive: the downed player's view, dim in the middle (the wrist stays readable) and dark red at the edges.
+            Unlit("DownedVignette", Color.white, true, MakeTexture("DownedVignette", 256, PaintDownedVignette));
             Lit("Silk", new Color(0.7f, 0.68f, 0.62f), 0.3f, flesh, null, fleshN);
             Lit("SpiderEye", new Color(0.015f, 0.008f, 0.008f), 0.97f, null, new Color(0.05f, 0.007f, 0.004f));
             Lit("PaleHide", new Color(0.72f, 0.63f, 0.58f), 0.74f, flesh, null, fleshN);
@@ -345,6 +347,25 @@ namespace TrashAstronauts.EditorTools
         }
 
         static byte B(float v) => (byte)Mathf.Clamp(Mathf.RoundToInt(v * 255f), 0, 255);
+
+        /// <summary>
+        /// The downed view: a steady radial wash, a dark red-brown tint over the middle at 38 % and deepening smoothly to
+        /// 93 % at the rim, colour drained toward black-red. No pattern, so nothing in it flickers or moves.
+        /// </summary>
+        static void PaintDownedVignette(Color32[] px, int n, System.Random rng)
+        {
+            for (int y = 0; y < n; y++)
+            {
+                for (int x = 0; x < n; x++)
+                {
+                    float u = (x + 0.5f) / n * 2f - 1f, v = (y + 0.5f) / n * 2f - 1f;
+                    float r = Mathf.Clamp01(Mathf.Sqrt(u * u + v * v) / 1.15f);
+                    float edge = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.25f, 1f, r));
+                    float alpha = Mathf.Lerp(0.38f, 0.93f, edge);
+                    px[y * n + x] = new Color32(B(Mathf.Lerp(0.22f, 0.1f, edge)), B(0.015f), B(0.01f), B(alpha));
+                }
+            }
+        }
 
         static void PaintPlates(Color32[] px, int n, System.Random rng)
         {

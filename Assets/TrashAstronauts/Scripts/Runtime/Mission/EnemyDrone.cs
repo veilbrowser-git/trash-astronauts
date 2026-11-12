@@ -262,6 +262,12 @@ namespace TrashAstronauts.Mission
         {
             if (IsReplica || !m_Running || Brain == null || IsSedated) return;
             if (IsForbidden(noise.Position) && !IsNearGraph(noise.Position)) return;
+            // Co-op revive: a downed player's calls carry only a little way to it (ReviveRules.DownedNoiseCap).
+            if (noise.Loudness > ReviveRules.DownedNoiseCap && director != null && director.Net != null)
+            {
+                var source = director.FindPlayer(noise.Source);
+                if (source != null && source.IsDowned) noise = new NoiseEvent(noise.Position, ReviveRules.DownedNoiseCap, noise.Kind, noise.Source);
+            }
             if (Brain.HearNoise(noise, transform.position))
             {
                 m_HasPath = false;
@@ -355,7 +361,8 @@ namespace TrashAstronauts.Mission
             {
                 Vector3 flat = playerPosition - transform.position;
                 flat.y = 0f;
-                if (flat.magnitude <= m_Tuning.catchRadius)
+                // Co-op revive: not a crew member just revived, nor anyone close to a body it has only just left.
+                if (flat.magnitude <= m_Tuning.catchRadius && (director == null || !director.CatchBlocked(m_Target)))
                 {
                     Catch(m_Target);
                     return;
@@ -386,8 +393,8 @@ namespace TrashAstronauts.Mission
             for (int i = 0; i < players.Count; i++)
             {
                 var player = players[i];
-                // Someone who is away (headset off, link silent) is not there to be hunted.
-                if (player == null || player.IsAway) continue;
+                // Someone who is away (headset off, link silent) is not there to be hunted, nor is a downed crew member.
+                if (player == null || player.IsAway || player.IsDowned) continue;
                 Vector3 head = player.HeadPosition;
                 float distance = Vector3.Distance(head, transform.position);
                 NearestPlayerDistance = Mathf.Min(NearestPlayerDistance, distance);
@@ -676,7 +683,10 @@ namespace TrashAstronauts.Mission
             else FinishCatch(victim);
         }
 
-        /// <summary>Ends the catch: the run is failed for the crew. Called exactly once per catch.</summary>
+        /// <summary>
+        /// Ends the catch: the run is failed for the crew, or in a crew with someone else still up the victim is downed
+        /// where they were caught and the contract goes on (MissionDirector.EndCatch decides). Called exactly once per catch.
+        /// </summary>
         void FinishCatch(PlayerId victim)
         {
             if (IsReplica)
@@ -686,7 +696,38 @@ namespace TrashAstronauts.Mission
             }
             IsScaring = false;
             m_CatchPending = false;
-            if (director != null) director.FailMission(FailureReason.Caught, victim);
+            if (director != null) director.EndCatch(this, victim);
+        }
+
+        /// <summary>
+        /// Co-op revive (host): it has just downed someone at <paramref name="body"/>. It does not stay on the body: it
+        /// forgets the hunt and goes back on its rounds, starting with the stop of its route furthest from the body. Its
+        /// senses are untouched (anyone it sees on the way is fair game, except near the body for a short grace).
+        /// </summary>
+        public void LeaveAfterCatch(Vector3 body)
+        {
+            if (IsReplica || !m_Running || Brain == null) return;
+            Brain.WakeUp();
+            m_Target = null;
+            m_LastSeenTarget = null;
+            m_SawLastStep = false;
+            m_SeesNow = false;
+            m_HasPath = false;
+            m_Direct = false;
+            m_LurkUntil = 0f;
+            if (patrolRoute != null && patrolRoute.Length > 0)
+            {
+                int far = 0;
+                float best = -1f;
+                for (int i = 0; i < patrolRoute.Length; i++)
+                {
+                    if (patrolRoute[i] == null) continue;
+                    float d = (patrolRoute[i].Position - body).sqrMagnitude;
+                    if (d > best) { best = d; far = i; }
+                }
+                m_PatrolIndex = far;
+            }
+            RefreshPresentation(true);
         }
 
         /// <summary>The jumpscare did not get to its end in time. Put the world back and end the catch without it.</summary>

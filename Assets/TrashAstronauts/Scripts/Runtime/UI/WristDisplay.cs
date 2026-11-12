@@ -18,6 +18,8 @@ namespace TrashAstronauts.UI
         public TMP_Text salvageText;
         public TMP_Text threatText;
         public TMP_Text voiceText;
+        [Tooltip("Co-op revive: DOWNED and the revive ring for this player, or CREW 2 DOWN 12 m for a crew mate (above the readout).")]
+        public TMP_Text crewText;
         [Tooltip("Noise meter: scaled along X from 0 (silent) to 1 (the whole deck heard that).")]
         public Transform noiseBar;
         public Renderer noiseBarRenderer;
@@ -183,6 +185,7 @@ namespace TrashAstronauts.UI
             }
 
             Set(threatText, DescribeThreat(director, blinkOn));
+            Set(crewText, TrashAstronauts.Net.CoopRevive.WristLines(director, player));
 
         }
 

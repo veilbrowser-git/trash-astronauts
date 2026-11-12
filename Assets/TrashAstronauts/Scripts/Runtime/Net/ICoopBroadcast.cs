@@ -55,6 +55,14 @@ namespace TrashAstronauts.Net
         /// <summary>The host's blackout ended (instant = no stutter back).</summary>
         void BlackoutEnded(bool instant);
 
+        // ---- co-op revive (sent by CoopReviveHost, host->all, reliable). No default bodies: a missing forward must not compile.
+        /// <summary>This crew member was caught and is downed at <paramref name="position"/> (after the jumpscare).</summary>
+        void PlayerDowned(byte slot, NetVec3 position);
+        /// <summary>This crew member is up again, revived by <paramref name="by"/> (255 = nobody named).</summary>
+        void PlayerRevived(byte slot, byte by);
+        /// <summary>How far this downed crew member's ring is (0..1) and who holds it (255 = nobody); at most 5 a second while it moves.</summary>
+        void ReviveProgress(byte slot, float progress, byte rescuerSlot);
+
         // ---- items in the host's own hands (stage 3; sent by CoopItemHost). The session adapter forwards each to
         // the NetSessionHost method of the same name, which arbitrates through ItemOwnershipTable and broadcasts
         // ItemOwner. No default bodies: a missing forward must not compile.

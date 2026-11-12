@@ -702,6 +702,7 @@ namespace TrashAstronauts.Tests
             public void OnPointCutReport(byte slot, byte panel, byte index) { }
             public void OnTranqHitReport(byte slot, NetVec3 origin, NetVec3 hitPoint) { }
             public void OnWireReport(byte slot, byte index, NetWireChange change) { }
+            public void OnReviveHold(byte slot, byte targetSlot, bool on) { }
         }
 
         [Test]
