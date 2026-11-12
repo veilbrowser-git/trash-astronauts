@@ -126,6 +126,8 @@ namespace TrashAstronauts.EditorTools
             var settings = BuildSettingsPanel(s_Props, "Suit Settings Console", new Vector3(1.0f, 1.35f, -2.88f), Facing(Vector3.forward), 1.6f);
             settings.director = director;
             var shop = BuildShop(director);
+            var net = AddNetSession(missionGo, director);
+            BuildLobbyBoard(net);
 
             var blackout = missionGo.AddComponent<BlackoutController>();
             blackout.director = director;

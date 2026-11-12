@@ -185,6 +185,20 @@ namespace TrashAstronauts.UI
                     break;
             }
 
+            if (director.ContractStartBlocked && session.Phase != MissionPhase.Active)
+            {
+                // Co-op stage 1: the crew can see each other, but a contract is not shared yet.
+                Set(title, "CO-OP CREW LINKED");
+                Set(body,
+                    "Your crew can see each other in the tug.\n\n"
+                    + "Contracts are not shared in co-op yet, so none\n"
+                    + "can start while the crew is linked.\n\n"
+                    + "To take a contract, press LEAVE on the\n"
+                    + "CO-OP CREW panel (east wall) and play solo.\n\n"
+                    + "Banked credits: " + profile.totalCredits + " cr" + notice);
+                SetPrimary("LEAVE CREW FIRST", false);
+            }
+
             RefreshUpgradeButton(session.Phase, config, profile);
         }
 

@@ -114,6 +114,7 @@ namespace TrashAstronauts.EditorTools
             s_CreaturePrefabs = new[] { BuildCreaturePrefab(0), BuildCreaturePrefab(1), BuildCreaturePrefab(2), BuildCreaturePrefab(3) };
             s_DronePrefab = s_CreaturePrefabs[0];
             s_RigPrefab = BuildPlayerRigPrefab();
+            s_RemoteCrewPrefab = BuildRemoteCrewPrefab();
             AssetDatabase.SaveAssets();
         }
 

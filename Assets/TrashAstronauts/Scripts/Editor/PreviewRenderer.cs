@@ -182,6 +182,8 @@ namespace TrashAstronauts.EditorTools
                 Object.DestroyImmediate(rig);
             }
 
+            CoopShots();
+
             Shot("08_top_down", new Vector3(-1f, 46f, 22f), new Vector3(-1f, 0f, 22.01f), true);
             Shot("18_flight_deck", new Vector3(-0.8f, 1.6f, -3.3f), new Vector3(0.3f, 1.3f, -6.2f));
             Shot("30_supply_bay_shop", new Vector3(-2.5f, 1.6f, -4.3f), new Vector3(-5.4f, 1.3f, -4.8f));
@@ -225,6 +227,82 @@ namespace TrashAstronauts.EditorTools
                 mapDirector.enemies[0].gameObject.SetActive(true);
             }
             Object.DestroyImmediate(lineup);
+        }
+
+        /// <summary>
+        /// The CO-OP CREW panel as it looks offline, with the keypad up and with search results, where it hangs in
+        /// the tug, and two crew stand-ins (RemoteCrew prefab) posed in the cabin. Nothing here opens a socket:
+        /// the panel's text is filled in by hand for the keypad and results views. The scene is not saved.
+        /// </summary>
+        static void CoopShots()
+        {
+            var board = Object.FindAnyObjectByType<TrashAstronauts.UI.NetLobbyBoard>();
+            if (board != null)
+            {
+                board.Refresh();
+                Shot("50_coop_crew_panel", new Vector3(0.7f, 1.72f, 0.22f), new Vector3(1.9f, 1.8f, 0.22f), false, 70f);
+                Shot("51_coop_panel_in_tug", new Vector3(-1.5f, 1.65f, -1.9f), new Vector3(1.9f, 1.5f, 0.35f));
+
+                string status = board.status.text, notice = board.notice.text;
+                board.infoPanel.SetActive(false);
+                board.keypadPanel.SetActive(true);
+                board.codeEntry.text = "C 001  D 04_";
+                board.status.text = "TYPE THE HOST'S CREW CODE\n(shown on the host's CO-OP CREW panel)\nTHIS HEADSET  C 001  D 017";
+                board.fieldDButton.SetLabel("> D <");
+                Shot("52_coop_keypad", new Vector3(0.7f, 1.72f, 0.22f), new Vector3(1.9f, 1.8f, 0.22f), false, 70f);
+
+                board.keypadPanel.SetActive(false);
+                board.resultsPanel.SetActive(true);
+                board.resultLabels[0].text = "TUG 4821  2/4  IN HUB";
+                board.resultLabels[1].text = "TUG 1307  4/4  IN HUB  FULL";
+                board.resultRows[2].SetActive(false);
+                board.status.text = "FOUND 2: PRESS JOIN\nTHIS HEADSET  C 001  D 017";
+                board.notice.text = TrashAstronauts.UI.NetLobbyBoard.NoticeText(TrashAstronauts.Core.Net.LobbyNotice.NobodyFound);
+                Shot("53_coop_find_results", new Vector3(0.7f, 1.72f, 0.22f), new Vector3(1.9f, 1.8f, 0.22f), false, 70f);
+
+                board.resultRows[2].SetActive(true);
+                board.resultsPanel.SetActive(false);
+                board.infoPanel.SetActive(true);
+                board.status.text = status;
+                board.notice.text = notice;
+            }
+
+            var remotePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(Builder.PrefabDir + "/" + Builder.RemoteCrewPrefabName + ".prefab");
+            if (remotePrefab == null) return;
+            var crew = new System.Collections.Generic.List<GameObject>();
+            var poses = new[]
+            {
+                (slot: 1, head: new Vector3(-0.7f, 1.62f, -2.1f), yaw: 20f, wave: true),
+                (slot: 2, head: new Vector3(0.35f, 1.5f, -1.9f), yaw: -40f, wave: false),
+            };
+            foreach (var p in poses)
+            {
+                var go = Object.Instantiate(remotePrefab);
+                go.hideFlags = HideFlags.HideAndDontSave;
+                crew.Add(go);
+                var remote = go.GetComponent<TrashAstronauts.Net.RemoteAvatar>();
+                remote.Setup(new TrashAstronauts.Core.PlayerId(p.slot), 0);
+                Quaternion face = Quaternion.Euler(5f, p.yaw, 0f);
+                var s = TrashAstronauts.Core.Net.AvatarSnapshot.Default;
+                Vector3 right = face * Vector3.right, fwd = face * Vector3.forward;
+                s.headPosition = TrashAstronauts.Net.NetUnity.ToNet(p.head);
+                s.headRotation = TrashAstronauts.Net.NetUnity.ToNet(face);
+                Vector3 l = p.head - right * 0.25f + fwd * 0.3f + Vector3.down * 0.45f;
+                Vector3 r = p.wave ? p.head + right * 0.32f + fwd * 0.15f + Vector3.up * 0.12f : p.head + right * 0.22f + fwd * 0.35f + Vector3.down * 0.4f;
+                s.leftHandPosition = TrashAstronauts.Net.NetUnity.ToNet(l);
+                s.rightHandPosition = TrashAstronauts.Net.NetUnity.ToNet(r);
+                s.leftHandRotation = TrashAstronauts.Net.NetUnity.ToNet(face * Quaternion.Euler(10f, 10f, 0f));
+                s.rightHandRotation = TrashAstronauts.Net.NetUnity.ToNet(face * Quaternion.Euler(p.wave ? -70f : 10f, -10f, 0f));
+                s.leftGripCurl = p.wave ? 0.2f : 1f;
+                s.leftIndexCurl = p.wave ? 0.1f : 1f;
+                remote.Apply(in s);
+                remote.leftGlove.Apply(s.leftIndexCurl, s.leftGripCurl);
+                remote.rightGlove.Apply(0f, 0f);
+                remote.suit.SnapToHead();
+                remote.suit.Pose(0f);
+            }
+            Shot("54_remote_crew_in_tug", new Vector3(-1.3f, 1.6f, 0.7f), new Vector3(-0.1f, 1.3f, -2.0f), false, 70f);
+            foreach (var go in crew) Object.DestroyImmediate(go);
         }
 
         static void Shot(string name, Vector3 from, Vector3 lookAt, bool topDown = false, float fieldOfView = 80f)

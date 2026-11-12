@@ -77,10 +77,16 @@ namespace TrashAstronauts.Mission
         public WebTripwire[] sharedTripwires;
 
         /// <summary>
-        /// The co-op session this mission is part of, or null in single-player (always null today).
-        /// Set and cleared only by the session itself.
+        /// The co-op session this mission is part of, or null in single-player. Set only by NetSession, after
+        /// HOST CO-OP succeeded or a join was welcomed; cleared by <see cref="LeaveSession"/>.
         /// </summary>
         public IMissionNet Net { get; set; }
+
+        /// <summary>
+        /// Co-op stage 1: while a crew link is open (hosting, joining or joined) no contract may start on any
+        /// headset, because contracts are not shared yet. Set by NetSession; always false in single-player.
+        /// </summary>
+        public bool ContractStartBlocked { get; set; }
 
         readonly List<PlayerContext> m_Players = new List<PlayerContext>();
         readonly List<SalvageItem> m_Items = new List<SalvageItem>();
@@ -430,6 +436,8 @@ namespace TrashAstronauts.Mission
         public bool StartMission(PlayerId by)
         {
             if (Session.Phase == MissionPhase.Active) return false;
+            // Co-op stage 1: crew can meet in the tug, but a contract cannot be shared yet.
+            if (ContractStartBlocked) return false;
             if (Net != null && Net.IsClient)
             {
                 // Only the host starts a contract; it answers with the run parameters for everyone.
@@ -889,6 +897,78 @@ namespace TrashAstronauts.Mission
             if (!Session.ReturnToHub()) return false;
             ClearRunObjects();
             if (locker != null) locker.ResetForRun();
+            return true;
+        }
+
+        // ------------------------------------------------------------------ co-op session lifecycle
+
+        /// <summary>
+        /// Puts this headset in the state a co-op session starts from. Called by NetSession when HOST CO-OP
+        /// succeeds (<paramref name="asHost"/> true) and when a joiner's Welcome arrives. Only allowed from the
+        /// hub or the results screen (a session is never opened mid-contract): a results screen goes back to
+        /// the hub; a joiner also clears its own leftovers (the practice scrap, used panels, the locker) so it
+        /// starts from the same empty tug as the host. The tutorial pauses itself while <see cref="Net"/> is set.
+        /// </summary>
+        public bool ResetForSession(bool asHost)
+        {
+            if (Session.Phase == MissionPhase.Active) return false;
+            if (Session.Phase == MissionPhase.Results)
+            {
+                ReturnToHub();
+            }
+            else if (!asHost)
+            {
+                ClearRunObjects();
+                if (locker != null) locker.ResetForRun();
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Back to single-player: called by NetSession after LEAVE, a refused or lost link, or the host closing.
+        /// A contract still running is abandoned with nothing banked (one cannot run in a stage 1 session, but
+        /// a later stage relies on this), the local rig takes slot 0 and its own colour again, and
+        /// <see cref="Net"/> is cleared. The session has already destroyed the other crew members' stand-ins.
+        /// </summary>
+        public void LeaveSession()
+        {
+            if (Session.Phase == MissionPhase.Active) AbortRun();
+            Net = null;
+            ContractStartBlocked = false;
+            var local = LocalPlayer;
+            if (local != null)
+            {
+                local.AssignId(PlayerId.Local, false);
+                if (local.avatar != null) local.avatar.SetTint(PlayerAvatar.CrewColors[0]);
+            }
+        }
+
+        /// <summary>
+        /// Abandons the running contract without a result: nothing is banked, the wreck is cleared, the
+        /// creature goes back to sleep and anyone outside the tug is brought home. Used when a co-op link is lost.
+        /// </summary>
+        public bool AbortRun()
+        {
+            if (!Session.AbortToHub()) return false;
+            if (noise != null) noise.Muted = true;
+            if (enemies != null)
+            {
+                foreach (var enemy in enemies)
+                {
+                    if (enemy != null) enemy.EndRun();
+                }
+            }
+            ClearRunObjects();
+            if (locker != null) locker.ResetForRun();
+            bool anyMoved = false;
+            foreach (var player in m_Players)
+            {
+                if (player == null || player.IsRemote || player.locomotion == null || hubSpawn == null) continue;
+                if (safeZone != null && safeZone.Contains(player.HeadPosition)) continue;
+                anyMoved = true;
+                player.locomotion.FadeTeleport(player.fader, hubSpawn, CloseHatch);
+            }
+            if (!anyMoved) CloseHatch();
             return true;
         }
 
