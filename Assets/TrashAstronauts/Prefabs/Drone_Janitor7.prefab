@@ -2347,9 +2347,12 @@ MonoBehaviour:
   huntOffGraphDistance: 14
   lungeMultiplier: 1.3
   voiceVolume: 0.35
-  scareDistance: 0.78
-  scareLungeSeconds: 0.12
+  scareDistance: 0.55
+  scareLungeSeconds: 0.09
   scareHoldSeconds: 0.75
+  scareDarkSeconds: 0.5
+  scareMaulSeconds: 1.7
+  scareBiteDistance: 0.36
 --- !u!114 &153922907403488282
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -10,7 +10,7 @@ namespace TrashAstronauts.World
     {
         public Vector3 size = Vector3.one;
 
-        public bool Contains(Vector3 worldPoint)
+        public virtual bool Contains(Vector3 worldPoint)
         {
             Vector3 local = transform.InverseTransformPoint(worldPoint);
             Vector3 half = size * 0.5f;

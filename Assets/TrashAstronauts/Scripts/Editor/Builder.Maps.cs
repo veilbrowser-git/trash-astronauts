@@ -123,6 +123,97 @@ namespace TrashAstronauts.EditorTools
             Beams(x0, x1, z0, z1, height, (x1 - x0) >= (z1 - z0));
         }
 
+        /// <summary>A thread of silk between two points.</summary>
+        static void Strand(Transform parent, Vector3 a, Vector3 b, float radius = 0.004f)
+        {
+            Vector3 d = b - a;
+            float length = d.magnitude;
+            if (length < 0.02f) return;
+            var go = Part(parent, "Strand", Tube(radius, 1f, 5), parent.InverseTransformPoint((a + b) * 0.5f), M("Web"));
+            go.transform.rotation = Quaternion.FromToRotation(Vector3.up, d / length);
+            go.transform.localScale = new Vector3(1f, length, 1f);
+        }
+
+        /// <summary>A cobweb filling a corner: spokes fanning out between three edges, tied together by sagging rings.</summary>
+        static void Web(Vector3 corner, Vector3 u, Vector3 v, Vector3 w, float size)
+        {
+            var root = Empty(s_Props, "Web", corner, null, GameLayers.Default).transform;
+            var tips = new List<Vector3>();
+            const int spokes = 7;
+            for (int i = 0; i < spokes; i++)
+            {
+                // Sweep from one wall, across the ceiling line, to the other wall.
+                float t = i / (float)(spokes - 1);
+                Vector3 dir = (u * Mathf.Cos(t * Mathf.PI * 0.5f) + v * Mathf.Sin(t * Mathf.PI * 0.5f) + w * (0.25f + 0.5f * Mathf.Sin(t * Mathf.PI))).normalized;
+                Vector3 tip = corner + dir * size * (0.8f + 0.2f * Mathf.Sin(i * 2.3f));
+                tips.Add(tip);
+                Strand(root, corner, tip, 0.0035f);
+            }
+            for (int ring = 1; ring <= 4; ring++)
+            {
+                float k = ring / 4.6f;
+                for (int i = 0; i + 1 < tips.Count; i++)
+                {
+                    Vector3 a = Vector3.Lerp(corner, tips[i], k), b = Vector3.Lerp(corner, tips[i + 1], k);
+                    Vector3 sag = (a + b) * 0.5f + w * (0.03f * ring);
+                    Strand(root, a, sag, 0.0025f);
+                    Strand(root, sag, b, 0.0025f);
+                }
+            }
+
+            // One mesh per web, not a hundred little objects.
+            var filters = root.GetComponentsInChildren<MeshFilter>();
+            var pieces = new CombineInstance[filters.Length];
+            for (int i = 0; i < filters.Length; i++)
+            {
+                pieces[i].mesh = filters[i].sharedMesh;
+                pieces[i].transform = root.worldToLocalMatrix * filters[i].transform.localToWorldMatrix;
+            }
+            var combined = SaveMesh("Web_" + F(corner.x) + "_" + F(corner.y) + "_" + F(corner.z) + "_" + F(size), () =>
+            {
+                var m = new Mesh();
+                m.CombineMeshes(pieces, true, true);
+                m.RecalculateBounds();
+                return m;
+            });
+            for (int i = root.childCount - 1; i >= 0; i--) UnityEngine.Object.DestroyImmediate(root.GetChild(i).gameObject);
+            root.gameObject.AddComponent<MeshFilter>().sharedMesh = combined;
+            var renderer = root.gameObject.AddComponent<MeshRenderer>();
+            renderer.sharedMaterial = M("Web");
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        }
+
+        /// <summary>Something wrapped in silk and hung from the ceiling. A boot sticks out of the bottom.</summary>
+        static void Cocoon(Vector3 ceilingPoint, float drop, int seed)
+        {
+            var root = Empty(s_Props, "Cocoon", ceilingPoint, null, GameLayers.Default).transform;
+            float length = 0.55f + (seed % 3) * 0.12f;
+            Vector3 centre = Vector3.down * (drop + length * 0.5f);
+            Strand(root, ceilingPoint, ceilingPoint + Vector3.down * drop, 0.008f);
+            Strand(root, ceilingPoint + new Vector3(0.12f, 0, 0.05f), ceilingPoint + Vector3.down * (drop + 0.1f), 0.004f);
+            Part(root, "Bundle", Blob("Cocoon", new Vector3(0.2f, length * 0.5f, 0.18f), 0.05f, seed, 16, 12), centre, M("Silk"), new Vector3(0, seed * 37f, 6f));
+            for (int i = 0; i < 5; i++)
+                Part(root, "Wrap", Torus(0.19f - Mathf.Abs(i - 2) * 0.035f, 0.007f, 14, 5), centre + Vector3.up * ((i - 2) * length * 0.2f), M("Web"), new Vector3(8f * (i % 2 == 0 ? 1 : -1), 0, 5f));
+            CBox(root, "Boot", centre + Vector3.down * (length * 0.5f + 0.04f) + new Vector3(0.03f, 0, 0.04f), new Vector3(0.09f, 0.1f, 0.22f), M("Rubber"), 0.03f, new Vector3(25, seed * 11f, 0));
+            // Solid enough to bump into and to hide behind.
+            var col = Empty(root, "Collider", centre, null, GameLayers.Environment).AddComponent<CapsuleCollider>();
+            col.radius = 0.18f;
+            col.height = length;
+        }
+
+        /// <summary>A cluster of pale egg sacs stuck to a wall.</summary>
+        static void EggSacs(Vector3 wallPoint, Vector3 outward, int count, int seed)
+        {
+            var root = Empty(s_Props, "Egg Sacs", wallPoint, Facing(outward), GameLayers.Default).transform;
+            var rng = new System.Random(seed);
+            for (int i = 0; i < count; i++)
+            {
+                float r = 0.045f + (float)rng.NextDouble() * 0.05f;
+                var at = new Vector3(((float)rng.NextDouble() - 0.5f) * 0.5f, ((float)rng.NextDouble() - 0.5f) * 0.4f, -r * 0.7f);
+                Part(root, "Sac", Blob("EggSac", new Vector3(r, r * 1.15f, r), r * 0.18f, seed + i % 4, 12, 8), at, M("Silk"));
+            }
+        }
+
         static Light RoomLight(string name, float x, float y, float z, Color color, float intensity, float range)
         {
             var light = PointLight(s_Lights, name, new Vector3(x, y, z), color, intensity, range);
@@ -410,6 +501,16 @@ namespace TrashAstronauts.EditorTools
             Window(new Vector3(-3f, 1.7f, 38.6f - T * 0.5f - 0.015f), Vector3.back, 2.4f, 0.9f);
             Dust("B Dust Drive", new Vector3(0, 1.4f, 32.6f), new Vector3(10f, 2.2f, 10f), 60);
 
+            Web(new Vector3(-7.9f, AH - 0.05f, 26.5f), Vector3.right, Vector3.back, Vector3.down, 2.2f);
+            Web(new Vector3(7.9f, AH - 0.05f, 11.7f), Vector3.left, Vector3.forward, Vector3.down, 2.0f);
+            Web(new Vector3(-14.9f, H - 0.05f, 14.1f), Vector3.right, Vector3.forward, Vector3.down, 1.3f);
+            Web(new Vector3(5.9f, H - 0.05f, 38.5f), Vector3.left, Vector3.back, Vector3.down, 1.6f);
+            Cocoon(new Vector3(-5.0f, H, 36.2f), 1.0f, 71);
+            Cocoon(new Vector3(-4.6f, H, 37.7f), 1.25f, 72);
+            Cocoon(new Vector3(3.2f, AH, 23.6f), 2.3f, 73);
+            Cocoon(new Vector3(-12.6f, H, 22.6f), 1.1f, 74);
+            EggSacs(new Vector3(6f - T * 0.5f, 1.8f, 35.2f), Vector3.left, 8, 81);
+
             // Signs
             Sign("ORE HOLD", new Vector3(0, 2.45f, 11.6f - T * 0.5f - 0.02f), Vector3.back, 1.4f);
             Sign("CREW QUARTERS", new Vector3(-8f + T * 0.5f + 0.02f, 2.5f, 19f), Vector3.right, 1.3f);
@@ -606,6 +707,17 @@ namespace TrashAstronauts.EditorTools
             Dust("C Dust Reactor", new Vector3(0, 1.4f, 23.5f), new Vector3(9f, 2.2f, 7f), 50);
             Dust("C Dust Ring", new Vector3(0, 1.4f, 9.6f), new Vector3(16f, 2.2f, 3.4f), 40);
 
+            Web(new Vector3(-8.9f, H - 0.05f, 7.7f), Vector3.right, Vector3.forward, Vector3.down, 1.4f);
+            Web(new Vector3(8.9f, H - 0.05f, 31.5f), Vector3.left, Vector3.back, Vector3.down, 1.5f);
+            Web(new Vector3(-8.9f, H - 0.05f, 31.5f), Vector3.right, Vector3.back, Vector3.down, 1.3f);
+            Web(new Vector3(5.9f, H - 0.05f, 36.5f), Vector3.left, Vector3.back, Vector3.down, 1.6f);
+            Web(new Vector3(-4.9f, H - 0.05f, 27.5f), Vector3.right, Vector3.back, Vector3.down, 1.2f);
+            Cocoon(new Vector3(-3.9f, H, 35.9f), 1.1f, 91);
+            Cocoon(new Vector3(-2.7f, H, 36.1f), 0.9f, 92);
+            Cocoon(new Vector3(-3.4f, H, 18.2f), 1.2f, 93);
+            Cocoon(new Vector3(-7.8f, H, 22.4f), 1.15f, 94);
+            EggSacs(new Vector3(-5f + T * 0.5f, 1.9f, 22.4f), Vector3.right, 7, 95);
+
             // Signs
             Sign("LABORATORY", new Vector3(0, 2.45f, 11.6f - T * 0.5f - 0.02f), Vector3.back, 1.4f);
             Sign("REACTOR", new Vector3(0, 2.45f, 27.6f + T * 0.5f + 0.02f), Vector3.forward, 1.5f, new Color(0.4f, 1f, 0.9f));
@@ -692,13 +804,26 @@ namespace TrashAstronauts.EditorTools
             const float CH = 2.5f, z0 = -6.6f;
 
             FloorAndCeiling("Flight Deck Slabs", -2, 2, z0, -3, CH, M("Floor"));
-            Wall("Flight Deck W", new Vector2(-2, z0), new Vector2(-2, -3), CH, tug);
+            Wall("Flight Deck W", new Vector2(-2, z0), new Vector2(-2, -3), CH, tug, new Gap(1.8f, 1.6f, 2.1f)); // through to the supply bay
+
+            // --- supply bay: a side room for the company store, crates and lockers
+            Room("Supply Bay", -6, -2, z0, -3, CH, "NSW", tug, new Opening('E', -4.8f, 1.6f, 2.1f));
+            TeleportArea("Supply Bay Doorway", -2.6f, -1.4f, -5.3f, -4.3f);
+            Anchor("Supply Bay", -3.6f, -4.8f);
+            PointLight(s_Lights, "Supply Bay Light", new Vector3(-4f, 2.1f, -4.8f), new Color(1f, 0.9f, 0.7f), 3.6f, 6f);
+            Strip("Supply Bay Strip", new Vector3(-3.6f, CH - 0.03f, -4.8f), new Vector3(0.1f, 0.03f, 2.6f), "GlowWarm");
+            Sign("SUPPLY BAY", new Vector3(-2f + T * 0.5f + 0.02f, 2.3f, -4.8f), Vector3.right, 1.0f, new Color(1f, 0.85f, 0.4f));
+            Container(new Vector3(-2.75f, 0, -6.05f), new Vector3(0.9f, 0.8f, 0.8f), "ContainerBlue");
+            Container(new Vector3(-3.7f, 0, -6.1f), new Vector3(0.7f, 0.6f, 0.7f));
+            Barrel(new Vector3(-2.5f, 0, -3.5f), "BarrelBlue");
+            LockerRow(new Vector3(-3.6f, 0, -3f - T * 0.5f - 0.24f), Vector3.back, 3);
+            Poster("STORE CREDIT IS\nSTILL CREDIT", new Vector3(-4.6f, 1.7f, z0 + T * 0.5f + 0.015f), Vector3.forward, 0.9f, 0.5f, 0.42f);
             Wall("Flight Deck E", new Vector2(2, z0), new Vector2(2, -3), CH, tug);
             Wall("Flight Deck S", new Vector2(-2, z0), new Vector2(2, z0), CH, tug);
             TeleportArea("Flight Deck", -1.65f, 1.65f, -4.45f, -3.25f);
             TeleportArea("Flight Deck Doorway", -1.45f, -0.25f, -3.5f, -2.5f);
             Anchor("Flight Deck", -0.85f, -3.9f);
-            Rail(new Vector3(-1.8f, RailY, -4.6f), new Vector3(-1.8f, RailY, -3.3f));
+            Rail(new Vector3(-1.8f, RailY, -3.85f), new Vector3(-1.8f, RailY, -3.3f));
             Rail(new Vector3(1.8f, RailY, -3.9f), new Vector3(1.8f, RailY, -3.2f));
             Rail(new Vector3(0f, CH - 0.25f, -5.6f), new Vector3(0f, CH - 0.25f, -3.3f));
 
@@ -713,7 +838,6 @@ namespace TrashAstronauts.EditorTools
             Box(s_Props, "Windscreen Header", new Vector3(0, 2.18f, glassZ + 0.03f), new Vector3(3.7f, 0.08f, 0.08f), M("Trim"), GameLayers.Default, false);
             foreach (float x in new[] { -0.6f, 0.6f })
                 Box(s_Props, "Windscreen Post", new Vector3(x, 1.6f, glassZ + 0.03f), new Vector3(0.08f, 1.16f, 0.08f), M("Trim"), GameLayers.Default, false);
-            Window(new Vector3(-2f + T * 0.5f + 0.015f, 1.6f, -5.3f), Vector3.right, 1.6f, 0.8f);
             Window(new Vector3(2f - T * 0.5f - 0.015f, 1.6f, -5.9f), Vector3.left, 1.0f, 0.8f);
 
             // Console across the front, a pedestal between the seats, an overhead panel.
@@ -762,7 +886,7 @@ namespace TrashAstronauts.EditorTools
             Strip("Flight Deck Strip", new Vector3(0, CH - 0.03f, -4.1f), new Vector3(2.6f, 0.03f, 0.1f), "GlowTeal");
             Sign("FLIGHT DECK", new Vector3(-0.85f, 2.5f, -3f + T * 0.5f + 0.02f), Vector3.forward, 1.0f, new Color(0.6f, 1f, 0.9f));
             Sign("PAYCHEQUE\nSALVAGE TUG  CLASS IV", new Vector3(0, 2.32f, z0 + T * 0.5f + 0.06f), Vector3.forward, 0.6f, new Color(0.6f, 0.9f, 1f));
-            Poster("DAYS SINCE LAST\nINCIDENT:  0", new Vector3(-2f + T * 0.5f + 0.015f, 1.65f, -3.75f), Vector3.right, 0.8f, 0.5f, 0.45f);
+            Poster("DAYS SINCE LAST\nINCIDENT:  0", new Vector3(-2f + T * 0.5f + 0.015f, 1.65f, -3.48f), Vector3.right, 0.72f, 0.5f, 0.42f);
 
             // Cabin comforts: a walkway into the flight deck, a plant, a floating mug.
             Box(s_Props, "Cabin Walkway", new Vector3(-0.85f, 0.007f, -2.6f), new Vector3(1.0f, 0.012f, 5.6f), M("Walkway"), GameLayers.Default, false);

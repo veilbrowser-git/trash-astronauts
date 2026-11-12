@@ -98,6 +98,9 @@ namespace TrashAstronauts.Audio
         }
 
         /// <summary>Plays a non-positional one-shot (suit alarms, UI). Never varied.</summary>
+        /// <summary>The sound library, or null before one is set (never throws).</summary>
+        public static AudioLibrary LibraryOrNull => Library;
+
         public static void PlayUi(AudioClip clip, float volume = 1f, float pitch = 1f)
         {
             if (clip == null || !Application.isPlaying) return;

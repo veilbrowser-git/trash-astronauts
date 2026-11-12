@@ -102,6 +102,9 @@ namespace TrashAstronauts.EditorTools
 
             var safe = Empty(missionGo.transform, "Safe Zone (Tug)", new Vector3(0, 1.4f, -2.25f)).AddComponent<SafeZone>();
             safe.size = new Vector3(4.2f, 3.2f, 8.7f);
+            var supplyZone = Empty(missionGo.transform, "Safe Zone (Supply Bay)", new Vector3(-4f, 1.4f, -4.8f)).AddComponent<BoxZone>();
+            supplyZone.size = new Vector3(4.2f, 3.2f, 3.8f);
+            safe.annexes = new[] { supplyZone };
             // Big enough for the largest wreck (they all dock at the same airlock) and the tug's flight deck.
             var bounds = Empty(missionGo.transform, "Playable Bounds", new Vector3(-1.5f, 1.5f, 17f)).AddComponent<PlayableBounds>();
             bounds.size = new Vector3(30f, 6f, 50f);
@@ -125,6 +128,15 @@ namespace TrashAstronauts.EditorTools
             var scares = missionGo.AddComponent<ScareDirector>();
             scares.director = director;
             scares.apparition = BuildApparition(missionGo.transform);
+            // A hand-sized spider on a thread, for the drop scare.
+            var dropRoot = Empty(missionGo.transform, "Drop Spider", Vector3.zero, null, GameLayers.Default);
+            var dropBody = Empty(dropRoot.transform, "Body", Vector3.zero, Quaternion.Euler(80f, 0f, 0f)).transform;
+            LoadSpider("mimic", dropBody);
+            dropBody.localScale = Vector3.one * 0.16f;
+            dropRoot.SetActive(false);
+            scares.dropSpider = dropRoot;
+            scares.dropThread = MakeLine(missionGo.transform, "Drop Thread", 0.003f);
+            scares.dropThread.startColor = scares.dropThread.endColor = new Color(0.85f, 0.87f, 0.9f);
 
             // --- tutorial practice item
             var practiceSpawn = Empty(missionGo.transform, "Practice Scrap Spawn", new Vector3(0.9f, 1.15f, 0.4f));
@@ -924,21 +936,77 @@ namespace TrashAstronauts.EditorTools
             return locker;
         }
 
+        /// <summary>
+        /// The company store: a real stall in the supply bay with the goods on the counter, each turning
+        /// slowly above its own buy button. When a contract starts it folds itself up (awning down,
+        /// shutter closed, goods sunk into the counter) and shrinks to a crate; see ShopFolder.
+        /// </summary>
         static ShopPanel BuildShop(MissionDirector director)
         {
-            // On the tug's east wall between the locker and the hatch, facing west (-X), above the rail.
-            var root = Empty(s_Props, "Company Store", new Vector3(2f - T * 0.5f - 0.02f, 1.75f, 0.2f), Facing(Vector3.left), GameLayers.Default);
-            Prim(root.transform, "Back", PrimitiveType.Cube, new Vector3(0, 0, 0.012f), new Vector3(1.15f, 1.0f, 0.02f), M("Screen"));
-            CBox(root.transform, "Header Bar", new Vector3(0, 0.485f, 0.006f), new Vector3(1.15f, 0.03f, 0.03f), M("GlowTeal"), 0.006f);
-            var header = Text(root.transform, "Header", "COMPANY STORE", new Vector3(0, 0.33f, -0.002f), Quaternion.identity, 0.42f, new Vector2(1.08f, 0.24f), new Color(0.6f, 1f, 0.9f));
+            var root = Empty(s_Props, "Company Store", new Vector3(-5.42f, 0f, -4.8f), Facing(Vector3.right), GameLayers.Default);
+            var stall = Empty(root.transform, "Stall", Vector3.zero, null, GameLayers.Default).transform;
+            Prim(stall, "Counter", PrimitiveType.Cube, new Vector3(0, 0.45f, 0), new Vector3(2.4f, 0.9f, 0.62f), M("ContainerBlue"), true, null, GameLayers.Environment);
+            CBox(stall, "Counter Top", new Vector3(0, 0.915f, 0), new Vector3(2.5f, 0.04f, 0.7f), M("Trim"), 0.012f);
+            CBox(stall, "Counter Stripe", new Vector3(0, 0.84f, -0.315f), new Vector3(2.4f, 0.05f, 0.006f), M("Hazard"), 0.001f);
+            Prim(stall, "Back Board", PrimitiveType.Cube, new Vector3(0, 1.62f, 0.37f), new Vector3(2.4f, 1.42f, 0.06f), M("Screen"), true, null, GameLayers.Environment);
+            foreach (float x in new[] { -1.22f, 1.22f })
+                CBox(stall, "Post", new Vector3(x, 1.16f, 0.33f), new Vector3(0.08f, 2.32f, 0.08f), M("Trim"), 0.015f);
+            CBox(stall, "Header Bar", new Vector3(0, 2.26f, 0.33f), new Vector3(2.52f, 0.1f, 0.1f), M("GlowTeal"), 0.02f);
+            var header = Text(stall, "Header", "COMPANY STORE", new Vector3(0, 1.98f, 0.335f), Quaternion.identity, 0.62f, new Vector2(2.2f, 0.42f), new Color(0.6f, 1f, 0.9f));
+            Text(stall, "Slogan", "everything you need to earn it back", new Vector3(0, 1.2f, 0.335f), Quaternion.identity, 0.3f, new Vector2(2.2f, 0.12f), new Color(1f, 0.85f, 0.4f));
 
-            var size = new Vector2(1.0f, 0.17f);
+            // Hinged parts: the awning swings down, the shutter rolls shut over the goods.
+            var awningHinge = Empty(stall, "Awning Hinge", new Vector3(0, 2.34f, 0.36f), null, GameLayers.Default).transform;
+            CBox(awningHinge, "Awning", new Vector3(0, -0.02f, -0.52f), new Vector3(2.62f, 0.04f, 1.04f), M("Hazard"), 0.012f);
+            CBox(awningHinge, "Awning Lip", new Vector3(0, -0.08f, -1.03f), new Vector3(2.62f, 0.14f, 0.03f), M("Trim"), 0.008f);
+            var shutterHinge = Empty(stall, "Shutter Hinge", new Vector3(0, 2.27f, -0.33f), Quaternion.Euler(90f, 0f, 0f), GameLayers.Default).transform;
+            CBox(shutterHinge, "Shutter", new Vector3(0, -0.67f, 0), new Vector3(2.4f, 1.34f, 0.03f), M("Door"), 0.008f);
+            for (int i = 0; i < 6; i++)
+                CBox(shutterHinge, "Shutter Slat", new Vector3(0, -0.12f - i * 0.22f, -0.018f), new Vector3(2.4f, 0.02f, 0.012f), M("Trim"), 0.004f);
+
+            // The goods, one display each.
+            var goods = Empty(stall, "Goods", new Vector3(0, 0.94f, 0), null, GameLayers.Default).transform;
+            var x90 = new Vector3(90, 0, 0);
+            Transform Display(string name, float x)
+            {
+                Part(goods, name + " Plinth", Lathe("ShopPlinth", 16, new Vector2(0.17f, 0f), new Vector2(0.15f, 0.04f), new Vector2(0.12f, 0.05f)), new Vector3(x, 0, 0), M("Steel"));
+                var turn = Empty(goods, name, new Vector3(x, 0.26f, 0), null, GameLayers.Default);
+                turn.AddComponent<SlowSpin>();
+                return turn.transform;
+            }
+            var darts = Display("Tranq Darts", -0.8f);
+            Part(darts, "Rack", Tube(0.09f, 0.03f, 14), new Vector3(0, -0.16f, 0), M("TranqBody"));
+            for (int i = 0; i < 3; i++)
+            {
+                float ang = i * Mathf.PI * 2f / 3f;
+                var at = new Vector3(Mathf.Cos(ang) * 0.05f, 0, Mathf.Sin(ang) * 0.05f);
+                Part(darts, "Dart", Cone(0.012f, 0.002f, 0.2f, 8), at + Vector3.up * 0.0f, M("Chrome"));
+                Part(darts, "Dart Tail", Tube(0.014f, 0.05f, 8), at + Vector3.down * 0.11f, M("DartGlow"));
+            }
+            var dish = Display("Scanner Range", 0f);
+            Part(dish, "Dish", Lathe("ScannerDish", 16, new Vector2(0.012f, 0f), new Vector2(0.044f, 0.03f), new Vector2(0.047f, 0.03f), new Vector2(0.016f, -0.004f)), new Vector3(0, 0.02f, 0), M("PaintOrange"), new Vector3(60, 0, 0)).transform.localScale = Vector3.one * 2.4f;
+            Part(dish, "Module", Tube(0.05f, 0.14f, 12), new Vector3(0, -0.12f, 0), M("ToolBody"));
+            Part(dish, "Antenna", Tube(0.004f, 0.2f, 6), new Vector3(0.04f, 0.02f, -0.03f), M("Chrome"));
+            var coolant = Display("Cutter Coolant", 0.8f);
+            Part(coolant, "Canister", Lathe("CutterTank", 12, new Vector2(0f, -0.055f), new Vector2(0.018f, -0.05f), new Vector2(0.022f, -0.035f), new Vector2(0.022f, 0.035f), new Vector2(0.018f, 0.05f), new Vector2(0f, 0.055f)),
+                new Vector3(0, -0.02f, 0), M("PaintOrange")).transform.localScale = Vector3.one * 3f;
+            for (int i = 0; i < 4; i++) Part(coolant, "Fin", Tube(0.085f, 0.008f, 14), new Vector3(0, -0.1f + i * 0.045f, 0), M("Steel"));
+            Part(coolant, "Valve", Tube(0.016f, 0.06f, 8), new Vector3(0, 0.17f, 0), M("Brass"));
+
+            var size = new Vector2(0.68f, 0.26f);
             var panel = root.AddComponent<ShopPanel>();
             panel.director = director;
             panel.header = header;
-            panel.tranqButton = Button(root.transform, "Buy Tranq Dart", new Vector3(0, 0.08f, 0), Quaternion.identity, size, "TRANQ DART", M("ButtonGreen"), 0.4f);
-            panel.scannerButton = Button(root.transform, "Buy Scanner Range", new Vector3(0, -0.13f, 0), Quaternion.identity, size, "SCANNER RANGE+", M("ButtonBlue"), 0.4f);
-            panel.cutterButton = Button(root.transform, "Buy Cutter Coolant", new Vector3(0, -0.34f, 0), Quaternion.identity, size, "CUTTER COOLANT", M("ButtonAmber"), 0.4f);
+            panel.tranqButton = Button(stall, "Buy Tranq Dart", new Vector3(-0.8f, 0.5f, -0.325f), Quaternion.identity, size, "TRANQ DART", M("ButtonGreen"), 0.27f);
+            panel.scannerButton = Button(stall, "Buy Scanner Range", new Vector3(0f, 0.5f, -0.325f), Quaternion.identity, size, "SCANNER RANGE+", M("ButtonBlue"), 0.27f);
+            panel.cutterButton = Button(stall, "Buy Cutter Coolant", new Vector3(0.8f, 0.5f, -0.325f), Quaternion.identity, size, "CUTTER COOLANT", M("ButtonAmber"), 0.27f);
+
+            var folder = root.AddComponent<ShopFolder>();
+            folder.director = director;
+            folder.stall = stall;
+            folder.hinges = new[] { awningHinge, shutterHinge };
+            folder.foldedAngles = new[] { new Vector3(-88f, 0f, 0f), new Vector3(-90f, 0f, 0f) };
+            folder.goods = goods;
             return panel;
         }
 
@@ -1138,6 +1206,20 @@ namespace TrashAstronauts.EditorTools
 
             // --- drifting dust in the big spaces
             Dust("Dust Corridor", new Vector3(0, 1.4f, 14.6f), new Vector3(2.2f, 2.2f, 13f), 50);
+            // --- what lives here has been busy: webs in the corners, things wrapped and hung from the ceiling
+            Web(new Vector3(-10.2f, H - 0.05f, 18.5f), Vector3.right, Vector3.back, Vector3.down, 1.5f);
+            Web(new Vector3(-10.2f, H - 0.05f, 9.7f), Vector3.right, Vector3.forward, Vector3.down, 1.2f);
+            Web(new Vector3(8.2f, H - 0.05f, 15.5f), Vector3.left, Vector3.back, Vector3.down, 1.2f);
+            Web(new Vector3(-4.4f, H - 0.05f, 29.5f), Vector3.right, Vector3.back, Vector3.down, 1.6f);
+            Web(new Vector3(4.4f, H - 0.05f, 21.7f), Vector3.left, Vector3.forward, Vector3.down, 1.3f);
+            Web(new Vector3(-1.2f, H - 0.05f, 16.2f), Vector3.right, Vector3.forward, Vector3.down, 0.9f);
+            Cocoon(new Vector3(-3.9f, H, 26.3f), 1.25f, 51);
+            Cocoon(new Vector3(-3.7f, H, 28.9f), 0.95f, 52);
+            Cocoon(new Vector3(-8.3f, H, 12.4f), 1.1f, 53);
+            Cocoon(new Vector3(6.6f, H, 9.6f), 1.2f, 54);
+            EggSacs(new Vector3(-4.5f + T * 0.5f, 1.9f, 27.6f), Vector3.right, 7, 61);
+            EggSacs(new Vector3(-1.3f + T * 0.5f, 2.2f, 17.4f), Vector3.right, 5, 62);
+
             Dust("Dust Cargo", new Vector3(-5.8f, 1.4f, 14.1f), new Vector3(8f, 2.2f, 8f), 70);
             Dust("Dust Reactor", new Vector3(0, 1.4f, 25.6f), new Vector3(8f, 2.2f, 7f), 60);
             Dust("Dust Maintenance", new Vector3(4.8f, 1.4f, 12.1f), new Vector3(6f, 2.2f, 6f), 40);

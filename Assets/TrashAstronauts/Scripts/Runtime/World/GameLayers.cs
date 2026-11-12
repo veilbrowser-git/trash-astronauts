@@ -21,6 +21,7 @@ namespace TrashAstronauts.World
         public const int Zone = 15;
         public const int Enemy = 16;
 
+
         public static readonly (int index, string name)[] Names =
         {
             (Environment, "Environment"),

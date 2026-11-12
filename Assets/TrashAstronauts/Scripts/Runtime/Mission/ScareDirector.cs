@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace TrashAstronauts.Mission
 {
-    public enum ScareKind { DistantBang, HullGroan, Scuttle, BreathBehind, LightsFlicker, Glimpse, Charge }
+    public enum ScareKind { DistantBang, HullGroan, Scuttle, BreathBehind, LightsFlicker, Glimpse, Charge, Drop }
 
     /// <summary>
     /// Keeps the wreck from ever feeling empty. While a contract is running and the player is out of the
@@ -22,10 +22,13 @@ namespace TrashAstronauts.Mission
     public sealed class ScareDirector : MonoBehaviour
     {
         public MissionDirector director;
-        public Vector2 interval = new Vector2(28f, 60f);
+        public Vector2 interval = new Vector2(20f, 44f);
+        [Tooltip("A small spider on a thread, for the drop scare. Kept switched off between uses.")]
+        public GameObject dropSpider;
+        public LineRenderer dropThread;
         [Tooltip("The shape used for a glimpse. Kept switched off between glimpses.")]
         public GameObject apparition;
-        public float firstDelay = 35f;
+        public float firstDelay = 24f;
 
         public int EventCount { get; private set; }
         public ScareKind LastKind { get; private set; }
@@ -43,6 +46,7 @@ namespace TrashAstronauts.Mission
             if (director == null) director = MissionDirector.Active;
             if (director != null) director.MissionStarted += OnMissionStarted;
             if (apparition != null) apparition.SetActive(false);
+            if (dropSpider != null) dropSpider.SetActive(false);
         }
 
         void OnDisable()
@@ -86,7 +90,7 @@ namespace TrashAstronauts.Mission
             if (player.InSafeZone || Time.time < m_Next) return;
             if (director.blackout != null && director.blackout.IsBlackout) return;
             if (state == EnemyState.Chase) return; // the real thing is scary enough
-            Trigger((ScareKind)m_Random.Next(7));
+            Trigger((ScareKind)m_Random.Next(8));
         }
 
         /// <summary>Stages one event now. Returns false if it could not (for example no spot for a glimpse).</summary>
@@ -123,6 +127,10 @@ namespace TrashAstronauts.Mission
                     break;
                 case ScareKind.Glimpse:
                     done = ShowGlimpse(player, head, forward);
+                    break;
+                case ScareKind.Drop:
+                    done = dropSpider != null && !IsDropping;
+                    if (done) StartCoroutine(Drop(player));
                     break;
                 case ScareKind.Charge:
                     done = ShowGlimpse(player, head, forward);
@@ -236,6 +244,59 @@ namespace TrashAstronauts.Mission
             m_LookedAt = 0f;
             m_GlimpseUntil = Time.time + 6f;
             return true;
+        }
+
+        /// <summary>True while the spider on a thread is in front of the player.</summary>
+        public bool IsDropping { get; private set; }
+
+        IEnumerator Drop(PlayerContext player)
+        {
+            // A spider the size of a hand drops on a thread to eye level, an arm's length away, hangs
+            // there turning slowly, and is yanked back up. It cannot touch or hurt the player.
+            IsDropping = true;
+            Vector3 head = player.HeadPosition;
+            Vector3 forward = player.head != null ? Vector3.ProjectOnPlane(player.head.forward, Vector3.up) : Vector3.forward;
+            forward = forward.sqrMagnitude > 0.01f ? forward.normalized : Vector3.forward;
+            Vector3 hang = head + forward * 0.7f + Vector3.down * 0.06f;
+            float ceiling = head.y + 1.1f;
+            if (Physics.Raycast(hang, Vector3.up, out RaycastHit hit, 3f, GameLayers.EnvironmentMask, QueryTriggerInteraction.Ignore)) ceiling = hit.point.y;
+            Vector3 top = new Vector3(hang.x, ceiling, hang.z);
+
+            dropSpider.SetActive(true);
+            if (Sfx.Library != null) Sfx.PlayAt(Sfx.Library.cutterSparks, hang, 0.45f, 1.9f, 6f);
+            float spin = Range(0f, 360f);
+            void Place(Vector3 at)
+            {
+                dropSpider.transform.SetPositionAndRotation(at, Quaternion.LookRotation(-forward, Vector3.up) * Quaternion.Euler(0f, Mathf.Sin(spin) * 25f, 0f));
+                if (dropThread != null)
+                {
+                    dropThread.enabled = true;
+                    dropThread.positionCount = 2;
+                    dropThread.SetPosition(0, top);
+                    dropThread.SetPosition(1, at + Vector3.up * 0.02f);
+                }
+            }
+            for (float t = 0f; t < 0.3f; t += Time.deltaTime)
+            {
+                float k = t / 0.3f;
+                Place(Vector3.Lerp(top, hang, 1f - (1f - k) * (1f - k)));
+                yield return null;
+            }
+            if (player != null) player.PulseBoth(0.5f, 0.1f);
+            for (float t = 0f; t < 1.4f && director != null && director.Phase == MissionPhase.Active; t += Time.deltaTime)
+            {
+                spin += Time.deltaTime * 2.2f;
+                Place(hang + Vector3.up * (Mathf.Sin(t * 9f) * 0.012f));
+                yield return null;
+            }
+            for (float t = 0f; t < 0.22f; t += Time.deltaTime)
+            {
+                Place(Vector3.Lerp(hang, top, t / 0.22f));
+                yield return null;
+            }
+            if (dropThread != null) dropThread.enabled = false;
+            dropSpider.SetActive(false);
+            IsDropping = false;
         }
 
         /// <summary>True while the shape is running at the player.</summary>

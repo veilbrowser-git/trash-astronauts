@@ -42,6 +42,8 @@ namespace TrashAstronauts.Mission
         public int Value => m_DamagedValue >= 0 ? m_DamagedValue : (definition != null ? definition.creditValue : 0);
         public int FullValue => definition != null ? definition.creditValue : 0;
         public int DamageCount { get; private set; }
+        /// <summary>The suit pocket this is stowed in, if any.</summary>
+        public Inventory StoredIn { get; set; }
         int m_DamagedValue = -1;
 
         /// <summary>
@@ -50,7 +52,7 @@ namespace TrashAstronauts.Mission
         /// </summary>
         public int ApplyImpact(float speed)
         {
-            if (definition == null || definition.fragility <= 0f || IsSecured || isTraining) return 0;
+            if (definition == null || definition.fragility <= 0f || IsSecured || isTraining || StoredIn != null) return 0;
             var director = m_Director != null ? m_Director : MissionDirector.Active;
             if (director == null || director.Session == null || director.Phase != MissionPhase.Active) return 0;
             const float safeSpeed = 2.0f, wreckingSpeed = 7f;
@@ -107,6 +109,7 @@ namespace TrashAstronauts.Mission
             ReleasePosition = transform.position;
             WasThrown = false;
             var player = PlayerContext.From(args.interactorObject);
+            if (player != null && player.inventory != null && player.inventory.TryStoreReleased(this)) return;
             // Not while the object is being torn down (scene unload, end of a run).
             if (isActiveAndEnabled && gameObject.activeInHierarchy && gameObject.scene.isLoaded) StartCoroutine(AfterRelease(player));
         }
@@ -179,6 +182,7 @@ namespace TrashAstronauts.Mission
             var player = PlayerContext.From(args.interactorObject);
             LastHolder = player != null ? player.Id : PlayerId.Local;
             WasThrown = false;
+            if (StoredIn != null) StoredIn.Release(this);      // taken out of a pocket
             if (impact != null) impact.LastHandler = LastHolder;
             if (scanTag != null && definition != null) scanTag.Show(definition.displayName, Value, 2.5f);
 

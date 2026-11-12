@@ -223,6 +223,8 @@ namespace TrashAstronauts.EditorTools
             Lit("Shadow", new Color(0.012f, 0.012f, 0.016f), 0.1f);
             Lit("ApparitionEye", new Color(1f, 0.95f, 0.8f), 0.9f, null, new Color(2.6f, 2.3f, 1.7f));
             Lit("EyeSocket", new Color(0.02f, 0.008f, 0.008f), 0.9f);
+            Unlit("Web", new Color(0.8f, 0.83f, 0.86f, 0.38f), true);
+            Lit("Silk", new Color(0.7f, 0.68f, 0.62f), 0.3f, flesh, null, fleshN);
             Lit("SpiderEye", new Color(0.015f, 0.008f, 0.008f), 0.97f, null, new Color(0.05f, 0.007f, 0.004f));
             Lit("PaleHide", new Color(0.72f, 0.63f, 0.58f), 0.74f, flesh, null, fleshN);
             Lit("WardenPlate", new Color(0.3f, 0.2f, 0.07f), 0.78f, flesh, null, fleshN);

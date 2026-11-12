@@ -122,6 +122,10 @@ namespace TrashAstronauts.EditorTools
             grab.throwOnDetach = true;
             grab.retainTransformParent = false;
             grab.selectMode = InteractableSelectMode.Single;
+            // Throws follow the last fifth of a second of hand movement, so a flick of the wrist counts.
+            grab.throwSmoothingDuration = 0.18f;
+            grab.throwVelocityScale = 1.25f;
+            grab.throwAngularVelocityScale = 0.9f;
             if (heavy)
             {
                 // Bulky items lag behind the hand a little, which reads as weight.
@@ -855,6 +859,38 @@ namespace TrashAstronauts.EditorTools
             display.voiceText = Text(wrist.transform, "Voice", "NOISE: quiet", new Vector3(0, -0.063f, -0.001f), Quaternion.identity, 0.055f, new Vector2(0.12f, 0.012f), new Color(0.6f, 1f, 0.7f));
             context.wristDisplay = wrist.transform;
 
+            // --- inventory: an INV button beside the wrist display, and a see-through tray of pockets
+            var invButton = Button(wrist.transform, "Inventory Button", new Vector3(0.1f, 0.012f, 0f), Quaternion.identity, new Vector2(0.04f, 0.04f), "INV", M("ButtonAmber"), 0.075f);
+            var invRoot = Empty(rig.transform, "Inventory", Vector3.zero, null, GameLayers.Default);
+            var tray = Empty(invRoot.transform, "Tray", Vector3.zero, null, GameLayers.Default);
+            Prim(tray.transform, "Glass", PrimitiveType.Cube, new Vector3(0, 0.01f, 0.03f), new Vector3(0.94f, 0.3f, 0.004f), M("Ghost"));
+            CBox(tray.transform, "Top Edge", new Vector3(0, 0.162f, 0.03f), new Vector3(0.94f, 0.008f, 0.008f), M("GlowTeal"), 0.002f);
+            CBox(tray.transform, "Bottom Edge", new Vector3(0, -0.142f, 0.03f), new Vector3(0.94f, 0.008f, 0.008f), M("GlowTeal"), 0.002f);
+            var invHeader = Text(tray.transform, "Header", "POCKETS", new Vector3(0, 0.115f, 0.026f), Quaternion.identity, 0.16f, new Vector2(0.9f, 0.07f), new Color(0.7f, 1f, 0.95f));
+            var invSlots = new List<Transform>();
+            for (int i = 0; i < 5; i++)
+            {
+                var slot = Empty(tray.transform, "Slot " + i, new Vector3(-0.36f + i * 0.18f, -0.03f, -0.02f), null, GameLayers.Default);
+                Part(slot.transform, "Ring", Torus(0.07f, 0.004f, 20, 5), Vector3.zero, M("GlowTeal"), new Vector3(90, 0, 0));
+                Prim(slot.transform, "Pocket", PrimitiveType.Sphere, Vector3.zero, Vector3.one * 0.135f, M("Ghost"));
+                invSlots.Add(slot.transform);
+            }
+            var inventory = rig.AddComponent<Inventory>();
+            inventory.player = context;
+            inventory.panel = tray;
+            inventory.slots = invSlots.ToArray();
+            inventory.header = invHeader;
+            inventory.wristButton = invButton;
+            context.inventory = inventory;
+
+            // --- one-way pushers: the chest shoulders floating junk aside, an open hand can swat it
+            context.bumpers = new[]
+            {
+                MakeBumper(rig.transform, "Body Bumper", chest.transform, new Vector3(0, -0.2f, -0.12f), 0.24f, 0.9f, 0f, null),
+                MakeBumper(rig.transform, "Left Hand Bumper", context.leftHand.interactor.transform, Vector3.zero, 0.09f, 0f, 0.9f, context.leftHand),
+                MakeBumper(rig.transform, "Right Hand Bumper", context.rightHand.interactor.transform, Vector3.zero, 0.09f, 0f, 0.9f, context.rightHand),
+            };
+
             // --- suit menu
             var menuRoot = Empty(rig.transform, "Suit Menu", Vector3.zero, null, GameLayers.Default);
             var menuPanel = BuildSettingsPanel(menuRoot.transform, "Panel", Vector3.zero, Quaternion.identity, 1f);
@@ -900,6 +936,18 @@ namespace TrashAstronauts.EditorTools
             source.spatialBlend = 0f;
             source.volume = 0f;
             return source;
+        }
+
+        static Bumper MakeBumper(Transform rigRoot, string name, Transform target, Vector3 offset, float radius, float height, float minSpeed, HandRig hand)
+        {
+            var bumper = Empty(rigRoot, name, Vector3.zero, null, GameLayers.Default).AddComponent<Bumper>();
+            bumper.target = target;
+            bumper.localOffset = offset;
+            bumper.radius = radius;
+            bumper.height = height;
+            bumper.minSpeed = minSpeed;
+            bumper.hand = hand;
+            return bumper;
         }
 
         static void MakeHolster(GameObject holsterGo, SuitTool tool, Quaternion dockRotation)
