@@ -96,7 +96,7 @@ namespace TrashAstronauts.Tests
             Assert.AreEqual(run.items.Length, bot.World.Run.items.Length);
             Assert.AreNotEqual(RunStartParams.NoCreature, run.creatureIndex, "The shared spider is aboard a co-op contract.");
             Assert.IsTrue(m_Director.CreatureAboard);
-            Assert.IsNull(m_Director.ActiveEnemy.GetComponent<VoiceMimic>(), "Never the Mimic in co-op.");
+            Assert.AreSame(m_Director.enemies[run.creatureIndex], m_Director.ActiveEnemy, "The species the host picked is the one aboard.");
             Assert.AreEqual(0u, run.wireArmedMask, "No webs in co-op yet.");
             Assert.AreEqual(run.creatureIndex, bot.World.Run.creatureIndex);
 

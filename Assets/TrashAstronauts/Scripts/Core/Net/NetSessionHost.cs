@@ -792,6 +792,7 @@ namespace TrashAstronauts.Core.Net
             from.voiceStamp = m_Now;
             if (elapsed > 0) from.voiceTokens = Math.Min(VoiceMsg.BurstFrames, from.voiceTokens + elapsed * VoiceMsg.MaxFramesPerSecond);
             if (from.away || from.voiceTokens < m_VoiceRead.count) { m_Stats.rejected++; return; }
+            if (m_VoiceRead.slot == VoiceMsg.CreatureSlot) { m_Stats.rejected++; return; } // co-op Mimic: only the host speaks as the creature
             from.voiceTokens -= m_VoiceRead.count;
             m_VoiceRead.slot = from.slot; // never trust the slot a client wrote
 

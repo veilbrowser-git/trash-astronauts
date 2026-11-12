@@ -99,10 +99,11 @@ namespace TrashAstronauts.UI
                 var creature = director.ActiveEnemy;
                 bool heard = director.Phase == MissionPhase.Active && creature != null && Time.time - creature.LastHeardNoiseTime < 2f;
                 string label = heard ? "!! IT HEARD THAT !!" : NoiseLabel.Length > 0 ? "NOISE: " + NoiseLabel : "NOISE: quiet";
-                if (voice != null && !voice.Listening && voice.Status.Length > 0) label += "  (" + voice.Status + ")";
-                else if (voice != null && voice.CaptureActive) label += "  REC";
-                // Co-op: this player's voice is going out to the crew right now.
                 var chat = TrashAstronauts.Net.Voice.VoiceChat.Active;
+                if (voice != null && !voice.Listening && voice.Status.Length > 0) label += "  (" + voice.Status + ")";
+                // REC: phrases are being kept for a Mimic (here, or on the co-op host from this player's voice chat).
+                else if (voice != null && (voice.CaptureActive || (chat != null && chat.Mimic != null && chat.Mimic.HostMayKeepMyVoice))) label += "  REC";
+                // Co-op: this player's voice is going out to the crew right now.
                 if (chat != null && chat.IsTransmitting) label += "  MIC";
                 if (voiceText.text != label) voiceText.text = label;
             }

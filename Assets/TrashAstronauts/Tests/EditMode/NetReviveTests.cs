@@ -26,7 +26,7 @@ namespace TrashAstronauts.Tests
         [Test]
         public void Ring_FillsIn5sWithOneHand_AQuarterFasterWithTwoButNoMore_AndDrainsIn2_5sWithNone()
         {
-            Assert.AreEqual(5, NetProtocol.Version, "the revive is protocol 5");
+            Assert.AreEqual(6, NetProtocol.Version, "0.13.0 (revive, shoves, the Mimic in co-op) is protocol 6");
             float p = 0f;
             int frames = 0;
             while (p < 1f && frames < 10000) { p = ReviveRules.StepProgress(p, 1, 0.01f); frames++; }

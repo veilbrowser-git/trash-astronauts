@@ -47,7 +47,8 @@ namespace TrashAstronauts.Net
     /// Proximity voice chat rides on the same session (VoiceChat, attached when a session starts): while a crew
     /// member talks, their compressed voice goes to the others through the host (and Unity's Relay when online).
     /// Nothing is sent while nobody talks, with MIC or VOICE CHAT off, or outside a crew; nothing is recorded or
-    /// stored, and recorded Mimic phrases and profile data are never sent.
+    /// stored, and profile data are never sent. With a Mimic aboard the host keeps a few crew phrases in memory and
+    /// sends its altered playback as the creature's voice (Net/Voice/MimicCrewVoice.cs).
     /// </summary>
     [DefaultExecutionOrder(300)] // LateUpdate after XRI, hand tracking, the gloves and the suit have posed the rig
     public sealed class NetSession : MonoBehaviour, IMissionNet
@@ -770,7 +771,7 @@ namespace TrashAstronauts.Net
             // Co-op revive: a crew member kept on only for a jumpscare is no longer in the crew (cannot be downed or revive).
             m_Rules.Revive.IsPresent = slot => IsPresent(slot);
             m_Rules.Revive.Clock = () => Now;
-            // Co-op contracts carry the shared spider (never the Mimic) and its blackouts; webs stay unstrung.
+            // Co-op contracts carry the shared spider (any species, the Mimic too) and its blackouts; webs stay unstrung.
             m_Rules.CreatureEnabled = true;
             // Everyone grabs: the host's arbitration of crew grabs, releases, throws and hand-backs.
             m_Items = new CoopItemHost(director, new HostBroadcast(this));
