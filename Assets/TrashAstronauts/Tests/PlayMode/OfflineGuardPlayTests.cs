@@ -5,6 +5,7 @@ using TrashAstronauts.Core;
 using TrashAstronauts.Core.Net;
 using TrashAstronauts.Mission;
 using TrashAstronauts.Net;
+using TrashAstronauts.Net.Online;
 using TrashAstronauts.Player;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -14,8 +15,8 @@ namespace TrashAstronauts.Tests
 {
     /// <summary>
     /// Single-player must stay exactly single-player: a whole contract played without touching the CO-OP CREW
-    /// panel never opens a socket, never sets MissionDirector.Net, and leaves the NetSession offline. Kept in
-    /// the suite for good (plan section 8).
+    /// panel never opens a socket or a Relay connection, never asks Unity's services for anything, never sets
+    /// MissionDirector.Net, and leaves the NetSession offline. Kept in the suite for good (plan section 8).
     /// </summary>
     public class OfflineGuardPlayTests
     {
@@ -63,8 +64,12 @@ namespace TrashAstronauts.Tests
             Assert.IsTrue(net.IsOffline);
             Assert.IsNull(m_Director.Net);
             Assert.IsFalse(m_Director.ContractStartBlocked);
+            int onlineStarts = OnlineServices.StartRequests;
+            Assert.AreEqual(0, RelayTransport.LiveCount);
 
             Assert.IsTrue(m_Director.StartMission(PlayerId.Local));
+            Assert.IsFalse(m_Director.CoopRideAlong, "A solo contract is the full contract.");
+            Assert.IsTrue(m_Director.CreatureAboard);
             Assert.AreEqual(MissionPhase.Active, m_Director.Phase);
             for (int i = 0; i < 30; i++) yield return null;
 
@@ -83,6 +88,10 @@ namespace TrashAstronauts.Tests
             Assert.IsFalse(net.IsHost);
             Assert.IsFalse(net.IsClient);
             Assert.AreEqual(0, m_Opened, "No transport was ever asked for.");
+            Assert.AreEqual(onlineStarts, OnlineServices.StartRequests, "Unity's services were never asked to start.");
+            Assert.AreEqual(0, RelayTransport.LiveCount, "No Relay connection.");
+            Assert.IsFalse(net.HasOnlineLink, "No online link was even created.");
+            Assert.AreEqual(OnlineStep.None, net.OnlineBusy);
             Assert.AreEqual(0, UdpTransport.LiveCount);
             Assert.IsNull(m_Director.Net);
             Assert.IsFalse(m_Director.ContractStartBlocked);

@@ -255,14 +255,37 @@ namespace TrashAstronauts.EditorTools
                 board.resultsPanel.SetActive(true);
                 board.resultLabels[0].text = "TUG 4821  2/4  IN HUB";
                 board.resultLabels[1].text = "TUG 1307  4/4  IN HUB  FULL";
-                board.resultRows[2].SetActive(false);
+                for (int i = 2; i < board.resultRows.Length; i++) board.resultRows[i].SetActive(false);
                 board.status.text = "FOUND 2: PRESS JOIN\nTHIS HEADSET  C 001  D 017";
                 board.notice.text = TrashAstronauts.UI.NetLobbyBoard.NoticeText(TrashAstronauts.Core.Net.LobbyNotice.NobodyFound);
                 Shot("53_coop_find_results", new Vector3(0.7f, 1.72f, 0.22f), new Vector3(1.9f, 1.8f, 0.22f), false, 70f);
 
-                board.resultRows[2].SetActive(true);
+                // FIND ONLINE with a full list of five games, one of them out on a contract.
+                string[] games = { "TUG 4821  2/4  IN HUB", "TUG 1307  4/4  IN HUB  FULL", "TUG 5150  1/4  RESULTS", "TUG 2718  3/4  ON CONTRACT", "TUG 9001  1/4  IN HUB" };
+                for (int i = 0; i < board.resultRows.Length; i++)
+                {
+                    board.resultRows[i].SetActive(i < games.Length);
+                    if (i < games.Length) board.resultLabels[i].text = games[i];
+                }
+                board.status.text = "ONLINE: FOUND 5: PRESS JOIN";
+                board.notice.text = TrashAstronauts.UI.NetLobbyBoard.OnlineNoticeText(TrashAstronauts.Net.Online.OnlineProblem.GameGone);
+                board.joinButtons[1].SetInteractable(false); // full
+                board.joinButtons[3].SetInteractable(false); // on a contract
+                Shot("56_coop_find_online", new Vector3(0.7f, 1.72f, 0.22f), new Vector3(1.9f, 1.8f, 0.22f), false, 70f);
+
+                // Hosting online: the tug number, ONLINE, and the 6-character code.
                 board.resultsPanel.SetActive(false);
                 board.infoPanel.SetActive(true);
+                string info = board.info.text;
+                board.status.text = "HOSTING  TUG 4821  ONLINE\nCODE  K7Q2ZD\nCREW 2/4:  ORANGE (YOU)  BLUE";
+                board.notice.text = "";
+                board.info.text = "Contracts are shared: the host launches one and the\nwhole crew rides along, with one oxygen tank and one\nlocker, and everyone is paid. In this version only the\nhost can carry salvage and there is no creature.\nNothing from your microphone is ever sent.";
+                board.joinButtons[1].SetInteractable(true);
+                board.joinButtons[3].SetInteractable(true);
+                Shot("57_coop_hosting_online", new Vector3(0.7f, 1.72f, 0.22f), new Vector3(1.9f, 1.8f, 0.22f), false, 70f);
+
+                for (int i = 0; i < board.resultRows.Length; i++) board.resultRows[i].SetActive(true);
+                board.info.text = info;
                 board.status.text = status;
                 board.notice.text = notice;
             }

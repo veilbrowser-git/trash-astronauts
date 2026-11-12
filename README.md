@@ -1,9 +1,9 @@
 # Trash Astronauts
 
 A VR salvage game for standalone Meta Quest (Quest 3 / 3S, tracked controllers). It is a
-single-player game; an early co-op preview lets 2 to 4 headsets on the same Wi-Fi meet in the tug and see
-each other (see **Co-op on the same Wi-Fi** below). Nothing goes over the network unless you press one of
-the co-op buttons. You are an underpaid astronaut: board a derelict hauler from your salvage tug, float
+single-player game with an early co-op preview: 2 to 4 headsets, on the same Wi-Fi or online, form a crew,
+see each other in the tug and take a shared contract together (see **Co-op** below). Nothing goes over the
+network unless you press one of the co-op buttons. You are an underpaid astronaut: board a derelict hauler from your salvage tug, float
 through it by pushing off the walls and swimming, cut open panels, haul junk back to the tug's
 collection locker, and get out before your oxygen runs out or the thing that used to be the ship's
 janitor finds you.
@@ -125,15 +125,17 @@ audio, prefabs and the scene in place, and it never overwrites the balancing ass
 | Press buttons | Touch with a fingertip, **or** point at a button and pull the trigger (up to 3.5 m). |
 | Suit menu | **B / Y** (or the left menu button): height +/-, snap-turn angle, left/right hand, drift on/off, unstuck, recall tools. The same panel is on the tug's rear wall. |
 
-## Co-op on the same Wi-Fi (preview)
+## Co-op (preview): same Wi-Fi or online
 
-This first co-op version only lets the crew **see each other**: every player's suit, helmet, head and both
-hands (fingers included) move in the tug, each suit in its own colour (orange is the host, then blue, green
-and magenta). **Contracts are not shared yet**: while a crew is linked, no headset can start a contract, and
-the mission board says so. Press LEAVE to play a contract alone.
+2 to 4 headsets form a crew in the tug. Everyone sees everyone's suit, helmet, head and both hands (fingers
+included), each suit in its own colour (orange is the host, then blue, green and magenta), and **the host
+can start a real contract that the whole crew rides along in**.
 
 The **CO-OP CREW** panel is on the tug wall opposite the mission board, between the collection locker and
-the practice plate:
+the practice plate. Its upper row of buttons is for the same Wi-Fi, the lower row for online play, and
+**LEAVE** (beside both rows) ends either kind.
+
+**On the same Wi-Fi**
 
 1. On one headset press **HOST CO-OP**. The panel shows the tug number and the crew code, for example
    `TUG 4821` and `C 001  D 042`.
@@ -141,12 +143,48 @@ the practice plate:
    press **JOIN** next to the right tug number.
 3. If FIND CREW finds nobody, press **ENTER CODE**, type the host's crew code on the keypad (C is filled in
    for you; usually only D needs typing) and press **JOIN**.
-4. **LEAVE** on any headset goes back to playing alone. If the host leaves, everyone is put back to solo.
 
-All headsets need the same game version and the same Wi-Fi network. Some routers stop devices on the same
-Wi-Fi from seeing each other (called client or AP isolation; common on guest networks), and then neither
-FIND CREW nor ENTER CODE can work. Co-op has not been tried with two real headsets yet: whether FIND CREW
-finds a host on a Quest, and whether a Quest shows its own crew code correctly, are still to be confirmed.
+Some routers stop devices on the same Wi-Fi from seeing each other (called client or AP isolation; common on
+guest networks), and then neither FIND CREW nor ENTER CODE can work: use online play instead.
+
+**Online (anywhere with internet)**
+
+1. On one headset press **HOST ONLINE**. After a few seconds (signing in, opening a connection) the panel
+   shows `HOSTING  TUG 4821  ONLINE` and a 6-character code.
+2. On each other headset press **FIND ONLINE**. Up to five open games of the same game version are listed,
+   for example `TUG 4821  1/4  IN HUB`, each with a **JOIN** button; press **JOIN** next to the host's tug
+   number. Full crews and crews out on a contract cannot be joined.
+3. There is no keypad for the 6-character code on the panel (36 letter and digit keys do not fit it at a
+   size a gloved hand can hit), so online games are joined from the FIND ONLINE list. The code is shown so a
+   later version can use it.
+
+If something goes wrong the panel says what, in words (for example `NO INTERNET`, `SERVICE BUSY - TRY
+AGAIN`, `GAME GONE`, `CREW FULL`).
+
+**The shared contract.** Once the crew is together, START CONTRACT on the host's mission board launches a
+contract for everyone (on another headset START asks the host). Shared: the wreck and the salvage (the same
+items with the same values everywhere; the host's game moves them and everyone sees them where the host has
+them), one oxygen tank (the host's size; it drains while anyone who is not away is outside the tug), doors,
+cut panels (anyone's cutter counts; the host opens the panel), the collection locker, and the contract
+clock. EXTRACT works only when everyone who is not away is inside the tug; otherwise the board says who is
+missing, for example `NOT ABOARD: CREW 2, 3`. When the contract ends everyone is brought back to the tug
+and **everyone is paid the full payout into their own save**. Shop, settings and the crew record stay on
+each headset.
+
+**Not in this version:** only the host can carry salvage (the others see `HOST ONLY` on it and can open
+doors, cut panels and help find things), and **there is no creature in a co-op contract yet**, so no
+spider, no blackouts and no webs. The tutorial pauses while a crew is linked.
+
+**Pauses and lost links.** If a crew member takes the headset off, they count as away (not waited for at
+extraction, not using oxygen). If the host pauses, everyone's board shows `HOST PAUSED`. If nothing is
+heard from the host for a second and a half, the boards show `HOST NOT RESPONDING`; after 60 seconds (or
+if the host leaves) the others are put back to playing alone and a contract that was running is abandoned
+with nothing banked. If the host presses LEAVE during a contract, the contract is abandoned for everyone.
+Nobody can join while a contract is running.
+
+All headsets need the same game version; a different version is refused with `DIFFERENT VERSION`, on Wi-Fi
+and online alike. Co-op has not been tried with two real headsets yet (see **What was and was not
+tested**).
 
 Left-handed play: switch **HAND** in the suit menu. Holsters mirror and the wrist display moves to the other wrist. The setting is saved.
 
@@ -284,30 +322,41 @@ Everything loose is a real mass obeying Newton's laws, tuned to stay comfortable
 - The three creatures share one skeleton and one patrol route; they differ in senses, speed, size and look. Their balance has not been play-tested.
 - Working hard (swimming, thrusting) uses oxygen up to 40% faster. Breathing and heartbeat audio are synthesized and may want tuning or an off switch.
 - Hand tracking is implemented but experimental: the gesture thresholds and palm alignment are untested on a headset. Thumbstick-driven continuous locomotion is out of scope.
-- Co-op is a first slice only: players on the same Wi-Fi can see each other in the tug, nothing else is shared, and no contract can start while a crew is linked. It has never been run on two real headsets. See `Docs/MULTIPLAYER_NOTES.md`.
+- Co-op is a preview: a crew (same Wi-Fi or online) can share a contract, but only the host can carry salvage and there is no creature, blackout or web in a co-op contract yet. Nobody can join a crew that is out on a contract. It has never been run on two real headsets. See `Docs/MULTIPLAYER_NOTES.md`.
 
-## Online play (groundwork, not in the game yet)
+## Online play: how it works
 
-Co-op over the internet ("play anywhere") is being added next to same-Wi-Fi co-op. The code is in `Assets/TrashAstronauts/Scripts/Runtime/Net/Online/` (its own assembly, `TrashAstronauts.Online`); the entry point is `OnlineLink` (its header comment shows how a lobby board uses it).
+The online buttons are in `Assets/TrashAstronauts/Scripts/Runtime/Net/Online/` (its own assembly, `TrashAstronauts.Online`); the entry point is `OnlineLink`, which the CO-OP CREW panel drives through `NetSession`.
 
-- It uses **Unity Relay** to carry the game's own datagrams between headsets and **Unity Lobby** to list open games (`TUG 4821  2/4  IN HUB`, newest first, at most 5), both from Unity Gaming Services (package `com.unity.services.multiplayer` 2.4.1, on Unity Transport). It does not use Netcode for GameObjects. A host also gets a 6-character code friends can type if the list fails.
+- It uses **Unity Relay** to carry the game's own datagrams between headsets and **Unity Lobby** to list open games (`TUG 4821  2/4  IN HUB`, newest first, at most 5), both from Unity Gaming Services (package `com.unity.services.multiplayer` 2.4.1, on Unity Transport). It does not use Netcode for GameObjects: the same host and client sessions as on Wi-Fi run over the Relay connection.
 - Players sign in **anonymously** (no account, no name, no email). Unity gives the device a random player id.
-- It contacts Unity's servers **only after you choose to host or find an online game**. A player who never does that never initialises Unity Services; an automated test checks this in the real game scene.
+- It contacts Unity's servers **only after you press HOST ONLINE or FIND ONLINE**. A player who never does that never initialises Unity Services; an automated test checks this in the real game scene. LEAVE closes the Relay connection and removes a hosted game from the list.
+- The lobby entry carries the tug number, the crew count, whether the crew is in the hub, on the results screen or on a contract, and a fingerprint of the game version (so different versions never see each other). The Relay join code is readable only by players who join the lobby.
 - No microphone audio is sent, online or on Wi-Fi: the game's network messages carry poses, items and game events only.
-- **Not yet wired to the in-game board**, so this build cannot start an online game yet. It has **not been run on a headset**.
-- Tested on a Mac only: one automated test signs in two anonymous players, hosts a game through Relay, finds it in the Lobby list, joins it, and runs the game's real host and client sessions over it (handshake, 200 reliable messages each way, avatar snapshots both ways). It passed against the live service. Measured over Relay with DTLS encryption, one datagram can carry 1315 bytes; the game's datagrams are at most 1200.
+- Tested on a Mac only, against the live service: the game scene hosts through its own panel, a second simulated player finds it in the Lobby list, joins through Relay, sees the crew and the start of a contract, and everything closes on LEAVE. It has **not been run on a headset**. Measured over Relay with DTLS encryption, one datagram can carry 1315 bytes; the game's datagrams are at most 1200.
 - Relay drops a connection that stays silent for a while, so a headset that sleeps for long may lose an online game where it would keep a Wi-Fi one; this is untested.
 
 ## Privacy
 
 The game is single-player and works without any network. The app does hold Android's network (INTERNET)
-permission, because of the co-op preview, but it **opens a network connection only after you press HOST
-CO-OP, FIND CREW or ENTER CODE** on the tug's CO-OP CREW panel, and closes it when you press LEAVE. It then
-talks only to other headsets on the same local network: FIND CREW sends a small "is anyone hosting?" message
-to the addresses of your local network (port 47800), and in a crew each headset sends the others (through the host) its head and
-hand positions, finger curl, handedness, a few suit states (thruster, flashlight, cutter) and a fingerprint
-of the game version. There are no accounts, no servers and nothing goes to the internet. **No microphone
-audio and no recorded phrase is ever sent**, by co-op or anything else.
+permission, because of the co-op preview, but it **opens a network connection only after you press one of
+the buttons on the tug's CO-OP CREW panel**, and closes it when you press LEAVE.
+
+- **Same Wi-Fi (HOST CO-OP, FIND CREW, ENTER CODE):** the game talks only to other headsets on your local
+  network. FIND CREW sends a small "is anyone hosting?" message to the addresses of your local network
+  (port 47800). Nothing goes to the internet.
+- **Online (HOST ONLINE, FIND ONLINE):** only after you press one of these, the game signs in to Unity
+  Gaming Services **anonymously** (Unity assigns the device a random player id; no account, name or email),
+  lists or reads open games in **Unity Lobby** (tug number, crew count, hub/contract state and a version
+  fingerprint) and sends the crew's game data through **Unity Relay** servers. Unity's handling of this data
+  is covered by Unity's own privacy policy. The Unity Services SDK may keep its sign-in token on the device
+  for next time; the game itself stores nothing about it.
+
+In a crew, each headset sends the others (through the host) its head and hand positions, finger curl,
+handedness, a few suit states (thruster, flashlight, cutter, away) and a fingerprint of the game version,
+and the host sends the contract (wreck, salvage, positions of the items it moves, oxygen, doors, panels,
+locker, results). Your save, credits and settings are never sent. **No microphone audio and no recorded
+phrase is ever sent**, by co-op or anything else.
 
 If you allow microphone access, the microphone is normally read only to measure how loud you are, so the creature can react to your voice: up to one second of audio is held in memory at a time and overwritten.
 
@@ -315,7 +364,7 @@ If you allow microphone access, the microphone is normally read only to measure 
 
 In every case the audio is never written to storage, never analysed for words, and never leaves the headset. Refusing the permission, or switching MIC off in the suit menu, disables this and nothing else. Because the game uses the microphone, Android also lists the audio-settings and Bluetooth permissions (they let a Bluetooth headset's microphone work); the game does nothing else with them.
 
-Online play (see above; not in this build yet) will be the only part of the game that contacts the internet, and only after you choose to host or find an online game. It then signs in to Unity Gaming Services anonymously and sends game data, never audio, through Unity's Relay servers.
+Online co-op is the only part of the game that contacts the internet, and only after you press HOST ONLINE or FIND ONLINE.
 
 ## Terms of Use
 
@@ -341,11 +390,15 @@ and loss of balance, and you can collide with real objects while wearing a heads
 
 You play at your own risk.
 
-**5. Privacy.** The Game has no accounts and no online services, and it does not collect or share
-personal data. It uses the network only for its optional co-op preview, only after you press HOST CO-OP,
-FIND CREW or ENTER CODE, and then only with other headsets on your local network: it sends the position of
-your head and hands, finger curl, handedness, a few suit states and a game-version fingerprint, never
-microphone audio or recordings. Progress (credits, the oxygen upgrade and comfort settings)
+**5. Privacy and online services.** The Game has no accounts of its own and does not collect personal
+data. It uses the network only for its optional co-op preview, and only after you press one of the buttons
+on the CO-OP CREW panel. Same-Wi-Fi co-op talks only to other headsets on your local network. Online co-op
+(HOST ONLINE, FIND ONLINE) uses third-party services, Unity Gaming Services (anonymous sign-in, Lobby and
+Relay), which receive a random player id assigned by Unity, the listing of a hosted game and the game data
+exchanged with your crew; their use is subject to Unity's terms and privacy policy. Co-op sends the position
+of your head and hands, finger curl, handedness, a few suit states, a game-version fingerprint and the
+shared contract's state, never microphone audio, recordings, your save or settings. Online services may be
+unavailable, changed or withdrawn at any time. Progress (credits, the oxygen upgrade and comfort settings)
 is stored only in a file on your own device and is removed when you uninstall the Game.
 
 **6. Third-party software.** The Game is built with Unity and Unity packages, which are subject to

@@ -1,12 +1,17 @@
 # Preparing for co-op (2–4 players)
 
-**Status (co-op stage 1):** the first co-op slice is in: on the same Wi-Fi, one headset presses HOST CO-OP
-on the tug's CO-OP CREW panel, the others FIND CREW (or ENTER CODE) and JOIN, and everyone sees everyone's
-suit, head and hands move in the tug. Nothing else is shared yet and no contract can start while a crew is
-linked. The code is a small UDP netcode of our own (`Scripts/Core/Net`, adapters in `Scripts/Runtime/Net`,
-no networking package). A socket is opened only after one of those buttons is pressed; single-player opens
-none. The design and the remaining stages are in the co-op implementation plan; the notes below are the
-original seam survey and are kept for reference until the full rewrite planned for the last stage.
+**Status (co-op stage 2, "ride-along"):** 2 to 4 headsets form a crew from the tug's CO-OP CREW panel,
+either on the same Wi-Fi (HOST CO-OP / FIND CREW or ENTER CODE / JOIN; a small UDP netcode of our own in
+`Scripts/Core/Net`) or online (HOST ONLINE / FIND ONLINE / JOIN; the same session code carried by Unity
+Relay, games listed by Unity Lobby, anonymous sign-in; `Scripts/Runtime/Net/Online`). Everyone sees
+everyone's suit, head and hands, and the host can start a real contract that the whole crew rides along in:
+the host simulates the salvage and streams it, there is one shared oxygen tank, doors and cut panels are
+shared, there is one locker, extraction needs everyone who is not away inside the tug, and everyone banks
+the payout into their own save. Not yet: only the host can carry salvage (stage 3), and a co-op contract
+has no creature, blackouts or webs (stage 4). Adapters: `Runtime/Net/NetSession.cs` (the one MonoBehaviour),
+`SceneHostWorld` + `CoopHostRules` on the host, `SceneClientWorld` + `CoopClientApply` on a client.
+Nothing opens a socket or contacts a service until one of the panel's buttons is pressed; single-player
+opens none. The notes below are the original seam survey and are kept for reference.
 
 ## Boundaries that already exist
 

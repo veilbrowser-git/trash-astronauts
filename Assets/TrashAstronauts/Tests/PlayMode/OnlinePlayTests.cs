@@ -6,7 +6,9 @@ using NUnit.Framework;
 using TrashAstronauts.Core;
 using TrashAstronauts.Core.Net;
 using TrashAstronauts.Mission;
+using TrashAstronauts.Net;
 using TrashAstronauts.Net.Online;
+using TrashAstronauts.UI;
 using TrashAstronauts.World;
 using Unity.Services.Core;
 using UnityEngine;
@@ -28,6 +30,7 @@ namespace TrashAstronauts.Tests
         OnlineLink m_HostLink, m_GuestLink;
         INetTransport m_HostTransport, m_GuestTransport;
         PlayOnlineSessionRun m_Run;
+        NetSessionClient m_Bot;
 
         [UnityTearDown]
         public IEnumerator TearDown()
@@ -38,6 +41,14 @@ namespace TrashAstronauts.Tests
             MissionDirector.MapOverride = null;
             MissionDirector.ConditionOverride = null;
             BlackoutController.DamageOverride = null;
+
+            if (m_Bot != null)
+            {
+                m_Bot.Dispose();
+                m_Bot = null;
+            }
+            var scene = MissionDirector.Active != null ? MissionDirector.Active.GetComponent<NetSession>() : null;
+            if (scene != null) scene.ShutDown();
 
             if (m_Run != null)
             {
@@ -243,6 +254,149 @@ namespace TrashAstronauts.Tests
             }
             Assert.AreEqual(0, hostT.ConnectionCount, "the host saw the guest's Relay connection close");
             Debug.Log("[OnlineTest] complete after " + clock.ElapsedMilliseconds + " ms");
+        }
+
+        /// <summary>
+        /// The whole online path of the game, against Unity's servers: the scene's own CO-OP CREW panel presses HOST
+        /// ONLINE (OnlineServices.Shared, the real OnlineLink, NetSession's host over a RelayTransport); a scene-less
+        /// bot signs in as a second anonymous player, finds that tug in the real lobby list, joins through Relay,
+        /// sees the crew and the RunStart of a contract it asks for; then LEAVE closes everything.
+        /// </summary>
+        [UnityTest, Order(3), Category("Online"), Timeout(300000)]
+        public IEnumerator RealServices_ThePanelHostsOnline_ABotFindsAndJoinsThroughRelay_SeesTheCrewAndARunStart_AndLeaveClosesAll()
+        {
+            LogAssert.ignoreFailingMessages = true;
+            if (Application.internetReachability == NetworkReachability.NotReachable)
+                Assert.Inconclusive("No internet on this machine (Application.internetReachability = NotReachable).");
+
+            MissionDirector.StorageOverride = new MemorySaveStorage();
+            MissionDirector.SeedOverride = 44;
+            MissionDirector.CreatureOverride = 0;
+            MissionDirector.MapOverride = 0;
+            MissionDirector.ConditionOverride = ContractCondition.Standard;
+            BlackoutController.DamageOverride = 0f;
+            yield return SceneManager.LoadSceneAsync("TrashAstronauts", LoadSceneMode.Single);
+            yield return null;
+            yield return null;
+            var director = MissionDirector.Active;
+            var net = director.GetComponent<NetSession>();
+            var board = UnityEngine.Object.FindAnyObjectByType<NetLobbyBoard>();
+            Assert.AreEqual(0, RelayTransport.LiveCount);
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+
+            // HOST ONLINE on the panel.
+            Assert.IsTrue(board.hostOnlineButton.Press(null));
+            float until = Time.realtimeSinceStartup + 90f;
+            while (net.OnlineBusy != OnlineStep.None && Time.realtimeSinceStartup < until) yield return null;
+            if (net.OnlineBusy != OnlineStep.None) Assert.Inconclusive("HOST ONLINE did not finish in 90 s (" + net.OnlineLinkStatus + ").");
+            if (net.Mode != LobbyMode.Hosting)
+            {
+                OnlineProblem p = net.OnlineProblem;
+                string why = "host: " + p + " (" + OnlineErrors.Text(p) + ")" + (OnlineServices.Shared.LastError != null ? " - " + OnlineServices.Shared.LastError : "");
+                if (ServiceSide(p)) Assert.Inconclusive("The service refused or could not be reached: " + why);
+                Assert.Fail(why);
+            }
+            Assert.IsTrue(net.IsOnline);
+            Assert.AreEqual(1, RelayTransport.LiveCount, "The host runs over one Relay connection.");
+            ushort tug = net.Lobby.TugNumber;
+            board.Refresh();
+            StringAssert.Contains("TUG " + tug + "  ONLINE", board.status.text);
+            Assert.AreEqual(6, net.OnlineCode.Length, "the 6-character code is shown");
+            StringAssert.Contains("CODE  " + net.OnlineCode, board.status.text);
+            Debug.Log("[OnlineTest] the panel hosts TUG " + tug + " code " + net.OnlineCode + " listed " + net.OnlineListed + " after " + clock.ElapsedMilliseconds + " ms");
+
+            // The bot finds it in the real lobby list.
+            string version = OnlineConfig.VersionKey(NetProtocol.Version, net.ContentHash);
+            var guestServices = OnlineServices.CreateSeparate("ta-test-guest");
+            m_GuestLink = new OnlineLink(guestServices);
+            OnlineGame found = null;
+            OnlineFindResult f = default(OnlineFindResult);
+            float findUntil = Time.realtimeSinceStartup + 40f;
+            while (found == null && Time.realtimeSinceStartup < findUntil)
+            {
+                Task<OnlineFindResult> finding = m_GuestLink.FindAsync(version);
+                yield return Wait(finding, 60f);
+                if (!finding.IsCompleted) Assert.Inconclusive("FIND did not answer in 60 s.");
+                f = finding.Result;
+                if (!f.Ok && ServiceSide(f.Problem) && f.Problem != OnlineProblem.ServiceBusy)
+                    Assert.Inconclusive("The service refused or could not be reached: " + Why("find", f.Problem, f.Text, guestServices));
+                if (f.Games != null)
+                    foreach (OnlineGame g in f.Games)
+                        if (g.TugNumber == tug) found = g;
+                if (found == null)
+                {
+                    float next = Time.realtimeSinceStartup + 2.1f;
+                    while (Time.realtimeSinceStartup < next) yield return null;
+                }
+            }
+            Assert.IsNotNull(found, "the panel's game is in the lobby list (last answer: " + f.Text + ")");
+            Assert.AreEqual("TUG " + tug + "  1/4  IN HUB", found.Line);
+
+            // ...joins through Relay, and the same client session runs over it.
+            Task<OnlineJoinResult> joining = m_GuestLink.JoinAsync(found);
+            yield return Wait(joining, 90f);
+            if (!joining.IsCompleted) Assert.Inconclusive("JOIN did not finish.");
+            OnlineJoinResult j = joining.Result;
+            if (!j.Ok)
+            {
+                string why = Why("join", j.Problem, j.Text, guestServices);
+                if (ServiceSide(j.Problem)) Assert.Inconclusive("The service refused or could not be reached: " + why);
+                Assert.Fail(why);
+            }
+            Assert.AreEqual(2, RelayTransport.LiveCount);
+            var botWorld = new BotClientWorld();
+            m_Bot = new NetSessionClient(j.Transport, botWorld, new NetClientConfig { contentHash = net.ContentHash, seed = 77 });
+            botWorld.Session = m_Bot;
+            var botRelay = (RelayTransport)j.Transport;
+            Vector3 aboard = director.CrewSpot(1) + Vector3.up * 1.6f;
+            var avatar = AvatarSnapshot.Default;
+            avatar.headPosition = new NetVec3(aboard.x, aboard.y, aboard.z);
+            m_Bot.Connect(j.Host, NetSession.Now);
+            System.Func<bool> pump = () =>
+            {
+                double now = NetSession.Now;
+                botWorld.Now = now;
+                m_Bot.Poll(now);
+                m_Bot.SetLocalAvatar(in avatar);
+                m_Bot.SendTick(now);
+                botRelay.Flush();
+                return true;
+            };
+            until = Time.realtimeSinceStartup + 60f;
+            while (!(m_Bot.Welcomed && botWorld.Present[0] && net.Crew(1) != null) && m_Bot.State != ClientState.Ended && Time.realtimeSinceStartup < until) { pump(); yield return null; }
+            Assert.IsTrue(m_Bot.Welcomed, "Hello / Accept / Welcome through Relay (bot ended: " + m_Bot.EndReason + ")");
+            Assert.AreEqual(1, m_Bot.LocalSlot);
+            Assert.IsTrue(botWorld.Present[0], "the bot's roster has the host");
+            Assert.IsNotNull(net.Crew(1), "the scene shows the bot's suit");
+            board.Refresh();
+            StringAssert.Contains("CREW 2/4", board.status.text);
+            Debug.Log("[OnlineTest] bot joined through Relay after " + clock.ElapsedMilliseconds + " ms");
+
+            // The bot asks for a contract: it starts in the scene and the bot hears the RunStart.
+            m_Bot.SendStartRequest();
+            m_Bot.Flush(NetSession.Now);
+            botRelay.Flush();
+            until = Time.realtimeSinceStartup + 30f;
+            while (!(botWorld.Calls[NetMsg.RunStart] > 0 && director.Phase == MissionPhase.Active) && Time.realtimeSinceStartup < until) { pump(); yield return null; }
+            Assert.AreEqual(MissionPhase.Active, director.Phase, "the bot's START started the scene's contract");
+            Assert.Greater(botWorld.Calls[NetMsg.RunStart], 0, "the RunStart crossed Relay");
+            Assert.IsTrue(botWorld.RunHashValid);
+            Assert.AreEqual(director.CurrentRun.planHash, botWorld.Run.planHash);
+
+            // LEAVE on the panel: the bot is told, every Relay connection closes, the scene is solo again.
+            Assert.IsTrue(board.leaveButton.Press(null));
+            Assert.IsNull(director.Net);
+            Assert.AreEqual(MissionPhase.Hub, director.Phase);
+            until = Time.realtimeSinceStartup + 15f;
+            while (botWorld.Ended == SessionEndReason.None && Time.realtimeSinceStartup < until) { pump(); yield return null; }
+            Assert.AreEqual(SessionEndReason.HostClosed, botWorld.Ended, "the bot heard the host leave");
+            m_Bot.Dispose();
+            m_Bot = null;
+            until = Time.realtimeSinceStartup + (float)NetSession.HostLingerSeconds + 5f;
+            while (RelayTransport.LiveCount > 0 && Time.realtimeSinceStartup < until) yield return null;
+            Assert.AreEqual(0, RelayTransport.LiveCount, "no Relay connection left open");
+            Assert.IsTrue(net.IsOffline);
+            Debug.Log("[OnlineTest] panel path complete after " + clock.ElapsedMilliseconds + " ms");
         }
     }
 
