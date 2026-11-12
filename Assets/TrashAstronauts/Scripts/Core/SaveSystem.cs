@@ -26,6 +26,11 @@ namespace TrashAstronauts.Core
         public bool zeroGDrift = true;
         /// <summary>The creature can hear the player's voice through the headset microphone.</summary>
         public bool voiceDetection = true;
+        /// <summary>
+        /// Co-op proximity voice chat: while talking, this player's voice is sent to the crew, and the crew's voices
+        /// are played from their helmets. Needs <see cref="voiceDetection"/> (MIC) on to send; off stops both ways.
+        /// </summary>
+        public bool voiceChat = true;
         public bool tutorialCompleted;
         public int tranqDarts;
         public bool scannerUpgrade;

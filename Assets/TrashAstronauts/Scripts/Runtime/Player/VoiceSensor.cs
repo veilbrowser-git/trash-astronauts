@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TrashAstronauts.Core;
 using TrashAstronauts.Mission;
 using UnityEngine;
@@ -11,15 +12,27 @@ namespace TrashAstronauts.Player
     ///
     /// The one exception is the Mimic. Only while a Mimic is aboard and asking for it, the last few
     /// spoken phrases (a few seconds each) are also kept in memory so it can play them back. They are
-    /// forgotten when the contract ends. Nothing is ever written to disk and nothing leaves the headset.
-    /// The app does hold the network permission, for same-Wi-Fi co-op, but no co-op message can carry
-    /// microphone audio or recorded phrases (see Scripts/Core/Net/NetMessages.cs). Today co-op sends head and
-    /// hand poses, finger curls and a few suit state bits; a later stage will forward the creature's noise
-    /// events (a position and a loudness, talking included), never the sound itself. MIC off in the suit
-    /// menu switches all of this off.
+    /// forgotten when the contract ends. Nothing is ever written to disk.
+    ///
+    /// In a co-op session with VOICE CHAT on, the same capture also feeds proximity voice chat through
+    /// <see cref="MicTap"/> (Scripts/Runtime/Net/Voice/VoiceChat.cs): while the player talks, their voice is
+    /// compressed and sent to the other players in the crew only (through the host, and Unity's Relay when
+    /// online). Recorded Mimic phrases are never sent. This is the only microphone the game opens. MIC off in
+    /// the suit menu switches all of this off; VOICE CHAT off stops only the voice chat.
     /// </summary>
     public sealed class VoiceSensor : MonoBehaviour
     {
+        /// <summary>Receives every block read from the microphone (main thread, in Update) before the creature hears it.</summary>
+        public interface IMicTap
+        {
+            /// <summary>
+            /// <paramref name="block"/> holds <paramref name="count"/> samples at <paramref name="sampleRate"/>; valid only during
+            /// the call. <paramref name="suppressed"/> is true while the Mimic is using the speakers. Return true when the
+            /// block is the speakers playing someone else's voice (echo): the creature then does not hear it as the player.
+            /// </summary>
+            bool OnMicBlock(float[] block, int count, int sampleRate, bool suppressed);
+        }
+
         public PlayerContext player;
         public Transform head;
         public int sampleRate = 16000;
@@ -28,6 +41,15 @@ namespace TrashAstronauts.Player
 
         /// <summary>Test seam: a microphone level (RMS, 0..1) to use instead of a real microphone.</summary>
         public float? LevelOverride { get; set; }
+
+        /// <summary>Co-op voice chat's tap on this capture (null outside a session or with VOICE CHAT off).</summary>
+        public IMicTap MicTap { get; set; }
+        /// <summary>Sample rate of the blocks being read (the microphone's real rate, which may differ from the one asked for).</summary>
+        public int CaptureRate => m_Clip != null && m_Clip.frequency > 0 ? m_Clip.frequency : sampleRate;
+        /// <summary>Microphone blocks the creature was allowed to hear.</summary>
+        public long HeardBlocks { get; private set; }
+        /// <summary>Microphone blocks the tap identified as a crew member's voice from the speakers (not heard by the creature).</summary>
+        public long EchoBlocks { get; private set; }
 
         public VoiceMeter Meter { get; } = new VoiceMeter();
         /// <summary>Spoken phrases held for the Mimic. Empty unless one is aboard.</summary>
@@ -55,6 +77,8 @@ namespace TrashAstronauts.Player
         float m_CaptureRequestedAt = -100f;
         float m_SuppressUntil;
         readonly float[] m_Chunk = new float[256];
+        readonly Queue<float> m_Injected = new Queue<float>();
+        int m_InjectedRate = 16000;
 
         bool Wanted
         {
@@ -84,6 +108,21 @@ namespace TrashAstronauts.Player
             if (Recorder != null) Recorder.Abort();
         }
 
+        /// <summary>
+        /// Test seam: microphone samples at <paramref name="rate"/> Hz, read on the next Update exactly as if the microphone
+        /// had produced them (in place of a real microphone; ignored with MIC off).
+        /// </summary>
+        public void InjectMicSamples(float[] samples, int rate)
+        {
+            if (samples == null) return;
+            if (rate != m_InjectedRate) m_Injected.Clear();
+            m_InjectedRate = Mathf.Max(4000, rate);
+            for (int i = 0; i < samples.Length; i++) m_Injected.Enqueue(samples[i]);
+        }
+
+        /// <summary>Injected samples not yet read.</summary>
+        public int InjectedPending => m_Injected.Count;
+
         /// <summary>Test seam: hands the recorder a phrase as if it had just been spoken.</summary>
         public void InjectPhrase(float[] samples)
         {
@@ -102,8 +141,22 @@ namespace TrashAstronauts.Player
             {
                 if (m_Started) StopMicrophone();
                 Recorder.Clear();
+                m_Injected.Clear();
                 Listening = false;
                 Status = "MIC OFF";
+                return;
+            }
+
+            if (m_Injected.Count > 0)
+            {
+                // Test microphone: the same block path as the real one.
+                Listening = true;
+                Status = "";
+                while (m_Injected.Count >= m_Chunk.Length)
+                {
+                    for (int i = 0; i < m_Chunk.Length; i++) m_Chunk[i] = m_Injected.Dequeue();
+                    ProcessBlock(m_InjectedRate);
+                }
                 return;
             }
 
@@ -131,20 +184,33 @@ namespace TrashAstronauts.Player
             if (total < m_Chunk.Length) return;
             int fresh = Microphone.GetPosition(m_Device) - m_LastPosition;
             if (fresh < 0) fresh += total;
-            float blockSeconds = m_Chunk.Length / (float)sampleRate;
+            int rate = CaptureRate;
             int guard = 0;
             while (fresh >= m_Chunk.Length && guard++ < 64)
             {
                 if (!m_Clip.GetData(m_Chunk, m_LastPosition)) break;
                 m_LastPosition = (m_LastPosition + m_Chunk.Length) % total;
                 fresh -= m_Chunk.Length;
-                if (IsSuppressed) continue;
-
-                double sum = 0.0;
-                for (int i = 0; i < m_Chunk.Length; i++) sum += m_Chunk[i] * m_Chunk[i];
-                Hear(Mathf.Sqrt((float)(sum / m_Chunk.Length)), blockSeconds);
-                if (CaptureActive) Recorder.Feed(m_Chunk, m_Chunk.Length, Meter.Loudness >= Meter.minLoudness);
+                ProcessBlock(rate);
             }
+        }
+
+        void ProcessBlock(int rate)
+        {
+            bool suppressed = IsSuppressed;
+            // Voice chat gets every block first; it says whether the block is a crew member's voice from the speakers.
+            bool echo = MicTap != null && MicTap.OnMicBlock(m_Chunk, m_Chunk.Length, rate, suppressed);
+            if (suppressed) return;
+            if (echo)
+            {
+                EchoBlocks++;
+                return;
+            }
+            HeardBlocks++;
+            double sum = 0.0;
+            for (int i = 0; i < m_Chunk.Length; i++) sum += m_Chunk[i] * m_Chunk[i];
+            Hear(Mathf.Sqrt((float)(sum / m_Chunk.Length)), m_Chunk.Length / (float)Mathf.Max(1000, rate));
+            if (CaptureActive) Recorder.Feed(m_Chunk, m_Chunk.Length, Meter.Loudness >= Meter.minLoudness);
         }
 
         void Hear(float rms, float seconds)
