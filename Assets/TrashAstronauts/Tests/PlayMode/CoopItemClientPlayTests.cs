@@ -7,6 +7,7 @@ using TrashAstronauts.Core.Net;
 using TrashAstronauts.Mission;
 using TrashAstronauts.Net;
 using TrashAstronauts.Player;
+using TrashAstronauts.World;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
@@ -47,6 +48,7 @@ namespace TrashAstronauts.Tests
         [TearDown]
         public void TearDown()
         {
+            Time.captureDeltaTime = 0f;
             if (m_Hands != null) m_Hands.Dispose();
             m_Hands = null;
             if (m_Rig != null) m_Rig.Dispose();
@@ -297,7 +299,9 @@ namespace TrashAstronauts.Tests
             Assert.IsTrue(item.grab.isSelected);
             yield return Until(() => !sync.Authority.Pending, 1f, "the grant");
 
-            // A throw: swing forward and let go mid-swing.
+            // A throw: swing forward and let go mid-swing, on fixed 72 Hz frames so XRI's throw is the same every run.
+            Time.captureDeltaTime = RealPhysics.FixedTimestep;
+            yield return null;
             Vector3 hand = at;
             float swing = Time.time;
             while (Time.time - swing < 0.3f)
@@ -317,10 +321,14 @@ namespace TrashAstronauts.Tests
                 Assert.Less(Time.time - follow, 1f, "the release");
             }
             float releasedAt = Time.unscaledTime;
+            Time.captureDeltaTime = 0f;
             Assert.AreEqual(1, m_Rig.Count("released " + id), "ItemReleased at once, unconditionally.");
             yield return Until(() => m_Rig.Count("thrown " + id) == 1, 0.5f, "ItemThrown");
             Assert.Greater(m_Rig.Sent.IndexOf("thrown " + id), m_Rig.Sent.IndexOf("released " + id), "The throw follows the release, once the game has registered it.");
-            Assert.IsTrue(item.WasThrown);
+            // (The throw's speed itself is pinned frame-exactly by CoopGrabXriPlayTests; here it only has to reach the host as registered.)
+            bool thrown = item.WasThrown;
+            float throwSpeed = item.LastThrowSpeed;
+            Assert.IsTrue(thrown, "A real throw: " + throwSpeed + " m/s.");
             Assert.IsTrue(item.SimulatedHere, "Flown here.");
             Assert.IsFalse(item.Body.isKinematic);
             int posesInFlight = m_Rig.PosesQueued;
@@ -334,7 +342,8 @@ namespace TrashAstronauts.Tests
             Assert.AreEqual(ItemMode.HostFree, sync.Authority.Mode);
             Assert.AreEqual(1, m_Rig.Scripted.Calls[NetMsg.ItemReleased]);
             Assert.AreEqual(1, m_Rig.Scripted.Calls[NetMsg.ItemThrown]);
-            Assert.IsTrue(m_Rig.Scripted.LastWasThrown);
+            Assert.AreEqual(thrown, m_Rig.Scripted.LastWasThrown, "The host hears the throw as this machine registered it.");
+            Assert.AreEqual(throwSpeed, m_Rig.Scripted.LastThrowSpeed, 0.01f);
             Assert.AreEqual(1, m_Rig.Scripted.Returns.Count(r => r.itemId == id && r.cause == ItemReturnCause.Handoff));
 
             // The host's simulation has it a little elsewhere: this copy glides there instead of jumping.
