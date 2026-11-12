@@ -162,5 +162,37 @@ namespace TrashAstronauts.Tests
             AssertPlantedOnSurface(animator, walker, "ceiling", creature.displayName);
             walker.ClimbOverride = null;
         }
+    
+        [UnityTest]
+        public IEnumerator DormantAndInTheJumpscare_TheLegsLeaveTheFeetIk()
+        {
+            m_Director.StartMission(PlayerId.Local);
+            yield return null;
+            yield return null;
+            var creature = m_Director.ActiveEnemy;
+            var animator = creature.GetComponent<CreatureAnimator>();
+            yield return Seconds(0.5f);
+            Assert.AreEqual(EnemyState.Dormant, creature.State);
+            Assert.Less(animator.FootIkWeight, 0.01f, "Asleep on the ceiling it curls its legs instead of planting them.");
+
+            var player = m_Director.Players.First();
+            player.locomotion.TeleportTo(MapPoints.Freighter(0f, 0f, 19.6f));
+            yield return null;
+            creature.WakeNow();
+            foreach (var door in m_Director.wreckDoors) door.SetOpen(true, true);
+            Physics.SyncTransforms();
+            Vector3 head = player.HeadPosition;
+            creature.transform.position = new Vector3(head.x, creature.hoverHeight, head.z + 1.6f);
+            creature.transform.rotation = Quaternion.LookRotation(Vector3.back);
+            for (int i = 0; i < 200 && !creature.IsScaring && m_Director.Phase == MissionPhase.Active; i++) creature.Step(0.05f);
+            Assert.IsTrue(creature.IsScaring, "It should have caught a player standing right in front of it.");
+            float lowest = 1f;
+            for (int i = 0; i < 30 && creature.IsScaring; i++)
+            {
+                yield return null;
+                lowest = Mathf.Min(lowest, animator.FootIkWeight);
+            }
+            Assert.Less(lowest, 0.01f, "In the jumpscare its legs take their own pose, not planted feet.");
+        }
     }
 }
