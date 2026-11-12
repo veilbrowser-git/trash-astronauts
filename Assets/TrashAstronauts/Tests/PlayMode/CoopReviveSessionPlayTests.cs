@@ -6,6 +6,7 @@ using TrashAstronauts.Core.Net;
 using TrashAstronauts.Mission;
 using TrashAstronauts.Net;
 using TrashAstronauts.Player;
+using TrashAstronauts.UI;
 using UnityEngine;
 using UnityEngine.InputSystem.XR;
 using UnityEngine.TestTools;
@@ -144,6 +145,46 @@ namespace TrashAstronauts.Tests
             m_Net.Leave();
         }
 
+        /// <summary>The host caught with bots watching: the host is downed, the crew stays in the contract and revives the host.</summary>
+        [UnityTest]
+        public IEnumerator Host_TheHostCaught_WithBotsWatching_IsDowned_TheBotsStayIn_AndOneRevivesTheHost()
+        {
+            Bot a = null, b = null;
+            yield return HostWithTwoBots((x, y) => { a = x; b = y; });
+            yield return StartFromBot(a);
+            Assert.IsTrue(m_Player.locomotion.TeleportTo(MapPoints.Freighter(0f, 0f, 19.6f)));
+            yield return Frames(4);
+            var creature = m_Director.ActiveEnemy;
+            creature.WakeNow();
+            foreach (var door in m_Director.wreckDoors) door.SetOpen(true, true);
+            Physics.SyncTransforms();
+            Vector3 head = m_Player.HeadPosition;
+            creature.transform.position = new Vector3(head.x, creature.hoverHeight, head.z + 1.6f);
+            creature.transform.rotation = Quaternion.LookRotation(Vector3.back);
+            for (int i = 0; i < 300 && !creature.IsScaring && m_Director.Phase == MissionPhase.Active; i++) creature.Step(0.05f);
+            Assert.IsTrue(creature.IsScaring, "The spider caught the host.");
+
+            yield return PacedUntil(() => m_Player.IsDowned && a.World.Downed[0] && b.World.Downed[0], creature.ScareTotalSeconds + 3f);
+            Assert.IsTrue(m_Player.IsDowned, "The host is downed, not the contract failed.");
+            Assert.AreEqual(MissionPhase.Active, m_Director.Phase);
+            Assert.Greater(a.World.Calls[NetMsg.CatchStarted], 0, "The crew saw the catch.");
+            float waitUntil = Time.unscaledTime + EnemyDrone.RunEndWaitSeconds + 0.5f;
+            yield return PacedUntil(() => Time.unscaledTime >= waitUntil, EnemyDrone.RunEndWaitSeconds + 1.5f);
+            Assert.AreEqual(0, a.World.Calls[NetMsg.RunEnded] + b.World.Calls[NetMsg.RunEnded], "Nobody's contract ended.");
+            Assert.IsTrue(a.Session.Welcomed && b.Session.Welcomed, "Both bots still in the crew.");
+
+            Vector3 body = m_Player.DownedPosition;
+            SetHead(a, body + Vector3.right * 0.9f);
+            yield return Until(() => Vector3.Distance(m_Net.Crew(1).context.HeadPosition, body + Vector3.right * 0.9f) < 0.05f, maxRealSeconds: 5f);
+            a.Session.SendReviveHold(0, true);
+            yield return PacedUntil(() => !m_Player.IsDowned, ReviveRules.ReviveSeconds + 3f);
+            Assert.IsFalse(m_Player.IsDowned, "Revived by the bot.");
+            yield return Until(() => !a.World.Downed[0], maxRealSeconds: 3f);
+            Assert.AreEqual(1, a.World.RevivedBy[0]);
+            Assert.AreEqual(MissionPhase.Active, m_Director.Phase);
+            m_Net.Leave();
+        }
+
         // ================================================================== client half
 
         RunStartParams HostRunWithSpider(int runIndex)
@@ -175,10 +216,22 @@ namespace TrashAstronauts.Tests
             Assert.IsNotNull(suit);
 
             // Crew 3 is downed (as the host decided): their suit slumps here with its beacon.
+            // As the host does it: CatchStarted (the jumpscare plays here on their suit), then PlayerDowned.
             Vector3 at = suit.context.HeadPosition;
+            var creature = m_Director.ActiveEnemy;
+            host.Session.SendCatchStarted(2);
+            yield return Until(() => creature.IsScaring);
             host.Session.SendPlayerDowned(2, CoopConvert.ToNet(at));
-            yield return Until(() => suit.context.IsDowned);
+            yield return PacedUntil(() => suit.context.IsDowned && !creature.IsScaring, creature.ScareTotalSeconds + 4f);
             yield return Frames(2);
+            Assert.IsTrue(suit.context.IsDowned, "downed: scaring " + creature.IsScaring + ", holding " + creature.HoldingAfterScare
+                + ", phase " + m_Director.Phase + ", mode " + m_Net.Mode + ", crew " + (m_Net.Crew(2) != null) + ", same suit " + (m_Net.Crew(2) == suit)
+                + ", link losses " + creature.RunEndLinkLosses + ", downed msgs " + host.World.Calls[NetMsg.PlayerDowned]);
+            // A bystander stays in the contract after the wait for a RunEnded would have run out.
+            float waitUntil = Time.unscaledTime + EnemyDrone.RunEndWaitSeconds + 0.5f;
+            yield return PacedUntil(() => Time.unscaledTime >= waitUntil, EnemyDrone.RunEndWaitSeconds + 1.5f);
+            Assert.AreEqual(MissionPhase.Active, m_Director.Phase, "Watching a crew mate get downed does not end the contract here.");
+            Assert.AreEqual(0, creature.RunEndLinkLosses);
             Assert.IsTrue(suit.ShownDowned);
             Assert.IsTrue(suit.beacon.Shown);
 
@@ -208,9 +261,12 @@ namespace TrashAstronauts.Tests
             Assert.IsFalse(suit.ShownDowned);
             Assert.IsFalse(suit.beacon.Shown);
 
-            // This player downed, after a jumpscare that has already ended here: locked, then revived.
+            // This player caught and downed: the jumpscare, then locked, then revived.
+            host.Session.SendCatchStarted(1);
+            yield return Until(() => creature.IsScaring);
             host.Session.SendPlayerDowned(1, CoopConvert.ToNet(m_Player.HeadPosition));
-            yield return Until(() => m_Player.IsDowned);
+            yield return PacedUntil(() => m_Player.IsDowned && !creature.IsScaring, creature.ScareTotalSeconds + 4f);
+            Assert.IsTrue(m_Player.IsDowned);
             Assert.IsFalse(m_Player.locomotion.zeroG.enabled);
             host.Session.SendPlayerRevived(1, 2);
             yield return Until(() => !m_Player.IsDowned);
@@ -218,6 +274,66 @@ namespace TrashAstronauts.Tests
             Assert.AreEqual(MissionPhase.Active, m_Director.Phase);
             m_Net.Leave();
             Assert.IsFalse(m_Player.IsDowned);
+        }
+    }
+
+    public class CoopReviveGiveUpPlayTests : CoopReviveFixture
+    {
+        /// <summary>A downed player whose crew wandered off can GIVE UP from the wrist: a 1.5 s fingertip hold, then the normal LEAVE.</summary>
+        [UnityTest]
+        public IEnumerator Client_Downed_GivesUpFromTheWrist_WithAHeldFingertip_AndLeavesTheCrew()
+        {
+            var host = AddScriptedHost();
+            host.World.AutoStart = true;
+            m_Director.CoopRideAlong = true;
+            m_Director.CoopCreatureEnabled = true;
+            var run = m_Director.BuildRunParams();
+            m_Director.CoopRideAlong = false;
+            m_Director.CoopCreatureEnabled = false;
+            run.runIndex = 9;
+            run.planHash = run.ComputePlanHash();
+            host.World.NextRun = run;
+            Assert.IsTrue(m_Net.Join(host.Endpoint));
+            yield return Until(() => m_Net.Mode == LobbyMode.Joined && host.World.Joined[1]);
+            m_Director.StartMission(m_Director.LocalPlayerId);
+            yield return Until(() => m_Director.Phase == MissionPhase.Active);
+
+            host.Session.SendPlayerDowned(1, CoopConvert.ToNet(m_Player.HeadPosition));
+            yield return Until(() => m_Player.IsDowned);
+            Assert.IsTrue(m_Player.GetComponentsInChildren<HandButtonInteractor>().All(bi => !bi.enabled), "Every button is off...");
+            var giveUp = m_Player.GetComponent<DownedGiveUp>();
+            Assert.IsNotNull(giveUp, "...but GIVE UP is there.");
+            var wrist = m_Player.GetComponentInChildren<WristDisplay>(true);
+            wrist.Refresh();
+            StringAssert.Contains("GIVE UP", wrist.crewText.text);
+
+            foreach (var driver in m_Player.GetComponentsInChildren<TrackedPoseDriver>()) driver.enabled = false;
+            Transform spot = giveUp.Spot;
+            Assert.IsNotNull(spot);
+            var hand = spot.IsChildOf(m_Player.rightHand.transform) ? m_Player.leftHand : m_Player.rightHand;
+            Vector3 away = hand.transform.position;
+            // A brush of the wrist: not long enough.
+            hand.transform.position += spot.position - hand.fingertip.position;
+            float until = Time.unscaledTime + 0.6f;
+            while (Time.unscaledTime < until) { Tick(); yield return null; }
+            Assert.Greater(giveUp.Progress, 0f);
+            hand.transform.position = away;
+            yield return Frames(2);
+            Assert.AreEqual(0f, giveUp.Progress, "Letting go early resets it.");
+            Assert.AreEqual(LobbyMode.Joined, m_Net.Mode);
+
+            // Held for the full time: the normal LEAVE.
+            hand.transform.position += spot.position - hand.fingertip.position;
+            until = Time.unscaledTime + DownedGiveUp.HoldSeconds + 0.5f;
+            while (Time.unscaledTime < until && giveUp.GaveUp == 0) { Tick(); yield return null; }
+            Assert.AreEqual(1, giveUp.GaveUp);
+            yield return Frames(3);
+            Assert.AreNotEqual(LobbyMode.Joined, m_Net.Mode, "Left the crew.");
+            Assert.AreNotEqual(MissionPhase.Active, m_Director.Phase, "Back to playing alone.");
+            Assert.IsFalse(m_Player.IsDowned);
+            Assert.IsTrue(m_Player.GetComponentsInChildren<HandButtonInteractor>().All(bi => bi.enabled), "Everything back on.");
+            yield return Until(() => !host.World.Joined[1], maxRealSeconds: 3f);
+            Assert.IsFalse(host.World.Joined[1], "The host heard the goodbye.");
         }
     }
 

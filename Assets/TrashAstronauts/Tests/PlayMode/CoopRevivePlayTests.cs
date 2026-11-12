@@ -535,6 +535,54 @@ namespace TrashAstronauts.Tests
             Object.Destroy(crew.gameObject);
         }
 
+        /// <summary>A downing keeps the visor cracked for the rest of the contract, and only that long.</summary>
+        [UnityTest]
+        public IEnumerator Host_TheVisorADowningCracked_StaysCrackedAfterTheRevive_AndIsClearInTheHubAndTheNextContract()
+        {
+            Host();
+            yield return StartHostRun();
+            var crew = StandInBesideHost(1);
+            yield return Frames(2);
+            Assert.AreEqual(0, m_Player.visor.Stage);
+            Assert.IsTrue(m_Rules.Revive.TryDown(m_Director.LocalPlayerId, m_Director.ActiveEnemy));
+            Assert.AreEqual(m_Player.visor.cracks.Length, m_Player.visor.Stage);
+            m_Rules.HostReviveHold(1, 0, true);
+            yield return WaitFor(() => !m_Player.IsDowned, 8f);
+            Assert.IsFalse(m_Player.IsDowned);
+            Assert.Greater(m_Player.visor.Stage, 0, "Revived: still cracked for the rest of the contract.");
+
+            m_Director.AbortRun();
+            yield return Frames(3);
+            Assert.AreNotEqual(MissionPhase.Active, m_Director.Phase);
+            Assert.AreEqual(0, m_Player.visor.Stage, "Clear again once the contract is over.");
+            if (m_Director.Phase == MissionPhase.Results) m_Director.ReturnToHub();
+            yield return Frames(3);
+            Assert.IsTrue(m_Director.StartMission(m_Director.LocalPlayerId));
+            yield return Frames(3);
+            Assert.AreEqual(MissionPhase.Active, m_Director.Phase);
+            Assert.AreEqual(0, m_Player.visor.Stage, "...and in the next contract.");
+            Object.Destroy(crew.gameObject);
+        }
+
+        /// <summary>The same on a client, where the host's RunEnded ends the contract.</summary>
+        [UnityTest]
+        public IEnumerator Client_TheVisorADowningCracked_IsClearAfterTheHostsRunEnded()
+        {
+            BecomeClient(1);
+            var apply = new CoopClientApply(m_Director);
+            yield return StartClientRun(apply);
+            Assert.IsTrue(apply.ApplyPlayerDowned(1, CoopConvert.ToNet(m_Player.HeadPosition)));
+            yield return Frames(2);
+            Assert.AreEqual(m_Player.visor.cracks.Length, m_Player.visor.Stage);
+            Assert.IsTrue(apply.ApplyPlayerRevived(1, 0));
+            Assert.Greater(m_Player.visor.Stage, 0);
+            var ended = new RunEndedMsg { outcome = MissionOutcome.FailedOxygen, quota = m_Director.Session.Quota, elapsedSeconds = 30f };
+            apply.ApplyRunEnded(in ended);
+            yield return Frames(3);
+            Assert.AreNotEqual(MissionPhase.Active, m_Director.Phase);
+            Assert.AreEqual(0, m_Player.visor.Stage, "Clear once the host ended the contract.");
+        }
+
         [UnityTest]
         public IEnumerator Host_TheSharedTank_IgnoresADownedPlayersExertion()
         {
@@ -727,6 +775,46 @@ namespace TrashAstronauts.Tests
             Assert.IsFalse(crew.beacon.lamp.enabled);
             Assert.Less(Vector3.Distance(crew.head.position, head + Vector3.forward * 2f), 0.05f, "Standing again, following them.");
             Object.Destroy(crew.gameObject);
+        }
+
+        /// <summary>
+        /// The reviewer's blocker: a client that only WATCHES the host get caught and downed must stay in the contract.
+        /// Its replica waits for a RunEnded after every jumpscare; the downing settles that wait on every headset.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator Client_WatchingTheHostCaughtAndDowned_StaysInTheContract_NoLinkLossAfterTheWait()
+        {
+            BecomeClient(1);
+            var apply = new CoopClientApply(m_Director);
+            yield return StartClientRun(apply);
+            Vector3 head = MapPoints.Freighter(0.5f, 1.6f, 19.6f);
+            var host = AddRemoteCrew(0, head);
+            yield return Frames(2);
+            var creature = m_Director.ActiveEnemy;
+
+            Assert.IsTrue(apply.ApplyCatchStarted(0), "the host is caught");
+            yield return WaitFor(() => creature.ScarePhase >= 2, 3f);
+            Assert.IsTrue(apply.ApplyPlayerDowned(0, CoopConvert.ToNet(head)));
+            yield return WaitFor(() => !creature.IsScaring, 10f);
+            yield return Frames(2);
+            Assert.IsTrue(host.context.IsDowned, "The host's suit is downed here.");
+            Assert.IsFalse(creature.AwaitingRunEnd, "Nothing to wait for: the catch was settled by the downing.");
+            yield return Seconds(EnemyDrone.RunEndWaitSeconds + 0.5f);
+            Assert.AreEqual(MissionPhase.Active, m_Director.Phase, "Still in the contract.");
+            Assert.AreEqual(0, creature.RunEndLinkLosses, "Not taken for a lost link.");
+            Assert.IsFalse(m_Player.IsDowned);
+
+            // The same when the downing arrives after the jumpscare has already ended here.
+            Assert.IsTrue(apply.ApplyPlayerRevived(0, 1));
+            Assert.IsTrue(apply.ApplyCatchStarted(0));
+            yield return WaitFor(() => !creature.IsScaring, 12f);
+            Assert.IsTrue(creature.AwaitingRunEnd);
+            Assert.IsTrue(apply.ApplyPlayerDowned(0, CoopConvert.ToNet(head)));
+            Assert.IsFalse(creature.AwaitingRunEnd);
+            yield return Seconds(EnemyDrone.RunEndWaitSeconds + 0.5f);
+            Assert.AreEqual(MissionPhase.Active, m_Director.Phase);
+            Assert.AreEqual(0, creature.RunEndLinkLosses);
+            Object.Destroy(host.gameObject);
         }
 
         [UnityTest]

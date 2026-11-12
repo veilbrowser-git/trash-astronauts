@@ -498,14 +498,18 @@ namespace TrashAstronauts.Tests
             StringAssert.Contains("REC", wrist.voiceText.text, "and the wrist says so");
 
             VoiceChat.EnabledOverride = false;
-            yield return Frames(30);
+            yield return Frames(15); // 0.3 s: the first burst
             Assert.IsFalse(chat.Mimic.HostMayKeepMyVoice);
+            Assert.AreEqual(VoiceChat.OffNoticeRepeats, heard.Frames.Count, "a few 'voice off' notices at once");
             yield return RealTimeUntil(() => !wrist.voiceText.text.Contains("REC"), 1f);
             StringAssert.DoesNotContain("REC", wrist.voiceText.text);
-            Assert.AreEqual(VoiceChat.OffNoticeRepeats, heard.Frames.Count, "a few 'voice off' notices and nothing else");
-            Assert.IsTrue(heard.Frames.All(f => f.slot == 1 && VoiceMsg.IsOffNotice(f.bytes.Length)));
-            yield return Frames(30);
-            Assert.AreEqual(VoiceChat.OffNoticeRepeats, heard.Frames.Count, "nothing while it stays off");
+            // The notice is unreliable: while it stays off with the Mimic aboard, it is repeated every 0.5 s, so the
+            // host forgets this player's phrases even if every one of the first burst was lost.
+            int afterBurst = heard.Frames.Count;
+            yield return Frames(100); // 2 s of network time
+            int repeats = heard.Frames.Count - afterBurst;
+            Assert.That(repeats, Is.InRange(3, 5), "repeated about every " + VoiceChat.OffNoticeKeepSeconds + " s");
+            Assert.IsTrue(heard.Frames.All(f => f.slot == 1 && VoiceMsg.IsOffNotice(f.bytes.Length)), "notices only, never audio");
 
             var sender = new CreatureVoiceSender();
             sender.Begin(Speech(0.8), Now);
@@ -520,12 +524,17 @@ namespace TrashAstronauts.Tests
             Assert.IsNull(chat.Mimic.Playback, "with VOICE CHAT off the creature's copy of crew voices is not played");
             Assert.AreEqual(0, chat.Mimic.CreatureFramesReceived);
 
-            // MIC off does the same.
+            // Back on: the repeats stop.
             VoiceChat.EnabledOverride = null;
             yield return Frames(5);
+            int whileOn = heard.Frames.Count;
+            yield return Frames(50);
+            Assert.AreEqual(0, heard.Frames.Skip(whileOn).Count(f => VoiceMsg.IsOffNotice(f.bytes.Length)), "no notices while voice is on");
+            // MIC off does the same.
+            int beforeMic = heard.Frames.Count(f => VoiceMsg.IsOffNotice(f.bytes.Length));
             m_Director.Profile.Data.voiceDetection = false;
-            yield return Frames(30);
-            Assert.AreEqual(2 * VoiceChat.OffNoticeRepeats, heard.Frames.Count, "MIC off tells the host too");
+            yield return Frames(15);
+            Assert.AreEqual(beforeMic + VoiceChat.OffNoticeRepeats, heard.Frames.Count(f => VoiceMsg.IsOffNotice(f.bytes.Length)), "MIC off tells the host too");
             m_Director.Profile.Data.voiceDetection = true;
             m_Net.Leave();
         }

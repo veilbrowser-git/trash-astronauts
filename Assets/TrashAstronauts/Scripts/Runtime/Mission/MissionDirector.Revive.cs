@@ -49,6 +49,15 @@ namespace TrashAstronauts.Mission
             {
                 var player = m_Players[i];
                 if (player != null && player.IsDowned) player.SetDowned(false, player.DownedPosition);
+                // The visor a downing kept cracked is whole again once the contract is over (before 0.13.0 every
+                // jumpscare ended with a clear visor). Not in the middle of a jumpscare: that one clears it as it ends.
+                var downedLock = player != null && !player.IsRemote ? player.GetComponent<TrashAstronauts.Player.DownedLock>() : null;
+                if (downedLock != null && downedLock.VisorKeptCracked)
+                {
+                    downedLock.VisorKeptCracked = false;
+                    bool scaring = ActiveEnemy != null && ActiveEnemy.IsScaring;
+                    if (player.visor != null && !scaring) player.visor.Clear();
+                }
             }
         }
     }

@@ -49,9 +49,10 @@ namespace TrashAstronauts.Net
         void Down(PlayerContext player, Vector3 at)
         {
             if (player == null || m_Director.Phase != MissionPhase.Active) return;
-            // This player's own catch is settled without ending the run: stop waiting for a RunEnded.
+            // The catch is settled without ending the run: stop waiting for a RunEnded. On EVERY headset, not only the
+            // victim's: a crew member who watched the jumpscare started the same wait, and must stay in the contract.
             var creature = m_Director.ActiveEnemy;
-            if (!player.IsRemote && creature != null) creature.CatchSettledHere();
+            if (creature != null) creature.CatchSettledHere();
             player.SetDowned(true, at);
         }
 
@@ -84,7 +85,12 @@ namespace TrashAstronauts.Net
             {
                 var player = Find(slot);
                 if (player == null) continue;
-                if (state.IsDowned(slot)) player.SetDowned(true, CoopConvert.ToUnity(state.DownedAt(slot)));
+                if (state.IsDowned(slot))
+                {
+                    // (A downing learnt from the world state settles a catch here as well.)
+                    if (!player.IsDowned && m_Director.ActiveEnemy != null && !m_Director.ActiveEnemy.IsScaring) m_Director.ActiveEnemy.CatchSettledHere();
+                    player.SetDowned(true, CoopConvert.ToUnity(state.DownedAt(slot)));
+                }
                 else if (player.IsDowned) player.SetDowned(false, player.DownedPosition);
             }
         }
