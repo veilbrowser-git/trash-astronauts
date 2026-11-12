@@ -21,6 +21,7 @@ namespace TrashAstronauts.UI
         public PushButton snapTurn;
         public PushButton handedness;
         public PushButton drift;
+        public PushButton voice;
         public PushButton unstuck;
         public PushButton recallTools;
         public float heightStep = 0.1f;
@@ -33,6 +34,7 @@ namespace TrashAstronauts.UI
             Hook(snapTurn, OnSnapTurn, true);
             Hook(handedness, OnHandedness, true);
             Hook(drift, OnDrift, true);
+            Hook(voice, OnVoice, true);
             Hook(unstuck, OnUnstuck, true);
             Hook(recallTools, OnRecall, true);
             if (director != null) director.ProfileChanged += Refresh;
@@ -46,6 +48,7 @@ namespace TrashAstronauts.UI
             Hook(snapTurn, OnSnapTurn, false);
             Hook(handedness, OnHandedness, false);
             Hook(drift, OnDrift, false);
+            Hook(voice, OnVoice, false);
             Hook(unstuck, OnUnstuck, false);
             Hook(recallTools, OnRecall, false);
             if (director != null) director.ProfileChanged -= Refresh;
@@ -105,6 +108,13 @@ namespace TrashAstronauts.UI
             director.ApplyAndSaveSettings();
         }
 
+        void OnVoice(PushButton b, HandRig hand)
+        {
+            if (Data == null) return;
+            Data.voiceDetection = !Data.voiceDetection;
+            director.ApplyAndSaveSettings();
+        }
+
         void OnUnstuck(PushButton b, HandRig hand)
         {
             var player = PlayerFor(hand);
@@ -128,13 +138,15 @@ namespace TrashAstronauts.UI
                     + "Height boost: " + (cm >= 0 ? "+" : "") + cm + " cm\n"
                     + "Snap turn: " + Mathf.RoundToInt(data.snapTurnDegrees) + " deg\n"
                     + "Main hand: " + (data.Handedness == Handedness.Left ? "LEFT" : "RIGHT") + "\n"
-                    + "Drift: " + (data.zeroGDrift ? "ON (keep gliding)" : "OFF (stop on release)");
+                    + "Drift: " + (data.zeroGDrift ? "ON (keep gliding)" : "OFF (stop on release)") + "\n"
+                    + "Mic: " + (data.voiceDetection ? "ON (it can hear you talk)" : "OFF");
             }
             if (heightUp != null) heightUp.SetLabel("HEIGHT +");
             if (heightDown != null) heightDown.SetLabel("HEIGHT -");
             if (snapTurn != null) snapTurn.SetLabel("TURN " + Mathf.RoundToInt(data.snapTurnDegrees));
             if (handedness != null) handedness.SetLabel(data.Handedness == Handedness.Left ? "HAND: LEFT" : "HAND: RIGHT");
             if (drift != null) drift.SetLabel(data.zeroGDrift ? "DRIFT: ON" : "DRIFT: OFF");
+            if (voice != null) voice.SetLabel(data.voiceDetection ? "MIC: ON" : "MIC: OFF");
             if (unstuck != null) unstuck.SetLabel("UNSTUCK");
             if (recallTools != null) recallTools.SetLabel("RECALL TOOLS");
         }

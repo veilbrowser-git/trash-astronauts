@@ -17,6 +17,7 @@ namespace TrashAstronauts.Player
     {
         [SerializeField] int m_PlayerIndex;
         public Transform head;
+        public VoiceSensor voice;
         public HandRig leftHand;
         public HandRig rightHand;
         public PlayerLocomotion locomotion;

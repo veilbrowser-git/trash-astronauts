@@ -220,6 +220,7 @@ namespace TrashAstronauts.EditorTools
             Lit("PaleHide", new Color(0.56f, 0.5f, 0.47f), 0.5f, plates, null, platesN);
             Lit("WardenPlate", new Color(0.2f, 0.14f, 0.03f), 0.6f, plates, null, platesN);
             Lit("DuckYellow", new Color(0.98f, 0.8f, 0.08f), 0.7f);
+            Lit("LeafGreen", new Color(0.12f, 0.45f, 0.16f), 0.35f);
             Lit("Sinew", new Color(0.16f, 0.07f, 0.06f), 0.55f);
             Lit("Bone", new Color(0.62f, 0.58f, 0.5f), 0.35f);
             Lit("Claw", new Color(0.03f, 0.03f, 0.035f), 0.85f);

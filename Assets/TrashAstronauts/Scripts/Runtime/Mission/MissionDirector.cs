@@ -36,6 +36,8 @@ namespace TrashAstronauts.Mission
         public static ISaveStorage StorageOverride;
         /// <summary>Test seam: forces the loot seed for the next run.</summary>
         public static int? SeedOverride;
+        /// <summary>Test seam: forces which wreck the next contract is on.</summary>
+        public static int? MapOverride;
         /// <summary>Test seam: forces which creature from the roster is aboard.</summary>
         public static int? CreatureOverride;
 
@@ -56,6 +58,13 @@ namespace TrashAstronauts.Mission
         public SalvageSpawnPoint[] spawnPoints;
         public Cuttable[] cuttables;
         public EnemyDrone[] enemies;
+        [Header("Wrecks (one is docked per contract)")]
+        public WreckMap[] maps;
+        [Tooltip("Panels that exist whatever wreck is docked (the practice plate in the tug).")]
+        public Cuttable[] sharedCuttables;
+        [Tooltip("Doors that exist whatever wreck is docked (the airlock's inner door).")]
+        public SlidingDoor[] sharedDoors;
+        public BlackoutController blackout;
         public SlidingDoor[] wreckDoors;
 
         readonly List<PlayerContext> m_Players = new List<PlayerContext>();
@@ -73,6 +82,8 @@ namespace TrashAstronauts.Mission
         public bool HazardsPaused => m_PauseReasons != HazardPauseReason.None;
         /// <summary>The creature aboard this contract. A different one is picked from the roster each run.</summary>
         public EnemyDrone ActiveEnemy { get; private set; }
+        /// <summary>The wreck currently docked to the airlock.</summary>
+        public WreckMap ActiveMap { get; private set; }
         public MissionPhase Phase => Session != null ? Session.Phase : MissionPhase.Hub;
         public float NextRunOxygenCapacity => m_Config.GetOxygenCapacity(Profile.Data.oxygenUpgradeLevel);
 
@@ -120,6 +131,49 @@ namespace TrashAstronauts.Mission
                 }
             }
             SelectCreature(0);
+            SelectMap(0);
+        }
+
+        /// <summary>
+        /// Docks one wreck: switches its geometry on and the others off, and points loot, panels, doors,
+        /// the blackout and the creature's routes at it. Only called while nobody is aboard.
+        /// </summary>
+        void SelectMap(int index)
+        {
+            if (maps == null || maps.Length == 0) return;
+            index = Mathf.Clamp(index, 0, maps.Length - 1);
+            var map = maps[index];
+            if (map == null) return;
+            for (int i = 0; i < maps.Length; i++)
+            {
+                if (maps[i] != null) maps[i].SetAboard(i == index);
+            }
+            ActiveMap = map;
+
+            spawnPoints = map.spawnPoints ?? new SalvageSpawnPoint[0];
+            cuttables = Join(sharedCuttables, map.cuttables);
+            wreckDoors = Join(sharedDoors, map.doors);
+            if (enemies != null)
+            {
+                foreach (var enemy in enemies)
+                {
+                    if (enemy == null) continue;
+                    enemy.graph = map.graph;
+                    enemy.patrolRoute = map.patrolRoute;
+                    enemy.doors = map.creatureDoors;
+                    enemy.dock = map.dock;
+                }
+            }
+            if (blackout != null) blackout.SetTargets(map.lights, map.glowStrips, map.ambience);
+            Physics.SyncTransforms();
+        }
+
+        static T[] Join<T>(T[] a, T[] b)
+        {
+            var list = new List<T>();
+            if (a != null) list.AddRange(a);
+            if (b != null) list.AddRange(b);
+            return list.ToArray();
         }
 
         /// <summary>Makes one creature from the roster the one aboard; the others are switched off.</summary>
@@ -196,6 +250,11 @@ namespace TrashAstronauts.Mission
 
             int seed = SeedOverride ?? UnityEngine.Random.Range(1, int.MaxValue);
             SeedOverride = null;
+
+            // Clear the last wreck out completely before another one docks.
+            ClearRunObjects();
+            if (maps != null && maps.Length > 0)
+                SelectMap(MapOverride ?? new System.Random(seed ^ 0x1b873593).Next(maps.Length));
 
             var infos = new List<SpawnPointInfo>();
             if (spawnPoints != null)

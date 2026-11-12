@@ -50,6 +50,21 @@ namespace TrashAstronauts.Mission
             director.MissionEnded -= OnMissionEnded;
         }
 
+        [Tooltip("Ambience that plays whatever wreck is docked.")]
+        public AudioSource[] globalAmbience;
+
+        /// <summary>Points the blackout at a different wreck's lights. Any blackout in progress ends first.</summary>
+        public void SetTargets(Light[] newLights, Renderer[] newStrips, AudioSource[] mapAmbience)
+        {
+            EndBlackout(true);
+            lights = newLights ?? new Light[0];
+            glowStrips = newStrips ?? new Renderer[0];
+            var all = new System.Collections.Generic.List<AudioSource>();
+            if (globalAmbience != null) all.AddRange(globalAmbience);
+            if (mapAmbience != null) all.AddRange(mapAmbience);
+            ambience = all.ToArray();
+        }
+
         void OnMissionStarted()
         {
             EndBlackout(true);

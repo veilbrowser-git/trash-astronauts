@@ -24,6 +24,7 @@ namespace TrashAstronauts.Tests
             MissionDirector.StorageOverride = new MemorySaveStorage();
             MissionDirector.SeedOverride = 31;
             MissionDirector.CreatureOverride = null;
+            MissionDirector.MapOverride = 0;
             yield return SceneManager.LoadSceneAsync("TrashAstronauts", LoadSceneMode.Single);
             yield return null;
             yield return null;
@@ -37,6 +38,7 @@ namespace TrashAstronauts.Tests
             MissionDirector.StorageOverride = null;
             MissionDirector.SeedOverride = null;
             MissionDirector.CreatureOverride = null;
+            MissionDirector.MapOverride = null;
         }
 
         static IEnumerator Frames(int count)
@@ -258,7 +260,7 @@ namespace TrashAstronauts.Tests
             var creature = m_Director.ActiveEnemy;
             creature.WakeNow();
             foreach (var door in m_Director.wreckDoors) door.SetOpen(true, true);
-            duck.transform.position = new Vector3(0.3f, 1.2f, 21f); // corridor, a few metres from the reactor dock
+            duck.transform.position = creature.transform.position + new Vector3(-4f, -0.2f, -7f); // a few metres from the creature
             Assert.IsTrue(toy.Squeak());
             Assert.IsFalse(toy.Squeak(), "It needs a moment to re-inflate.");
             Assert.AreEqual(1, toy.SqueakCount);

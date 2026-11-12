@@ -56,6 +56,7 @@ namespace TrashAstronauts.EditorTools
             s_BoxMeshes.Clear();
             s_WreckLights.Clear();
             s_WreckGlow.Clear();
+            s_Loose = null;
 
             // Lighting: dim flat ambient so routes stay readable with the flashlight off, dark fog for mood.
             RenderSettings.ambientMode = AmbientMode.Flat;
@@ -99,10 +100,11 @@ namespace TrashAstronauts.EditorTools
             var hotkeys = missionGo.AddComponent<DevHotkeys>();
             hotkeys.director = director;
 
-            var safe = Empty(missionGo.transform, "Safe Zone (Tug)", new Vector3(0, 1.4f, -0.45f)).AddComponent<SafeZone>();
-            safe.size = new Vector3(4.2f, 3.2f, 5.1f);
-            var bounds = Empty(missionGo.transform, "Playable Bounds", new Vector3(-1f, 1.5f, 13.3f)).AddComponent<PlayableBounds>();
-            bounds.size = new Vector3(21.5f, 6f, 35.5f);
+            var safe = Empty(missionGo.transform, "Safe Zone (Tug)", new Vector3(0, 1.4f, -2.25f)).AddComponent<SafeZone>();
+            safe.size = new Vector3(4.2f, 3.2f, 8.7f);
+            // Big enough for the largest wreck (they all dock at the same airlock) and the tug's flight deck.
+            var bounds = Empty(missionGo.transform, "Playable Bounds", new Vector3(-1.5f, 1.5f, 17f)).AddComponent<PlayableBounds>();
+            bounds.size = new Vector3(30f, 6f, 50f);
             Exclusion(missionGo.transform, "No Drone: Airlock", new Vector3(0, 1.4f, 4.8f), new Vector3(4.2f, 3.2f, 5.7f));
             Exclusion(missionGo.transform, "No Drone: Duct A", new Vector3(6.8f, 1.2f, 20.1f), new Vector3(1.3f, 2.6f, 9.1f));
             Exclusion(missionGo.transform, "No Drone: Duct B", new Vector3(5.4f, 1.2f, 24f), new Vector3(1.9f, 2.6f, 1.3f));
@@ -190,7 +192,7 @@ namespace TrashAstronauts.EditorTools
             ambience.loop = true;
             ambience.playOnAwake = true;
             ambience.spatialBlend = 0f;
-            ambience.volume = 0.35f;
+            ambience.volume = 0.28f; // the re-synthesized ambience has more mid-range than the old one
             var tugHum = Empty(ambience.transform, "Tug Hum", new Vector3(0, 2.2f, -1.5f)).AddComponent<AudioSource>();
             ConfigureSpatial(tugHum, s_Audio != null ? s_Audio.tugAmbience : null, true, 0.5f, 1f, 9f);
             tugHum.playOnAwake = true;
@@ -199,8 +201,21 @@ namespace TrashAstronauts.EditorTools
             reactorHum.pitch = 0.5f;
             reactorHum.playOnAwake = true;
 
-            blackout.lights = s_WreckLights.ToArray();
-            blackout.glowStrips = s_WreckGlow.ToArray();
+            // --- wrecks: the freighter is stretched 1.5x; two more are built at full size. One docks per contract.
+            var sharedLights = s_WreckLights.Where(l => l.transform.position.z < 7.75f).ToArray();
+            var sharedGlow = s_WreckGlow.Where(r => r.transform.position.z < 7.75f).ToArray();
+            var freighter = FinishFreighter(missionGo.transform, dock.transform, doorR, practicePanel, reactorHum);
+            var barge = BuildOreBarge(sharedLights, sharedGlow);
+            var survey = BuildSurveyShip(sharedLights, sharedGlow);
+            foreach (var creature in creatures) creature.transform.SetPositionAndRotation(dock.transform.position, dock.transform.rotation);
+            director.maps = new[] { freighter, barge, survey };
+            director.sharedCuttables = new[] { practicePanel };
+            director.sharedDoors = new[] { doorA };
+            director.blackout = blackout;
+
+            blackout.lights = freighter.lights;
+            blackout.glowStrips = freighter.glowStrips;
+            blackout.globalAmbience = new[] { ambience };
             blackout.ambience = new[] { ambience, reactorHum };
 
             EditorSceneManager.MarkSceneDirty(scene);
@@ -270,7 +285,7 @@ namespace TrashAstronauts.EditorTools
 
             // Tug
             FloorAndCeiling("Tug Slabs", -2, 2, -3, 2, H, M("Floor"));
-            Wall("Tug S", new Vector2(-2, -3), new Vector2(2, -3), H, tug);
+            Wall("Tug S", new Vector2(-2, -3), new Vector2(2, -3), H, tug, new Gap(1.15f, 1.9f, 2.2f)); // through to the flight deck
             Wall("Tug W", new Vector2(-2, -3), new Vector2(-2, 2), H, tug);
             Wall("Tug E", new Vector2(2, -3), new Vector2(2, 2), H, tug);
             Wall("Tug N", new Vector2(-2, 2), new Vector2(2, 2), H, tug, new Gap(2f, 1.4f, 2.1f));
@@ -757,16 +772,14 @@ namespace TrashAstronauts.EditorTools
 
         static void Junk(GameObject prefab, Vector3 position)
         {
-            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, s_Props);
+            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, s_Loose != null ? s_Loose : s_Props);
             go.transform.SetPositionAndRotation(position, Quaternion.Euler(position.x * 37f, position.z * 53f, position.y * 71f));
         }
 
         static void BuildDecor()
         {
             // --- tug: window, pilot console, hatch signage
-            Box(s_Props, "Tug Window", new Vector3(-0.7f, 1.6f, -3f + T * 0.5f + 0.01f), new Vector3(1.6f, 0.8f, 0.02f), M("Stars"), GameLayers.Default, false);
-            Box(s_Props, "Tug Window Frame", new Vector3(-0.7f, 1.15f, -3f + T * 0.5f + 0.03f), new Vector3(1.8f, 0.08f, 0.06f), M("Trim"), GameLayers.Default, false);
-            Box(s_Props, "Pilot Console", new Vector3(-0.7f, 0.45f, -2.55f), new Vector3(1.6f, 0.9f, 0.6f), M("Trim"));
+            BuildCockpit();
             Sign("SALVAGE TUG 'PAYCHEQUE'", new Vector3(0, 2.45f, 2f - T * 0.5f - 0.02f), Vector3.back, 1.3f);
             Sign("WRECK >>", new Vector3(1.35f, 1.7f, 2f - T * 0.5f - 0.02f), Vector3.back, 1.2f);
             Sign("GRIP ANY SURFACE TO HOLD ON", new Vector3(-1.35f, 1.7f, 2f - T * 0.5f - 0.02f), Vector3.back, 0.7f, new Color(1f, 0.85f, 0.3f));
@@ -798,7 +811,6 @@ namespace TrashAstronauts.EditorTools
             Pipe("Reactor Feed E", new Vector3(0.9f, 2.25f, 25.9f), new Vector3(3.3f, 2.25f, 26.2f), 0.05f, "Pipe");
 
             // Consoles get lit screens and key rows so they read as equipment, not blocks.
-            ConsoleDetail(new Vector3(-0.7f, 0.9f, -2.55f), 1.5f, Vector3.forward);
             ConsoleDetail(new Vector3(-3.6f, 1.0f, 28.4f), 1.1f, Vector3.back);
             ConsoleDetail(new Vector3(5.2f, 0.9f, 14.9f), 2.0f, Vector3.back);
 

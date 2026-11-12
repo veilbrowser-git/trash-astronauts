@@ -34,6 +34,14 @@ MonoBehaviour:
   tranqHit: {fileID: 8300000, guid: d2f2c6746701c46028b97a7444fcb3c0, type: 3}
   impactLight: {fileID: 8300000, guid: 15da0061b2dfe4531be7495e23818914, type: 3}
   impactHeavy: {fileID: 8300000, guid: 9e922ba2abe8e4b49b298d63509a7273, type: 3}
+  impactLightVariants:
+  - {fileID: 8300000, guid: 15da0061b2dfe4531be7495e23818914, type: 3}
+  - {fileID: 8300000, guid: db51ad878e3ed490d85bb37e90c485b5, type: 3}
+  - {fileID: 8300000, guid: 08c784db636874ecdb9be173fca04cd8, type: 3}
+  impactHeavyVariants:
+  - {fileID: 8300000, guid: 9e922ba2abe8e4b49b298d63509a7273, type: 3}
+  - {fileID: 8300000, guid: 96b805600d7f6422395f37ceaa792af6, type: 3}
+  - {fileID: 8300000, guid: 38cc7e4c1514e43f08a251d81f002233, type: 3}
   doorMove: {fileID: 8300000, guid: 1293c66d34ee14be2844d0bd47c81c15, type: 3}
   airlockHiss: {fileID: 8300000, guid: 82943cf69bbce4adf89787a2c15c413c, type: 3}
   shipAmbience: {fileID: 8300000, guid: 2bf363892e2154a9190647c30f4d1ec4, type: 3}

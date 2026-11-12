@@ -77,7 +77,8 @@ namespace TrashAstronauts.Mission
             ReleasePosition = transform.position;
             WasThrown = false;
             var player = PlayerContext.From(args.interactorObject);
-            if (isActiveAndEnabled) StartCoroutine(AfterRelease(player));
+            // Not while the object is being torn down (scene unload, end of a run).
+            if (isActiveAndEnabled && gameObject.activeInHierarchy && gameObject.scene.isLoaded) StartCoroutine(AfterRelease(player));
         }
 
         IEnumerator AfterRelease(PlayerContext player)

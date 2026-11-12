@@ -24,6 +24,8 @@ namespace TrashAstronauts.Core
         public float seatedHeightOffset;
         /// <summary>Comfort option: keep drifting after letting go in zero-g (true) or stop at once (false).</summary>
         public bool zeroGDrift = true;
+        /// <summary>The creature can hear the player's voice through the headset microphone.</summary>
+        public bool voiceDetection = true;
         public bool tutorialCompleted;
         public int tranqDarts;
         public bool scannerUpgrade;

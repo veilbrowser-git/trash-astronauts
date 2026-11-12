@@ -141,11 +141,11 @@ namespace TrashAstronauts.UI
                 case MissionPhase.Hub:
                     Set(title, "SALVAGE CONTRACT");
                     Set(body,
-                        "Wreck: hauler MARGIN CALL (derelict)\n"
+                        "Wreck: assigned when you launch (3 on the books)\n"
                         + "Quota: " + config.quotaCredits + " cr     Bonus: +" + config.contractBonusCredits + " cr\n"
                         + "Oxygen: " + OxygenTank.FormatClock(director.NextRunOxygenCapacity) + " (drains outside this tug)\n\n"
-                        + "NOTICE: something is still aboard. It is a\n"
-                        + "different thing each contract. It cannot enter the tug.\n\n"
+                        + "NOTICE: a different wreck and a different THING\n"
+                        + "each contract. It can HEAR YOUR VOICE.\n\n"
                         + "Banked credits: " + profile.totalCredits + " cr" + notice);
                     SetPrimary("START CONTRACT", true);
                     break;
@@ -156,6 +156,7 @@ namespace TrashAstronauts.UI
                     Set(body,
                         "Secured: " + session.SecuredValue + " / " + session.Quota + " cr  (" + session.DepositedCount + " items)\n"
                         + "Oxygen: " + OxygenTank.FormatClock(session.Oxygen.Remaining) + "\n"
+                        + (director.ActiveMap != null ? "Wreck: " + director.ActiveMap.displayName + "\n" : "")
                         + (director.ActiveEnemy != null ? "Aboard: " + director.ActiveEnemy.displayName + "\n  " + director.ActiveEnemy.trait + "\n\n" : "\n")
                         + (session.QuotaMet
                             ? "QUOTA MET. Extract now for the bonus,\nor risk another trip for more."

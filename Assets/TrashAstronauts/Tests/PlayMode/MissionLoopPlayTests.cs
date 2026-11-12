@@ -30,6 +30,7 @@ namespace TrashAstronauts.Tests
             MissionDirector.StorageOverride = m_Storage;
             MissionDirector.SeedOverride = 20261111;
             MissionDirector.CreatureOverride = 0;
+            MissionDirector.MapOverride = 0;
             yield return SceneManager.LoadSceneAsync("TrashAstronauts", LoadSceneMode.Single);
             yield return null;
             yield return null;
@@ -44,6 +45,7 @@ namespace TrashAstronauts.Tests
             MissionDirector.StorageOverride = null;
             MissionDirector.SeedOverride = null;
             MissionDirector.CreatureOverride = null;
+            MissionDirector.MapOverride = null;
         }
 
         static IEnumerator Frames(int count)
@@ -326,7 +328,7 @@ namespace TrashAstronauts.Tests
             Assert.AreEqual(EnemyState.Patrol, drone.State);
             OpenWreckDoors();
 
-            var noiseAt = new Vector3(0.3f, 1.2f, 15f); // mid corridor, far from the reactor dock
+            var noiseAt = new Vector3(0.3f, 1.2f, 25f); // in the spine corridor, well away from the reactor dock but within earshot
             float startDistance = Vector3.Distance(drone.transform.position, noiseAt);
             m_Director.noise.Emit(new NoiseEvent(noiseAt, 1f, NoiseKind.Cutting, PlayerId.Local));
             Assert.AreEqual(EnemyState.Investigate, drone.State);

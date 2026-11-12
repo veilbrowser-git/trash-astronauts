@@ -41,6 +41,7 @@ namespace TrashAstronauts.Tests
             MissionDirector.StorageOverride = new MemorySaveStorage();
             MissionDirector.SeedOverride = 4242;
             MissionDirector.CreatureOverride = 0;
+            MissionDirector.MapOverride = 0;
             yield return SceneManager.LoadSceneAsync("TrashAstronauts", LoadSceneMode.Single);
             yield return null;
             m_Director = MissionDirector.Active;
@@ -62,6 +63,7 @@ namespace TrashAstronauts.Tests
             MissionDirector.StorageOverride = null;
             MissionDirector.SeedOverride = null;
             MissionDirector.CreatureOverride = null;
+            MissionDirector.MapOverride = null;
         }
 
         static IEnumerator Settle(int frames = 3)

@@ -36,13 +36,13 @@ namespace TrashAstronauts.EditorTools
             Shot("01_tug_mission_board", new Vector3(1.0f, 1.6f, -0.6f), new Vector3(-2f, 1.45f, -0.4f));
             Shot("02_tug_locker_and_hatch", new Vector3(-1.2f, 1.6f, -1.6f), new Vector3(1.6f, 1.3f, 0.6f));
             Shot("03_airlock", new Vector3(0f, 1.6f, 4.0f), new Vector3(0.3f, 1.4f, 7.6f));
-            Shot("04_corridor", new Vector3(0f, 1.6f, 8.2f), new Vector3(0f, 1.4f, 21f));
-            Shot("05_cargo_bay", new Vector3(-2.0f, 1.7f, 12.2f), new Vector3(-8.5f, 1.2f, 16.5f));
-            Shot("06_maintenance", new Vector3(2.2f, 1.6f, 10.2f), new Vector3(7.4f, 1.3f, 14.6f));
-            Shot("07_reactor", new Vector3(0f, 1.6f, 22.2f), new Vector3(0f, 1.3f, 25.5f));
+            Shot("04_corridor", Builder.FreighterPoint(0f, 1.6f, 8.2f), Builder.FreighterPoint(0f, 1.4f, 21f));
+            Shot("05_cargo_bay", Builder.FreighterPoint(-2.0f, 1.7f, 12.2f), Builder.FreighterPoint(-8.5f, 1.2f, 16.5f));
+            Shot("06_maintenance", Builder.FreighterPoint(2.2f, 1.6f, 10.2f), Builder.FreighterPoint(7.4f, 1.3f, 14.6f));
+            Shot("07_reactor", Builder.FreighterPoint(0f, 1.6f, 22.2f), Builder.FreighterPoint(0f, 1.3f, 25.5f));
             Shot("09_board_closeup", new Vector3(-0.2f, 1.5f, -1.0f), new Vector3(-2f, 1.5f, -1.0f));
-            Shot("10_creature", new Vector3(2.1f, 1.35f, 26.9f), new Vector3(3.4f, 1.3f, 28.4f));
-            Shot("11_creature_side", new Vector3(1.9f, 1.5f, 28.9f), new Vector3(3.4f, 1.3f, 28.4f));
+            Shot("10_creature", Builder.FreighterPoint(2.1f, 1.35f, 26.9f), Builder.FreighterPoint(3.4f, 1.3f, 28.4f));
+            Shot("11_creature_side", Builder.FreighterPoint(1.9f, 1.5f, 28.9f), Builder.FreighterPoint(3.4f, 1.3f, 28.4f));
             Shot("12_gloves_and_tools", new Vector3(-0.35f, 1.45f, -0.55f), new Vector3(0.4f, 1.1f, -0.9f));
             Shot("13_salvage_lineup", new Vector3(0f, 1.25f, -40.9f), new Vector3(0f, 1.2f, -40f));
             // All three creatures side by side on an empty stage: Janitor, Listener, Warden.
@@ -108,7 +108,34 @@ namespace TrashAstronauts.EditorTools
                 Object.DestroyImmediate(rig);
             }
 
-            Shot("08_top_down", new Vector3(-1f, 34f, 13f), new Vector3(-1f, 0f, 13.01f), true);
+            Shot("08_top_down", new Vector3(-1f, 46f, 22f), new Vector3(-1f, 0f, 22.01f), true);
+            Shot("18_flight_deck", new Vector3(-0.8f, 1.6f, -3.3f), new Vector3(0.3f, 1.3f, -6.2f));
+            Shot("19_cabin_to_flight_deck", new Vector3(0.6f, 1.6f, 1.2f), new Vector3(-0.8f, 1.3f, -5f));
+
+            // The other two wrecks: dock each in turn.
+            var mapDirector = Object.FindFirstObjectByType<TrashAstronauts.Mission.MissionDirector>();
+            if (mapDirector != null && mapDirector.maps != null && mapDirector.maps.Length >= 3)
+            {
+                void Dock(int index)
+                {
+                    for (int i = 0; i < mapDirector.maps.Length; i++) mapDirector.maps[i].gameObject.SetActive(i == index);
+                    foreach (var enemy in mapDirector.enemies) enemy.gameObject.SetActive(false);
+                }
+                Dock(1);
+                Shot("20_barge_hold", new Vector3(-0.4f, 1.7f, 12.4f), new Vector3(1.5f, 1.9f, 22f));
+                Shot("21_barge_hold_from_above", new Vector3(-7f, 3.6f, 12.6f), new Vector3(3f, 0.8f, 23f));
+                Shot("22_barge_quarters", new Vector3(-8.8f, 1.6f, 19f), new Vector3(-14f, 1.2f, 17f));
+                Shot("23_barge_drive_room", new Vector3(0f, 1.6f, 27.4f), new Vector3(0f, 1.3f, 33f));
+                Shot("24_barge_top_down", new Vector3(-1f, 46f, 22f), new Vector3(-1f, 0f, 22.01f), true);
+                Dock(2);
+                Shot("25_survey_ring_south", new Vector3(-0.5f, 1.6f, 8.2f), new Vector3(-8f, 1.4f, 11f));
+                Shot("26_survey_ring_west", new Vector3(-7f, 1.6f, 11f), new Vector3(-7f, 1.4f, 28f));
+                Shot("27_survey_lab", new Vector3(0f, 1.6f, 12.2f), new Vector3(1.5f, 1.2f, 19f));
+                Shot("28_survey_observation_deck", new Vector3(0f, 1.6f, 32f), new Vector3(-1f, 1.5f, 36.4f));
+                Shot("29_survey_top_down", new Vector3(-1f, 46f, 22f), new Vector3(-1f, 0f, 22.01f), true);
+                Dock(0);
+                mapDirector.enemies[0].gameObject.SetActive(true);
+            }
             Object.DestroyImmediate(lineup);
         }
 

@@ -17,6 +17,7 @@ namespace TrashAstronauts.UI
         public TMP_Text oxygenText;
         public TMP_Text salvageText;
         public TMP_Text threatText;
+        public TMP_Text voiceText;
         public Transform oxygenBar;
         public Renderer oxygenBarRenderer;
         public float refreshInterval = 0.2f;
@@ -94,6 +95,17 @@ namespace TrashAstronauts.UI
             }
 
             Set(threatText, DescribeThreat(director, blinkOn));
+
+            if (voiceText != null)
+            {
+                var voice = player != null ? player.voice : null;
+                string mic;
+                if (voice == null) mic = "";
+                else if (!voice.Listening) mic = voice.Status;
+                else if (voice.HeardRecently && session.Phase == MissionPhase.Active) mic = "MIC ))) IT CAN HEAR YOU";
+                else mic = "MIC " + new string('|', 1 + Mathf.RoundToInt(voice.Loudness * 7f));
+                Set(voiceText, mic);
+            }
         }
 
         static string DescribeThreat(MissionDirector director, bool blinkOn)

@@ -761,7 +761,7 @@ namespace TrashAstronauts.EditorTools
             var root = Empty(parent, name, localPos, localRot, GameLayers.Default);
             root.transform.localScale = Vector3.one * scale;
             Prim(root.transform, "Back", PrimitiveType.Cube, new Vector3(0, -0.03f, 0.012f), new Vector3(0.56f, 0.54f, 0.02f), M("Screen"));
-            var summary = Text(root.transform, "Summary", "SUIT SETTINGS", new Vector3(0, 0.15f, -0.002f), Quaternion.identity, 0.22f, new Vector2(0.52f, 0.16f), new Color(0.75f, 0.95f, 1f));
+            var summary = Text(root.transform, "Summary", "SUIT SETTINGS", new Vector3(0, 0.15f, -0.002f), Quaternion.identity, 0.2f, new Vector2(0.52f, 0.17f), new Color(0.75f, 0.95f, 1f));
 
             var size = new Vector2(0.24f, 0.07f);
             var panel = root.AddComponent<SettingsPanel>();
@@ -771,8 +771,9 @@ namespace TrashAstronauts.EditorTools
             panel.snapTurn = Button(root.transform, "Snap Turn", new Vector3(-0.13f, -0.065f, 0), Quaternion.identity, size, "TURN 45", M("ButtonBlue"), 0.22f);
             panel.handedness = Button(root.transform, "Handedness", new Vector3(0.13f, -0.065f, 0), Quaternion.identity, size, "HAND: RIGHT", M("ButtonBlue"), 0.22f);
             panel.drift = Button(root.transform, "Drift", new Vector3(-0.13f, -0.15f, 0), Quaternion.identity, size, "DRIFT: ON", M("ButtonBlue"), 0.22f);
-            panel.unstuck = Button(root.transform, "Unstuck", new Vector3(0.13f, -0.15f, 0), Quaternion.identity, size, "UNSTUCK", M("ButtonAmber"), 0.22f);
-            panel.recallTools = Button(root.transform, "Recall Tools", new Vector3(0f, -0.235f, 0), Quaternion.identity, new Vector2(0.5f, 0.07f), "RECALL TOOLS", M("ButtonAmber"), 0.22f);
+            panel.voice = Button(root.transform, "Voice", new Vector3(0.13f, -0.15f, 0), Quaternion.identity, size, "MIC: ON", M("ButtonBlue"), 0.22f);
+            panel.unstuck = Button(root.transform, "Unstuck", new Vector3(-0.13f, -0.235f, 0), Quaternion.identity, size, "UNSTUCK", M("ButtonAmber"), 0.22f);
+            panel.recallTools = Button(root.transform, "Recall Tools", new Vector3(0.13f, -0.235f, 0), Quaternion.identity, size, "RECALL TOOLS", M("ButtonAmber"), 0.2f);
             return panel;
         }
 
@@ -901,7 +902,7 @@ namespace TrashAstronauts.EditorTools
 
             // --- wrist display
             var wrist = Empty(rig.transform, "Wrist Display", Vector3.zero, null, GameLayers.Default);
-            Prim(wrist.transform, "Back", PrimitiveType.Cube, new Vector3(0, 0, 0.004f), new Vector3(0.125f, 0.092f, 0.006f), M("Screen"));
+            Prim(wrist.transform, "Back", PrimitiveType.Cube, new Vector3(0, -0.007f, 0.004f), new Vector3(0.125f, 0.106f, 0.006f), M("Screen"));
             var display = wrist.AddComponent<WristDisplay>();
             display.player = context;
             display.oxygenText = Text(wrist.transform, "Oxygen", "O2 100%", new Vector3(0, 0.028f, -0.001f), Quaternion.identity, 0.085f, new Vector2(0.12f, 0.026f), new Color(0.8f, 1f, 1f));
@@ -912,6 +913,7 @@ namespace TrashAstronauts.EditorTools
             display.oxygenBarRenderer = bar.GetComponent<MeshRenderer>();
             display.salvageText = Text(wrist.transform, "Salvage", "NO CONTRACT", new Vector3(0, -0.012f, -0.001f), Quaternion.identity, 0.07f, new Vector2(0.12f, 0.024f), new Color(1f, 0.9f, 0.6f));
             display.threatText = Text(wrist.transform, "Threat", "", new Vector3(0, -0.035f, -0.001f), Quaternion.identity, 0.065f, new Vector2(0.12f, 0.014f), new Color(1f, 0.6f, 0.5f));
+            display.voiceText = Text(wrist.transform, "Voice", "MIC", new Vector3(0, -0.051f, -0.001f), Quaternion.identity, 0.055f, new Vector2(0.12f, 0.012f), new Color(0.6f, 1f, 0.7f));
             context.wristDisplay = wrist.transform;
 
             // --- suit menu
@@ -932,6 +934,11 @@ namespace TrashAstronauts.EditorTools
             prompt.title.fontStyle = FontStyles.Bold;
             prompt.body = Text(promptVisuals.transform, "Body", "", new Vector3(0, -0.02f, -0.001f), Quaternion.identity, 0.25f, new Vector2(0.7f, 0.17f), new Color(0.88f, 0.96f, 1f));
             promptVisuals.SetActive(false);
+
+            var voice = rig.AddComponent<VoiceSensor>();
+            voice.player = context;
+            voice.head = camGo.transform;
+            context.voice = voice;
 
             var suitAudio = rig.AddComponent<SuitAudio>();
             suitAudio.player = context;
