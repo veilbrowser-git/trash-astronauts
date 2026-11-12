@@ -99,7 +99,11 @@ namespace TrashAstronauts.Net
 
         public void OnTranqHitReport(byte slot, NetVec3 origin, NetVec3 hitPoint)
         {
-            if (m_Rules != null) m_Rules.HostTranqHitReport(origin, hitPoint, slot);
+            if (m_Rules == null || !m_Rules.HostTranqHitReport(origin, hitPoint, slot)) return;
+            // Everyone sees the crew member's shot: the host draws it and tells the others (the shooter drew its own).
+            CoopToolSync.ShowTranqTracer(m_Net, slot, origin, hitPoint);
+            var host = m_Net.HostSession;
+            if (host != null) host.SendTranqTracer(slot, origin, hitPoint);
         }
 
         public void OnWireReport(byte slot, byte index, NetWireChange change) { /* Stage 4: webs are never armed in a co-op contract. */ }

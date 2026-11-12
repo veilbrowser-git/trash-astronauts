@@ -337,10 +337,19 @@ namespace TrashAstronauts.EditorTools
                 remote.Apply(in s);
                 remote.leftGlove.Apply(s.leftIndexCurl, s.leftGripCurl);
                 remote.rightGlove.Apply(0f, 0f);
+                // The waving one is talking (voice chat's helmet light); the other wears a chosen suit colour .
+                if (p.wave)
+                {
+                    var talk = remote.head.Find(TrashAstronauts.Net.Voice.VoiceTalkLight.ChildName);
+                    if (talk != null) talk.GetComponent<Renderer>().enabled = true;
+                }
+                else TrashAstronauts.Net.CrewLook.ApplyLook(remote, p.slot, 9);
                 remote.suit.SnapToHead();
                 remote.suit.Pose(0f);
             }
             Shot("54_remote_crew_in_tug", new Vector3(-1.3f, 1.6f, 0.7f), new Vector3(-0.1f, 1.3f, -2.0f), false, 70f);
+            Vector3 talker = poses[0].head;
+            Shot("55_remote_talk_light", talker + new Vector3(0.35f, 0.25f, 0.9f), talker + Vector3.up * 0.1f, false, 50f);
             foreach (var go in crew) Object.DestroyImmediate(go);
         }
 

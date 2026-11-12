@@ -60,7 +60,8 @@ namespace TrashAstronauts.Net
         {
             if (context != null) context.AssignId(id, true);
             SetHandedness(handedness);
-            if (suit != null) suit.SetTint(PlayerAvatar.CrewColors[Mathf.Clamp(id.Value, 0, PlayerAvatar.CrewColors.Length - 1)]);
+            // The slot's own colour, suit and gloves; NetSession's AddCrew then puts on the colour that player chose.
+            CrewLook.ApplyLook(this, id.Value, SuitLook.Default);
             SetShown(false);
         }
 
