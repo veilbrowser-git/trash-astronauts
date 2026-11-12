@@ -52,6 +52,8 @@ namespace TrashAstronauts.Player
         public float thrusterAcceleration = 1.9f;
         [Tooltip("The thruster stops adding speed once you are moving this fast in that direction.")]
         public float thrusterMaxSpeed = 2.4f;
+        [Tooltip("Under gravity the thruster adds this many times the local gravity to its acceleration, so a hop is possible.")]
+        public float gravityThrustBoost = 1.6f;
         [Range(0.1f, 0.9f)] public float thrusterTriggerThreshold = 0.45f;
         [Tooltip("Speed lost per second while a thumbstick is clicked in (brake).")]
         public float brakeDeceleration = 4.5f;
@@ -335,6 +337,10 @@ namespace TrashAstronauts.Player
                 Vector3 before = m_Velocity;
                 // Same force, more mass, less acceleration: hauling the reactor core is sluggish.
                 float acceleration = thrusterAcceleration * BodyMass / Mathf.Max(1f, TotalMass);
+                // Under gravity (the Moon cave) the suit runs its thruster in surface mode: enough extra push to
+                // hop clear of the ground and glide, instead of barely cancelling its own weight.
+                float pull = TrashAstronauts.Mission.MapGravity.GravityAt(transform.position + Vector3.up * 0.5f).magnitude;
+                if (pull > 0.01f) acceleration += pull * gravityThrustBoost;
                 float gain = Mathf.Min(acceleration * dt, thrusterMaxSpeed - along);
                 m_Velocity = Vector3.ClampMagnitude(m_Velocity + direction * gain, maxSpeed);
                 ThrusterSpeedGained += (m_Velocity - before).magnitude;

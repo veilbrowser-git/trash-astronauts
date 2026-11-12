@@ -178,7 +178,7 @@ namespace TrashAstronauts.Tests
             yield return Seconds(1.5f);
             Assert.IsTrue(zeroG.IsThrusting);
             hand.TriggerOverride = 0f;
-            Assert.Greater(m_Player.transform.position.y, rest + 0.12f, "The thruster should lift you off the ground.");
+            Assert.Greater(m_Player.transform.position.y, rest + 0.6f, "The thruster should lift you well clear of the ground, not just cancel your weight.");
             yield return Seconds(5f);
             Assert.Less(m_Player.transform.position.y, 0.08f, "After the hop you come back down.");
         }

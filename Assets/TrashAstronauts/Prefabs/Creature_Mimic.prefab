@@ -1937,6 +1937,58 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!1 &5140567729533125528
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 9002511559691777915}
+  - component: {fileID: 132953227134939041}
+  m_Layer: 16
+  m_Name: Body Pusher
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &9002511559691777915
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5140567729533125528}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6628373664335975555}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &132953227134939041
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5140567729533125528}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ed1fce880aea64294a96d5e9061973a2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: TrashAstronauts.Runtime::TrashAstronauts.Player.Bumper
+  target: {fileID: 6319843204776546869}
+  localOffset: {x: 0, y: 0.2, z: 0}
+  radius: 0.5
+  height: 0
+  minSpeed: 0
+  hand: {fileID: 0}
+  bounce: 0.2
+  ownerMass: 220
 --- !u!1 &5357520532147597136
 GameObject:
   m_ObjectHideFlags: 0
@@ -2840,6 +2892,7 @@ Transform:
   - {fileID: 7071622595592555921}
   - {fileID: 3427863573313628496}
   - {fileID: 493098130541025209}
+  - {fileID: 9002511559691777915}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!54 &3995320352917698988
@@ -2927,6 +2980,7 @@ MonoBehaviour:
   lurkSeconds: {x: 3, y: 9}
   huntOffGraphDistance: 14
   lungeMultiplier: 1.3
+  staggerCooldown: 6
   voiceVolume: 0.35
   scareDistance: 0.46
   scareLungeSeconds: 0.09

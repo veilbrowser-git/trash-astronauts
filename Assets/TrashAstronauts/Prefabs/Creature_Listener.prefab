@@ -38,6 +38,7 @@ Transform:
   - {fileID: 2618497989426486892}
   - {fileID: 5531481850758812397}
   - {fileID: 1795293797881679113}
+  - {fileID: 5086694135655700528}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!54 &8625797291957282849
@@ -125,6 +126,7 @@ MonoBehaviour:
   lurkSeconds: {x: 3, y: 9}
   huntOffGraphDistance: 14
   lungeMultiplier: 1.3
+  staggerCooldown: 6
   voiceVolume: 0.35
   scareDistance: 0.46
   scareLungeSeconds: 0.09
@@ -3359,6 +3361,58 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!1 &8974675116665209032
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 5086694135655700528}
+  - component: {fileID: 3700499937265307637}
+  m_Layer: 16
+  m_Name: Body Pusher
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &5086694135655700528
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8974675116665209032}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6109879194641692374}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &3700499937265307637
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8974675116665209032}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ed1fce880aea64294a96d5e9061973a2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: TrashAstronauts.Runtime::TrashAstronauts.Player.Bumper
+  target: {fileID: 8958945085173470208}
+  localOffset: {x: 0, y: 0.2, z: 0}
+  radius: 0.5
+  height: 0
+  minSpeed: 0
+  hand: {fileID: 0}
+  bounce: 0.2
+  ownerMass: 220
 --- !u!1 &8990856266579551657
 GameObject:
   m_ObjectHideFlags: 0
