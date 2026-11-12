@@ -17,6 +17,8 @@ namespace TrashAstronauts.Mission
         ApplicationFocus = 1 << 0,
         TrackingLost = 1 << 1,
         Scripted = 1 << 2,
+        /// <summary>Co-op client: the host's hazards are paused (only the host's pause freezes them).</summary>
+        HostPaused = 1 << 3,
     }
 
     /// <summary>
@@ -32,7 +34,7 @@ namespace TrashAstronauts.Mission
     /// today. On a client each of those methods hands the request to the session instead of acting.
     /// </summary>
     [DefaultExecutionOrder(-100)]
-    public sealed class MissionDirector : MonoBehaviour
+    public sealed partial class MissionDirector : MonoBehaviour
     {
         /// <summary>The mission running in the loaded scene. One mission per scene, any number of players.</summary>
         public static MissionDirector Active { get; private set; }
@@ -592,6 +594,7 @@ namespace TrashAstronauts.Mission
             }
             run.wireArmedMask = wireMask;
             run.hazardFlags = RunStartParams.HazardBlackouts;
+            ApplyCoopRunLimits(ref run);
 
             run.planHash = run.ComputePlanHash();
             m_BuiltPlan = plan;
@@ -1149,6 +1152,7 @@ namespace TrashAstronauts.Mission
                     TickMission(Time.deltaTime * (1f + m_Config.exertionOxygenCost * exertion), everyoneSafe);
                 }
             }
+            if (Net != null && Net.IsClient) ExtrapolateClientClock(everyoneSafe, Time.deltaTime);
 
             if (Time.time >= m_NextBoundsCheck)
             {

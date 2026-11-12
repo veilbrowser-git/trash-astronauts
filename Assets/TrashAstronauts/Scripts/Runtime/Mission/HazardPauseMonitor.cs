@@ -6,6 +6,8 @@ namespace TrashAstronauts.Mission
     /// <summary>
     /// Pauses mission hazards (oxygen drain and the drone) whenever the player cannot fairly respond:
     /// the app lost focus or was paused (headset taken off, system menu open) or head tracking dropped out.
+    /// In a co-op session only the host's pause freezes hazards; on a client the same signals mark the
+    /// local player Away (not counted for oxygen or extraction) and tell the host.
     /// </summary>
     public sealed class HazardPauseMonitor : MonoBehaviour
     {
@@ -21,12 +23,18 @@ namespace TrashAstronauts.Mission
         {
             // In the editor, clicking another window should not freeze the game during iteration.
             if (Application.isEditor) return;
-            if (director != null) director.SetHazardPause(HazardPauseReason.ApplicationFocus, !hasFocus);
+            if (director != null) Pause(HazardPauseReason.ApplicationFocus, !hasFocus);
         }
 
         void OnApplicationPause(bool paused)
         {
-            if (director != null) director.SetHazardPause(HazardPauseReason.ApplicationFocus, paused);
+            if (director != null) Pause(HazardPauseReason.ApplicationFocus, paused);
+        }
+
+        void Pause(HazardPauseReason reason, bool paused)
+        {
+            if (director.Net != null && director.Net.IsClient) director.SetLocalAway(reason, paused);
+            else director.SetHazardPause(reason, paused);
         }
 
         void Update()
@@ -36,7 +44,7 @@ namespace TrashAstronauts.Mission
             if (!action.enabled || action.controls.Count == 0)
             {
                 // No headset bound: nothing to lose.
-                director.SetHazardPause(HazardPauseReason.TrackingLost, false);
+                Pause(HazardPauseReason.TrackingLost, false);
                 return;
             }
 
@@ -45,13 +53,13 @@ namespace TrashAstronauts.Mission
             {
                 m_EverTracked = true;
                 m_UntrackedTime = 0f;
-                director.SetHazardPause(HazardPauseReason.TrackingLost, false);
+                Pause(HazardPauseReason.TrackingLost, false);
             }
             else if (m_EverTracked)
             {
                 m_UntrackedTime += Time.unscaledDeltaTime;
                 if (m_UntrackedTime >= trackingLossGraceSeconds)
-                    director.SetHazardPause(HazardPauseReason.TrackingLost, true);
+                    Pause(HazardPauseReason.TrackingLost, true);
             }
         }
     }
