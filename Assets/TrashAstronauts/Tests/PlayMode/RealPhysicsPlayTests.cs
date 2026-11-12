@@ -551,7 +551,10 @@ namespace TrashAstronauts.Tests
             m_Director.StartMission(PlayerId.Local);
             yield return Steps(2);
             var door = Object.FindObjectsByType<SlidingDoor>(FindObjectsSortMode.None)
-                .Where(d => !d.locked && d.leaf != null).OrderByDescending(d => Vector3.Distance(d.transform.position, m_Player.transform.position)).First();
+                .Where(d => !d.locked && d.leaf != null)
+                // Away from the creature: its body now shoves loose things too, which is not what this tests.
+                .Where(d => m_Director.ActiveEnemy == null || Vector3.Distance(d.transform.position, CreatureBody(m_Director.ActiveEnemy).bounds.center) > 4f)
+                .OrderByDescending(d => Vector3.Distance(d.transform.position, m_Player.transform.position)).First();
             door.SetOpen(true, true);
             yield return Steps(2);
             var item = Loose("elec_comms_relay");
@@ -577,6 +580,252 @@ namespace TrashAstronauts.Tests
                     if (!c.isTrigger && !leafCollider.isTrigger)
                         Assert.IsFalse(Physics.ComputePenetration(c, c.transform.position, c.transform.rotation, leafCollider, leafCollider.transform.position, leafCollider.transform.rotation, out _, out _),
                             "Nothing is left stuck inside the shut door.");
+        }
+        // ------------------------------------------------------------------ two hands on a heavy object
+
+        /// <summary>Puts this hand on the item where it is (the item does not move) and closes it.</summary>
+        IEnumerator AlsoGrabWith(HandRig hand, SalvageItem item, Vector3 offset)
+        {
+            hand.transform.position += item.transform.position + offset - hand.interactor.transform.position;
+            Physics.SyncTransforms();
+            yield return new WaitForFixedUpdate();
+            hand.GripOverride = 1f;
+            var select = hand.interactor.selectInput;
+            select.inputSourceMode = UnityEngine.XR.Interaction.Toolkit.Inputs.Readers.XRInputButtonReader.InputSourceMode.ManualValue;
+            select.QueueManualState(true, 1f, true, false);
+            for (int i = 0; i < 4; i++) yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator TwoHandsOnTheCore_CarryItWithLessLag_ThrowHarder_AndOneCanLetGo()
+        {
+            m_Director.StartMission(PlayerId.Local);
+            yield return FloatInCargoBay();
+            HandsUnderTestControl();
+            var right = m_Player.rightHand;
+            var left = m_Player.leftHand;
+            var core = m_Director.Items.Where(i => !i.IsMounted && i.definition != null).OrderByDescending(i => i.Body.mass).First();
+            var weight = core.GetComponent<HeldWeight>();
+            var duck = m_Director.Items.First(i => i.definition != null && i.definition.id == "novelty_rubber_duck");
+            Assert.AreEqual(UnityEngine.XR.Interaction.Toolkit.Interactables.InteractableSelectMode.Multiple, core.grab.selectMode, "Heavy things take a second hand.");
+            Assert.AreEqual(UnityEngine.XR.Interaction.Toolkit.Interactables.InteractableSelectMode.Single, duck.grab.selectMode, "Light things are unchanged.");
+
+            // One hand: the baseline lag.
+            Vector3 rightHome = right.transform.position;
+            yield return GrabWith(right, core);
+            var oneHand = new float[2];
+            yield return SwingAndMeasureLag(right, core, oneHand);
+            float oneScale = core.grab.velocityScale;
+
+            // The other hand takes hold too: both hold it, and the pair steers it much more firmly.
+            yield return AlsoGrabWith(left, core, Vector3.up * 0.12f);
+            Assert.IsTrue(right.IsHolding && left.IsHolding, "Both hands hold the core.");
+            Assert.AreEqual(2, weight.HandCount);
+            Assert.Greater(core.grab.velocityScale, oneScale * 1.5f, "Two hands steer it harder than one.");
+            for (int i = 0; i < 72; i++) yield return new WaitForFixedUpdate();
+            var twoHands = new float[2];
+            // Swing both hands together.
+            for (int i = 0; i < 14; i++)
+            {
+                right.transform.position += Vector3.forward * 0.0214f;
+                left.transform.position += Vector3.forward * 0.0214f;
+                yield return new WaitForFixedUpdate();
+            }
+            twoHands[0] = weight.GripGap;
+            Assert.Less(twoHands[0], oneHand[0] * 0.8f, "Carried in two hands it lags less: one hand " + oneHand[0] + ", two " + twoHands[0]);
+
+            // Letting go with one hand: still held by the other, back to the one-handed feel.
+            left.interactor.selectInput.QueueManualState(false, 0f, false, true);
+            left.GripOverride = 0f;
+            yield return null;
+            yield return null;
+            Assert.IsFalse(left.IsHolding);
+            Assert.IsTrue(right.IsHolding, "The other hand keeps hold of it.");
+            Assert.IsTrue(core.IsHeld);
+            Assert.AreEqual(1, weight.HandCount);
+            Assert.AreEqual(oneScale, core.grab.velocityScale, 1e-4f, "Back to one-handed behaviour.");
+            Assert.IsFalse(core.Body.isKinematic);
+            yield return LetGo(right);
+
+            // The throw cap with two arms is that of one arm throwing half the mass.
+            Assert.Greater(RealPhysics.MaxThrowSpeed(core.Body.mass / 2f), RealPhysics.MaxThrowSpeed(core.Body.mass) * 1.3f);
+        }
+        // ------------------------------------------------------------------ the spider is a physical body
+
+        static Collider CreatureBody(EnemyDrone creature) =>
+            creature.GetComponentsInChildren<SphereCollider>().First(c => c.gameObject.layer == GameLayers.Enemy && !c.isTrigger);
+
+        /// <summary>A horizontal direction from p with at least this much room, ignoring the creature itself.</summary>
+        static bool RoomAround(Vector3 p, float room, out Vector3 dir)
+        {
+            int mask = ~(1 << GameLayers.Enemy);
+            foreach (var d in new[] { Vector3.forward, Vector3.back, Vector3.left, Vector3.right })
+            {
+                if (!Physics.SphereCast(p, 0.25f, d, out _, room, mask, QueryTriggerInteraction.Ignore)) { dir = d; return true; }
+            }
+            dir = Vector3.forward;
+            return false;
+        }
+
+        /// <summary>Throws the item squarely at the creature's body from 1 m away and waits for the hit.</summary>
+        IEnumerator ThrowAtCreature(EnemyDrone creature, Rigidbody item, float speed)
+        {
+            var body = CreatureBody(creature);
+            Vector3 c = body.bounds.center;
+            Assume.That(RoomAround(c, 1.6f, out Vector3 dir), "Need open space beside the creature.");
+            Vector3 start = c + dir * 1.1f;
+            item.position = start;
+            item.transform.position = start;
+            item.rotation = Quaternion.identity;
+            item.transform.rotation = Quaternion.identity;
+            item.angularVelocity = Vector3.zero;
+            item.linearVelocity = -dir * speed;
+            Physics.SyncTransforms();
+            // Keep it aimed at the body (which may still be settling on its surface) until it hits.
+            var emitter = item.GetComponent<ImpactNoiseEmitter>();
+            int hitsBefore = emitter.CreatureHits;
+            for (int i = 0; i < 72 && emitter.CreatureHits == hitsBefore; i++)
+            {
+                Vector3 to = body.bounds.center - item.worldCenterOfMass;
+                if (to.magnitude > 0.5f) item.linearVelocity = to.normalized * speed;
+                yield return new WaitForFixedUpdate();
+            }
+            for (int i = 0; i < 4; i++) yield return new WaitForFixedUpdate();
+            item.linearVelocity = Vector3.zero;
+            item.position = item.transform.position = start + Vector3.up * 30f;
+            Physics.SyncTransforms();
+        }
+
+        IEnumerator AwakeCreature(EnemyDrone[] result)
+        {
+            m_Director.StartMission(PlayerId.Local);
+            yield return Steps(2);
+            var creature = m_Director.ActiveEnemy;
+            creature.WakeNow();
+            // Out in the open middle of the cargo bay, standing on the floor (hazards are paused, so it stays).
+            creature.transform.SetPositionAndRotation(new Vector3(0f, creature.hoverHeight, 9.2f), Quaternion.identity);
+            Physics.SyncTransforms();
+            for (float t = 0f; t < 1.5f; t += Time.deltaTime) yield return null; // let the body settle on its surface
+            result[0] = creature;
+        }
+
+        [UnityTest]
+        public IEnumerator AHeavyThrow_StaggersTheSpider_ACanDoesNot_AndItCannotBeStunLocked()
+        {
+            var found = new EnemyDrone[1];
+            yield return AwakeCreature(found);
+            var creature = found[0];
+            Assert.AreNotEqual(EnemyState.Dormant, creature.State);
+            var can = Object.FindObjectsByType<ImpactNoiseEmitter>(FindObjectsSortMode.None)
+                .First(e => e.GetComponent<SalvageItem>() == null && e.name.Contains("Can") && !e.GetComponent<Rigidbody>().isKinematic);
+            var core = m_Director.Items.Where(i => !i.IsMounted && i.definition != null).OrderByDescending(i => i.Body.mass).First();
+            Assert.AreEqual(0f, EnemyDrone.StaggerSecondsFor(0.35f * 8f), "A tossed can is far below the threshold.");
+
+            // A can thrown hard does nothing.
+            yield return ThrowAtCreature(creature, can.GetComponent<Rigidbody>(), 8f);
+            Assert.Greater(can.LastCreatureHitMomentum, 0.5f, "Test set-up: the can should have hit the creature at " + CreatureBody(creature).bounds.center + "; can at " + can.transform.position);
+            Assert.AreEqual(0, creature.StaggerCount, "A 0.35 kg can does not stagger it.");
+
+            // The 40 kg core at 4 m/s: 160 kg m/s.
+            yield return ThrowAtCreature(creature, core.Body, 4f);
+            var emitter = core.GetComponent<ImpactNoiseEmitter>();
+            Assert.Greater(emitter.LastCreatureHitMomentum, 100f, "Test set-up: the core should have hit it squarely.");
+            Assert.AreEqual(1, creature.StaggerCount, "The core staggers it.");
+            Assert.IsTrue(creature.IsStaggered);
+
+            // While staggered it does not advance.
+            Vector3 at = creature.transform.position;
+            for (int i = 0; i < 8; i++) creature.Step(0.05f);
+            Assert.Less(Vector3.Distance(at, creature.transform.position), 0.001f, "Reeling, it does not move.");
+            Assert.AreNotEqual(EnemyState.Dormant, creature.State, "Its mind is untouched.");
+            for (int i = 0; i < 30; i++) creature.Step(0.05f);
+            Assert.IsFalse(creature.IsStaggered, "The stagger is brief.");
+
+            // Another heavy hit inside the cooldown does nothing.
+            yield return ThrowAtCreature(creature, core.Body, 4f);
+            Assert.AreEqual(1, creature.StaggerCount, "It cannot be stun-locked.");
+            Assert.IsFalse(creature.Stagger(1f));
+            // After the cooldown it can be staggered again; never while asleep.
+            for (int i = 0; i < 140; i++) creature.Step(0.05f);
+            creature.Tranquilize(5f);
+            Assert.IsFalse(creature.Stagger(1f), "Not while sedated.");
+        }
+
+        [UnityTest]
+        public IEnumerator TheSpider_CannotBeStaggered_DuringAJumpscare()
+        {
+            m_Director.StartMission(PlayerId.Local);
+            yield return Steps(2);
+            m_Player.locomotion.TeleportTo(MapPoints.Freighter(0f, 0f, 19.6f));
+            for (int i = 0; i < 4; i++) yield return null;
+            var creature = m_Director.ActiveEnemy;
+            creature.WakeNow();
+            foreach (var door in m_Director.wreckDoors) door.SetOpen(true, true);
+            Physics.SyncTransforms();
+            Vector3 head = m_Player.HeadPosition;
+            creature.transform.position = new Vector3(head.x, creature.hoverHeight, head.z + 1.6f);
+            creature.transform.rotation = Quaternion.LookRotation(Vector3.back);
+            for (int i = 0; i < 200 && !creature.IsScaring && m_Director.Phase == MissionPhase.Active; i++) creature.Step(0.05f);
+            Assume.That(creature.IsScaring, "Test set-up: it should have caught the player.");
+            Assert.IsFalse(creature.Stagger(1f), "Nothing interrupts a jumpscare.");
+            Assert.IsFalse(creature.IsStaggered);
+            Assert.AreEqual(0, creature.StaggerCount);
+        }
+
+        [UnityTest]
+        public IEnumerator TheSpider_KnocksAFloatingCrateAside_InsteadOfGhostingThroughIt()
+        {
+            var found = new EnemyDrone[1];
+            yield return AwakeCreature(found);
+            var creature = found[0];
+            var crate = Object.FindObjectsByType<ImpactNoiseEmitter>(FindObjectsSortMode.None)
+                .First(e => e.GetComponent<SalvageItem>() == null && e.name.Contains("Crate")).GetComponent<Rigidbody>();
+            Vector3 c = CreatureBody(creature).bounds.center;
+            Assume.That(RoomAround(c, 3f, out Vector3 dir), "Need a clear run for the creature.");
+            Vector3 at = c + dir * 1.3f;
+            crate.position = crate.transform.position = at;
+            crate.linearVelocity = Vector3.zero;
+            crate.angularVelocity = Vector3.zero;
+            Physics.SyncTransforms();
+            yield return Steps(2);
+
+            // Walk it straight through where the crate floats, at 2 m/s.
+            for (int i = 0; i < 90; i++)
+            {
+                creature.transform.position += dir * (2f * Time.fixedDeltaTime);
+                yield return new WaitForFixedUpdate();
+            }
+            var pusher = creature.GetComponentInChildren<Bumper>();
+            Assert.IsNotNull(pusher, "The creature has a body pusher.");
+            Assert.Greater(pusher.PushCount, 0, "It pushed the crate. Body moved from " + c + " to " + CreatureBody(creature).bounds.center + " along " + dir);
+            Assert.Greater(Vector3.Dot(crate.linearVelocity, dir), 0.8f, "The crate is knocked ahead of it: " + crate.linearVelocity + " body now " + CreatureBody(creature).bounds.center + " crate " + crate.position);
+            Assert.Greater(Vector3.Dot(crate.position - at, dir), 0.5f);
+        }
+        // ------------------------------------------------------------------ delicate things crack
+
+        [UnityTest]
+        public IEnumerator ADamagingHit_OnSomethingDelicate_ShedsAFewShardsThatFadeAway()
+        {
+            m_Director.StartMission(PlayerId.Local);
+            yield return Steps(2);
+            var board = m_Director.Items.First(i => !i.IsMounted && i.definition != null && i.definition.fragility > 0f && !i.definition.bulky);
+            int burstsBefore = ShardBurst.Bursts;
+            var noise = new float[2];
+            yield return KnockIntoAWall(board, 6f, noise);
+            Assert.Greater(board.DamageCount, 0, "Test set-up: a 6 m/s knock damages it.");
+            Assert.Greater(ShardBurst.Bursts, burstsBefore, "A damaging hit sheds shards.");
+
+            // However many hits, never more than a dozen alive, and they all fade out.
+            for (int i = 0; i < 10; i++) ShardBurst.Emit(board.transform.position, Vector3.up, null);
+            Assert.That(ShardBurst.Alive, Is.InRange(1, ShardBurst.PoolSize));
+            for (float t = 0f; t < ShardBurst.Lifetime + 0.3f; t += Time.deltaTime) yield return null;
+            Assert.AreEqual(0, ShardBurst.Alive, "They fade out.");
+
+            // A gentle bump on scrap does nothing.
+            var scrap = m_Director.Items.First(i => !i.IsMounted && i.definition != null && i.definition.fragility <= 0f && !i.definition.bulky);
+            burstsBefore = ShardBurst.Bursts;
+            yield return KnockIntoAWall(scrap, 6f, noise);
+            Assert.AreEqual(burstsBefore, ShardBurst.Bursts, "Scrap does not shatter.");
         }
     }
 }

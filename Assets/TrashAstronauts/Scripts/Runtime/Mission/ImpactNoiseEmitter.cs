@@ -67,6 +67,49 @@ namespace TrashAstronauts.Mission
             LastGrabbedBy = player != null ? player.Id : director != null ? director.LocalPlayerId : PlayerId.Local;
         }
 
+        /// <summary>Momentum (kg m/s) of the last hit on a creature, along the contact normal.</summary>
+        public float LastCreatureHitMomentum { get; private set; }
+        /// <summary>How many times this body has hit a creature.</summary>
+        public int CreatureHits { get; private set; }
+
+        /// <summary>
+        /// Something heavy thrown hard into the creature knocks it off balance. Momentum is the body's
+        /// mass times its closing speed along the contact normal, so a glancing blow counts for less.
+        /// Only the machine that simulates this body, and never a client (the host runs the creature).
+        /// </summary>
+        void TryStaggerCreature(Collision collision)
+        {
+            if (collision.collider == null || collision.collider.gameObject.layer != TrashAstronauts.World.GameLayers.Enemy) return;
+            var drone = collision.collider.GetComponentInParent<EnemyDrone>();
+            if (drone == null || !SimulatedHere || OnAClient(MissionDirector.Active)) return;
+            if (m_Body == null) m_Body = GetComponent<Rigidbody>();
+            Vector3 normal = collision.contactCount > 0 ? collision.GetContact(0).normal : -collision.relativeVelocity.normalized;
+            float closing = Mathf.Abs(Vector3.Dot(collision.relativeVelocity, normal));
+            LastCreatureHitMomentum = m_Body.mass * closing;
+            CreatureHits++;
+            float seconds = EnemyDrone.StaggerSecondsFor(LastCreatureHitMomentum);
+            if (seconds > 0f) drone.Stagger(seconds);
+        }
+
+        Material m_ShardMaterial;
+        bool m_LookedForShardMaterial;
+
+        /// <summary>A damaging knock on something delicate: a few shards fly off and it cracks. Cosmetic.</summary>
+        void Crack(Vector3 point, Collision collision)
+        {
+            if (!m_LookedForShardMaterial)
+            {
+                m_LookedForShardMaterial = true;
+                var renderer = GetComponentInChildren<MeshRenderer>();
+                if (renderer != null) m_ShardMaterial = renderer.sharedMaterial;
+            }
+            Vector3 normal = collision.contactCount > 0 ? collision.GetContact(0).normal : Vector3.up;
+            // The contact normal points from the other body toward this one: shards fly back off the hit.
+            if (Vector3.Dot(normal, transform.position - point) < 0f) normal = -normal;
+            TrashAstronauts.World.ShardBurst.Emit(point, normal, m_ShardMaterial);
+            if (Sfx.Library != null) Sfx.PlayAt(Sfx.Library.impactLight, point, 0.7f, Random.Range(1.7f, 1.9f), 12f);
+        }
+
         static bool OnAClient(MissionDirector director) => director != null && director.Net != null && director.Net.IsClient;
 
         /// <summary>
@@ -103,6 +146,7 @@ namespace TrashAstronauts.Mission
 
         void OnCollisionEnter(Collision collision)
         {
+            TryStaggerCreature(collision);
             if (Time.time - m_SpawnTime < 1f) return;
             float speed = collision.relativeVelocity.magnitude;
             if (speed < audioSpeedThreshold) return;
@@ -116,7 +160,7 @@ namespace TrashAstronauts.Mission
             bool simulatedHere = SimulatedHere;
 
             // Delicate salvage is worth less every time it is banged into something.
-            if (m_Item != null && simulatedHere) m_Item.ApplyImpact(speed);
+            if (m_Item != null && simulatedHere && m_Item.ApplyImpact(speed) > 0) Crack(point, collision);
 
             // How hard it really was: the collision impulse (heavier things hit harder at the same speed,
             // glancing blows softer) and what it is made of (rubber thuds, bare metal clangs).
