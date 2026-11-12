@@ -95,6 +95,10 @@ namespace TrashAstronauts.Mission
         public Vector3 SurfaceNormal { get; private set; } = Vector3.up;
         /// <summary>Test seam: pins where it wants to be (0 floor, 1 ceiling). Null lets it decide.</summary>
         public float? ClimbOverride { get; set; }
+        /// <summary>Which side wall it climbs: +1 to its right, -1 to its left (seen along its heading).</summary>
+        public float Side => m_Side;
+        /// <summary>Pins the side wall (+1 right, -1 left); a co-op replica takes the host's. Null lets it decide.</summary>
+        public float? SideOverride { get; set; }
 
         float m_NextChoice;
         float m_Side = 1f;
@@ -140,7 +144,8 @@ namespace TrashAstronauts.Mission
             bool wallA = Physics.Raycast(nav, right, out RaycastHit a, wallSearch, mask, QueryTriggerInteraction.Ignore);
             bool wallB = Physics.Raycast(nav, -right, out RaycastHit b, wallSearch, mask, QueryTriggerInteraction.Ignore);
             bool onSurfaceEnd = Climb < 0.02f || Climb > 0.98f;
-            if (onSurfaceEnd || !m_HasWall)
+            if (SideOverride.HasValue) m_Side = SideOverride.Value < 0f ? -1f : 1f;
+            else if (onSurfaceEnd || !m_HasWall)
             {
                 if (wallA && wallB) m_Side = (m_Side > 0f ? a.distance <= b.distance + 0.8f : a.distance + 0.8f < b.distance) ? 1f : -1f;
                 else if (wallA) m_Side = 1f;

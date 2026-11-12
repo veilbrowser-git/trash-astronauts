@@ -20,9 +20,12 @@ namespace TrashAstronauts.Net
         public CoopClientApply(MissionDirector director)
         {
             m_Director = director;
+            Creature = new CoopCreatureClient(director);
         }
 
         public MissionDirector Director => m_Director;
+        /// <summary>The host's creature and blackouts on this client (stage 4).</summary>
+        public CoopCreatureClient Creature { get; }
 
         /// <summary>A wire slot as a player id (255 = nobody).</summary>
         public static PlayerId Who(byte slot) => slot == 255 ? PlayerId.None : new PlayerId(slot);
@@ -57,8 +60,16 @@ namespace TrashAstronauts.Net
         /// <summary>IClientWorld.OnExtractRefused.</summary>
         public void ApplyExtractRefused(byte missingSlotsMask) => m_Director.ApplyExtractRefused(missingSlotsMask);
 
-        /// <summary>IClientWorld.OnRunEnded. Null when there was no run to end (a repeat).</summary>
-        public MissionResult ApplyRunEnded(in RunEndedMsg result) => m_Director.ApplyRunEnded(result.ToResult());
+        /// <summary>
+        /// IClientWorld.OnRunEnded. Null when there was no run to end (a repeat), and also when it arrived while
+        /// the jumpscare is still playing here: it is then applied when the jumpscare ends (1 s at most).
+        /// </summary>
+        public MissionResult ApplyRunEnded(in RunEndedMsg result)
+        {
+            var ended = result.ToResult();
+            if (Creature.HoldRunEnded(() => m_Director.ApplyRunEnded(ended))) return null;
+            return m_Director.ApplyRunEnded(ended);
+        }
 
         /// <summary>IClientWorld.OnReturnedToHub.</summary>
         public bool ApplyReturnedToHub() => m_Director.ApplyReturnedToHub();
@@ -121,6 +132,30 @@ namespace TrashAstronauts.Net
         {
             return m_Director.ApplyItemRecovered(m_Director.RunItemAt(itemId), CoopConvert.ToUnity(position));
         }
+
+        // ------------------------------------------------------------------ creature and hazards (stage 4)
+
+        /// <summary>
+        /// IClientWorld.OnCreatureState. <paramref name="hostTime"/> is the host's clock when it was sent (NaN = now),
+        /// mapped onto this machine's clock like item poses; the replica is shown about 100 ms behind.
+        /// </summary>
+        public bool ApplyCreatureSnapshot(in CreatureSnapshot creature, double hostTime = double.NaN)
+            => Creature.ApplyCreatureSnapshot(in creature, LocalTimeOf(hostTime));
+
+        /// <summary>IClientWorld.OnCreatureStateChanged.</summary>
+        public bool ApplyCreatureStateChanged(EnemyState state, byte targetSlot) => Creature.ApplyCreatureStateChanged(state, targetSlot);
+
+        /// <summary>IClientWorld.OnTranquilized.</summary>
+        public bool ApplyTranquilized(float seconds) => Creature.ApplyTranquilized(seconds);
+
+        /// <summary>IClientWorld.OnCatchStarted.</summary>
+        public bool ApplyCatchStarted(byte victimSlot) => Creature.ApplyCatchStarted(victimSlot);
+
+        /// <summary>IClientWorld.OnBlackoutStarted.</summary>
+        public bool ApplyBlackoutStarted(float seconds) => Creature.ApplyBlackoutStarted(seconds);
+
+        /// <summary>IClientWorld.OnBlackoutEnded.</summary>
+        public bool ApplyBlackoutEnded(bool instant) => Creature.ApplyBlackoutEnded(instant);
 
         // ------------------------------------------------------------------ world
 
