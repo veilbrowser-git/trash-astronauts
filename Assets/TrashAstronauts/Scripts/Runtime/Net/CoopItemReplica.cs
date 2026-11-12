@@ -27,10 +27,13 @@ namespace TrashAstronauts.Net
     }
 
     /// <summary>
-    /// On a co-op client, the copy of a salvage item that another machine (the host, in the ride-along stage)
-    /// simulates. The body is kinematic (<see cref="SalvageItem.RefreshBodyMode"/> decides that); this only
-    /// moves it, about 100 ms behind the poses that arrive, through the core's SnapshotBuffer. Added to an
-    /// item by <see cref="MissionDirector.ApplyRunStart"/> on a client; never present offline or on a host.
+    /// The copy of a salvage item that another machine simulates: on a client every item the host (or another
+    /// crew member) moves, and on a host every item a client holds or is flying (co-op stage 3). The body is
+    /// kinematic (<see cref="SalvageItem.RefreshBodyMode"/> decides that); this only moves it, about 100 ms
+    /// behind the poses that arrive, through the core's SnapshotBuffer. When this machine hands the item back
+    /// it glides from where it was to the streamed pose over <see cref="BlendSeconds"/> instead of jumping.
+    /// Added by <see cref="MissionDirector.ApplyRunStart"/> on a client and by CoopItemHost on a host; never
+    /// present offline.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class CoopItemReplica : MonoBehaviour
@@ -44,6 +47,22 @@ namespace TrashAstronauts.Net
         public bool AtRest { get; private set; }
         public int PosesAccepted { get; private set; }
         public int PosesDropped { get; private set; }
+
+        /// <summary>
+        /// Move the kinematic body through the physics engine (MovePosition) instead of placing it, so it carries
+        /// its velocity into contacts: an item in a crew member's hand knocks the host's items about (and they
+        /// take the knock) as hard as it really swings. Set by CoopItemHost; snaps still place it directly.
+        /// </summary>
+        public bool physicsDriven;
+
+        /// <summary>How long the glide from a locally simulated pose back to the stream lasts.</summary>
+        public const double BlendSeconds = 0.2;
+        double m_BlendStart = -1, m_BlendEnd = -1, m_BlendDuration;
+        bool m_BlendArmed;
+        Vector3 m_BlendFromPosition;
+        Quaternion m_BlendFromRotation = Quaternion.identity;
+        /// <summary>True while it glides back to the stream after this machine stopped simulating it.</summary>
+        public bool Blending => m_BlendEnd > LocalNow;
 
         /// <summary>
         /// How far in the past items and the creature replica are drawn: SnapshotBuffer.InterpolationDelay (100 ms) on Wi-Fi; NetSession sets
@@ -68,6 +87,8 @@ namespace TrashAstronauts.Net
             Epoch = -1;
             Held = false;
             AtRest = true;
+            m_BlendArmed = false;
+            m_BlendEnd = -1;
         }
 
         bool AcceptEpoch(int epoch)
@@ -101,6 +122,7 @@ namespace TrashAstronauts.Net
             PosesAccepted++;
             Held = held;
             AtRest = atRest;
+            StartBlendIfArmed();
             return true;
         }
 
@@ -113,7 +135,62 @@ namespace TrashAstronauts.Net
             m_Buffer.Push(time, new PoseSnapshot(ToNet(position), ToNet(rotation)));
             Held = false;
             AtRest = true;
+            StartBlendIfArmed();
             return true;
+        }
+
+        /// <summary>
+        /// This machine stops simulating the item: forget samples from before (another flight) and stay where it
+        /// is under <paramref name="epoch"/> until the stream says otherwise; from the first pose that arrives it
+        /// glides there over <paramref name="blendSeconds"/> instead of jumping.
+        /// </summary>
+        public void Seed(Vector3 position, Quaternion rotation, int epoch, double blendSeconds = BlendSeconds)
+        {
+            m_Buffer.Clear();
+            Epoch = epoch & CoopEpoch.Mask;
+            Held = false;
+            AtRest = true;
+            m_BlendEnd = -1;
+            m_BlendDuration = blendSeconds;
+            m_BlendArmed = blendSeconds > 0;
+        }
+
+        /// <summary>The first pose after a seed starts the glide from wherever the item is shown now.</summary>
+        void StartBlendIfArmed()
+        {
+            if (!m_BlendArmed) return;
+            m_BlendArmed = false;
+            m_BlendFromPosition = transform.position;
+            m_BlendFromRotation = transform.rotation;
+            m_BlendStart = LocalNow;
+            m_BlendEnd = LocalNow + m_BlendDuration;
+        }
+
+        /// <summary>
+        /// A pose whose epoch the caller has already checked (a host following the one client that owns the item).
+        /// </summary>
+        public bool Follow(Vector3 position, Quaternion rotation, bool held, double localTime = double.NaN)
+        {
+            double time = double.IsNaN(localTime) ? LocalNow : localTime;
+            if (m_Buffer.Count > 0 && time <= m_Buffer.NewestTime) time = m_Buffer.NewestTime + 0.001;
+            if (!m_Buffer.Push(time, new PoseSnapshot(ToNet(position), ToNet(rotation))))
+            {
+                PosesDropped++;
+                return false;
+            }
+            PosesAccepted++;
+            Held = held;
+            AtRest = false;
+            StartBlendIfArmed();
+            return true;
+        }
+
+        /// <summary>Forgets every sample (this machine simulates the item again).</summary>
+        public void ClearSamples()
+        {
+            m_Buffer.Clear();
+            m_BlendEnd = -1;
+            m_BlendArmed = false;
         }
 
         /// <summary>Jumps straight to a pose (a lost item brought back).</summary>
@@ -122,6 +199,8 @@ namespace TrashAstronauts.Net
             m_Buffer.Clear();
             m_Buffer.Push(LocalNow, new PoseSnapshot(ToNet(position), ToNet(rotation)));
             AtRest = true;
+            m_BlendArmed = false;
+            m_BlendEnd = -1;
             Move(position, rotation);
         }
 
@@ -137,13 +216,28 @@ namespace TrashAstronauts.Net
                 if (!m_Buffer.TryGetNewest(out pose, out _)) return;
             }
             else if (!m_Buffer.Sample(renderTime, out pose)) return;
-            Move(ToUnity(pose.position), ToUnity(pose.rotation));
+            Vector3 position = ToUnity(pose.position);
+            Quaternion rotation = ToUnity(pose.rotation);
+            double now = LocalNow;
+            if (m_BlendEnd > now && m_BlendEnd > m_BlendStart)
+            {
+                float k = Mathf.SmoothStep(0f, 1f, (float)((now - m_BlendStart) / (m_BlendEnd - m_BlendStart)));
+                position = Vector3.Lerp(m_BlendFromPosition, position, k);
+                rotation = Quaternion.Slerp(m_BlendFromRotation, rotation, k);
+            }
+            Move(position, rotation, !physicsDriven);
         }
 
-        void Move(Vector3 position, Quaternion rotation)
+        void Move(Vector3 position, Quaternion rotation, bool place = true)
         {
-            transform.SetPositionAndRotation(position, rotation);
             var body = m_Item != null ? m_Item.Body : null;
+            if (!place && body != null && body.isKinematic)
+            {
+                body.MovePosition(position);
+                body.MoveRotation(rotation);
+                return;
+            }
+            transform.SetPositionAndRotation(position, rotation);
             if (body != null && body.isKinematic)
             {
                 body.position = position;

@@ -54,6 +54,14 @@ namespace TrashAstronauts.Net
         void BlackoutStarted(float seconds);
         /// <summary>The host's blackout ended (instant = no stutter back).</summary>
         void BlackoutEnded(bool instant);
+
+        // ---- items in the host's own hands (stage 3; sent by CoopItemHost). The session adapter forwards each to
+        // the NetSessionHost method of the same name, which arbitrates through ItemOwnershipTable and broadcasts
+        // ItemOwner. No default bodies: a missing forward must not compile.
+        /// <summary>The host player's hand closed on the item. False: a crew member holds it (or it is locked); cancel the local grab.</summary>
+        bool LocalGrab(byte itemId);
+        /// <summary>The host player's last hand let go of the item; the host keeps simulating it.</summary>
+        void LocalRelease(byte itemId);
     }
 
     /// <summary>Unity values to and from the core's wire types.</summary>

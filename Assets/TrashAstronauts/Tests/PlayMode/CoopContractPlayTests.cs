@@ -677,10 +677,12 @@ namespace TrashAstronauts.Tests
             mirror.RunStart(in run);
             Assert.AreEqual(SessionDigest.Describe(mirror.Session), SessionDigest.Describe(m_Director.Session));
 
-            // The scanner says why it cannot be picked up.
+            // The scanner shows what it is; the stage 2 "HOST ONLY" hint is gone (stage 3 shares grabbing through
+            // CoopItemClient; this session has none, so the items simply stay with the host).
             var scrap = m_Director.RunItems.First(i => !i.IsMounted && i.definition.category == SalvageCategory.SmallScrap);
             scrap.ShowScan(2f);
-            StringAssert.Contains("HOST ONLY", scrap.scanTag.text.text);
+            StringAssert.Contains(scrap.definition.displayName, scrap.scanTag.text.text);
+            StringAssert.DoesNotContain("HOST ONLY", scrap.scanTag.text.text);
 
             // The same message again changes nothing; a corrupted one is refused.
             var items = m_Director.RunItems.ToList();
