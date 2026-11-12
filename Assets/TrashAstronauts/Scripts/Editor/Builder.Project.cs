@@ -24,12 +24,17 @@ namespace TrashAstronauts.EditorTools
         {
             ConfigureLayers();
             GameLayers.ApplyCollisionMatrix();
-            Time.fixedDeltaTime = 1f / 72f;
+            // One physics step per frame at the Quest's base 72 Hz. At 90 Hz the steps no longer line up
+            // with frames, so every loose body is interpolated (see RealPhysics.ConfigureLooseBody):
+            // held and thrown things move smoothly without paying for a faster physics rate.
+            Time.fixedDeltaTime = RealPhysics.FixedTimestep; // also applied at startup by RealPhysics
             // Sturdier collisions for floating objects: more solver passes, and even slow taps bounce.
             Physics.defaultSolverIterations = 10;
             Physics.defaultSolverVelocityIterations = 4;
             Physics.bounceThreshold = 0.25f;
-            Physics.defaultMaxDepenetrationVelocity = 3f;
+            // Overlapping bodies ease apart instead of shooting off; spins are not clipped early.
+            Physics.defaultMaxDepenetrationVelocity = RealPhysics.MaxDepenetrationVelocity;
+            Physics.defaultMaxAngularSpeed = RealPhysics.MaxAngularVelocity;
 
             Try("player settings", ConfigurePlayerSettings);
             Try("render pipeline", ConfigureRenderPipeline);

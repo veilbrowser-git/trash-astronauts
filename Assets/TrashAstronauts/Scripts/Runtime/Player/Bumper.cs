@@ -8,7 +8,8 @@ namespace TrashAstronauts.Player
     /// A one-way pusher that follows part of the player: the chest, or an open hand. Each physics step it
     /// looks for loose salvage it is overlapping and, if it is moving into it, gives it that motion (plus
     /// a little bounce). So the player can shoulder floating junk aside and swat things with an open
-    /// hand, and nothing can ever push the player back, because nothing here is a physical body.
+    /// hand. It is not a physical body, so nothing can shove or snag it; instead each push is a
+    /// collision of two masses and the player feels the reaction (Newton's third law).
     /// A hand only counts for a deliberate swing; reaching slowly to pick something up does not knock it away.
     /// </summary>
     public sealed class Bumper : MonoBehaviour
@@ -28,6 +29,23 @@ namespace TrashAstronauts.Player
         bool m_HasLast;
         float m_Speed;
         static readonly Collider[] s_Hits = new Collider[16];
+
+        ZeroGLocomotion m_Locomotion;
+        bool m_LookedForLocomotion;
+        /// <summary>The body this pusher belongs to, which takes the reaction of every shove.</summary>
+        ZeroGLocomotion Locomotion
+        {
+            get
+            {
+                if (!m_LookedForLocomotion)
+                {
+                    m_LookedForLocomotion = true;
+                    var player = GetComponentInParent<PlayerContext>();
+                    if (player != null && player.locomotion != null) m_Locomotion = player.locomotion.zeroG;
+                }
+                return m_Locomotion;
+            }
+        }
 
         public bool IsSolid { get; private set; }
         public Vector3 Velocity { get; private set; }
@@ -81,8 +99,14 @@ namespace TrashAstronauts.Player
                 normal = normal.sqrMagnitude > 1e-6f ? normal.normalized : Velocity.normalized;
                 float closing = Vector3.Dot(Velocity, normal) - Vector3.Dot(body.linearVelocity, normal);
                 if (closing <= 0.02f) continue;
+                // A collision between two masses: the player (M) and the thing (m). The thing gets
+                // (1+e) c M/(M+m) and the player (1+e) c m/(M+m) back the other way, so nudging a can
+                // costs nothing and shouldering the reactor core slows you right down.
+                float playerMass = Locomotion != null ? Locomotion.TotalMass : RealPhysics.PlayerBodyMass;
+                float impulse = closing * (1f + bounce) * playerMass * body.mass / (playerMass + body.mass);
                 body.WakeUp();
-                body.AddForce(normal * (closing * (1f + bounce)), ForceMode.VelocityChange);
+                body.AddForce(normal * (impulse / body.mass), ForceMode.VelocityChange);
+                if (Locomotion != null) Locomotion.AddMomentum(-normal * impulse);
                 PushCount++;
             }
         }

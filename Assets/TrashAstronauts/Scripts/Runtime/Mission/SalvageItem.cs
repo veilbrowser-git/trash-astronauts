@@ -223,10 +223,14 @@ namespace TrashAstronauts.Mission
             LastThrowSpeed = velocity.magnitude;
             WasThrown = LastThrowSpeed > 0.8f;
             if (!WasThrown || player == null || player.locomotion == null || player.locomotion.zeroG == null) return;
-            var director = m_Director != null ? m_Director : MissionDirector.Active;
-            float playerMass = director != null ? Mathf.Max(20f, director.Config.playerMass) : 90f;
-            Vector3 recoil = -velocity * (m_Body.mass / playerMass);
-            player.locomotion.zeroG.AddImpulse(Vector3.ClampMagnitude(recoil, 1.2f));
+            var zeroG = player.locomotion.zeroG;
+            // Momentum is conserved in the thrower's own frame: what the item gained relative to the body
+            // that threw it comes back as body speed the other way, against the body plus whatever the
+            // hands still hold (the thrown item has already left them). Arm limits on throw speed
+            // (RealPhysics.MaxThrowSpeed) keep this within reason; the clamp is only a safety net.
+            Vector3 relative = velocity - zeroG.Velocity;
+            Vector3 recoil = -relative * (m_Body.mass / Mathf.Max(20f, zeroG.TotalMass));
+            zeroG.AddImpulse(Vector3.ClampMagnitude(recoil, 2.5f));
         }
 
         /// <summary>Called by the mission director right after spawning.</summary>

@@ -207,6 +207,18 @@ and performance testing on the headset.
 - **Saves** are a JSON file in `Application.persistentDataPath` with temp-file writes and a backup copy. Nothing is saved mid-mission.
 - **Performance choices made up front:** Simple Lit materials, MSAA 4x, no HDR, no shadows, about a dozen unshadowed point lights, no post-processing, primitive colliders on everything that moves, around 25 active rigidbodies, pooled audio. Lighting is realtime, not baked.
 
+## Physics
+
+Everything loose is a real mass obeying Newton's laws, tuned to stay comfortable in VR. The numbers live in one file, `Scripts/Runtime/World/RealPhysics.cs`.
+
+- **Real weights.** You are a suited person of about 150 kg. Salvage weighs what it would: the rubber duck 0.1 kg, the nav board 0.6 kg, the toaster 1.8 kg, the hull plate 3 kg, the comms relay 3.5 kg, the copper cable spool 6 kg and the reactor regulator core 40 kg. Junk cans are 0.35 kg, junk crates 5 kg, and cut panels about 18 kg per square metre of face (4 to 30 kg).
+- **Materials.** Bare metal (hull plate, cable spool, toaster), painted metal (relay, reactor core, panels, cans), rubber and plastic (duck, crates) and glass and ceramic (circuit boards) each have their own friction and bounce. Rubber bounces most, glass least.
+- **Near-vacuum.** Things keep drifting and spinning, losing only about 2% of their speed and 4% of their spin per second. Every throwable uses continuous collision detection, so even a 25 m/s throw does not pass through a wall or the locker. Objects that start out overlapping ease apart at no more than 1 m/s instead of shooting off.
+- **Smooth at 72 to 90 Hz.** Physics runs at the Quest's base 72 Hz and every loose body is interpolated, so held and thrown things do not judder at 90 Hz either.
+- **Every push pushes back.** A throw kicks you the other way in proportion to the object's mass (momentum is conserved, measured against how you were already moving). Shouldering a floating can costs you nothing, but shouldering the reactor core slows you right down. The suit thruster is a fixed force, so you accelerate more slowly while hauling something heavy. The camera is never rotated by any of this, and the speed caps are unchanged.
+- **Weight in the hand.** Anything up to 2 kg follows your hand exactly. Heavier things trail it slightly and swing a little past it when you stop. The reactor core lags most, by several centimetres in a brisk move, and settles within about a second. A held object still collides with walls and other objects. If you pull your hand more than about 45 cm from where the object is stuck, your grip slips and the controller ticks. A throw keeps your hand's real speed and spin, up to what an arm could give that mass: about 14 m/s for the duck, 10 m/s for the relay and 4 m/s for the core.
+- **Contacts.** How loud a knock is, both to you and to the spider, depends on how hard it really was (the collision impulse) and on what the object is made of. A 40 kg core slamming into a wall is nearly twice as loud as the 3.5 kg relay at the same speed. The duck bumping a wall is not a noise the spider hears. A closing door gently pushes loose objects out of the doorway, to whichever side they are on, and waits until the doorway is clear. As before, it never closes on the player.
+
 ## Known limitations
 
 - Controller-relative offsets (glove, grab point, wrist display, holsters) were set by reasoning, not by trying them on. Expect to tune them on the first headset session.

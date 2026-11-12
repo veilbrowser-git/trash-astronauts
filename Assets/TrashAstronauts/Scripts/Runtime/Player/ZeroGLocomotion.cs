@@ -48,7 +48,7 @@ namespace TrashAstronauts.Player
 
         [Header("Suit thruster (point an empty hand and hold trigger)")]
         public bool thrusterEnabled = true;
-        [Tooltip("Acceleration in m/s^2 along the direction the hand points.")]
+        [Tooltip("Acceleration in m/s^2 along the direction the hand points, for the suited body alone. The thrust is a fixed force, so carrying something heavy makes it proportionally slower (a = F / (body + load)).")]
         public float thrusterAcceleration = 1.9f;
         [Tooltip("The thruster stops adding speed once you are moving this fast in that direction.")]
         public float thrusterMaxSpeed = 2.4f;
@@ -150,6 +150,51 @@ namespace TrashAstronauts.Player
         public void AddImpulse(Vector3 velocityChange)
         {
             m_Velocity = Vector3.ClampMagnitude(m_Velocity + velocityChange, maxSpeed);
+        }
+
+        /// <summary>
+        /// Mass of the suited person (kg): the mission's figure when there is one. Throws, shoves and the
+        /// thruster are all worked out against this plus whatever is in the hands.
+        /// </summary>
+        public float BodyMass
+        {
+            get
+            {
+                var director = TrashAstronauts.Mission.MissionDirector.Active;
+                return director != null && director.Config != null ? Mathf.Max(20f, director.Config.playerMass) : RealPhysics.PlayerBodyMass;
+            }
+        }
+
+        /// <summary>Mass of what this player's hands are holding right now (kg). Something held in both hands counts once.</summary>
+        public float CarriedMass
+        {
+            get
+            {
+                Rigidbody first = HeldBody(leftHand);
+                Rigidbody second = HeldBody(rightHand);
+                float mass = first != null ? first.mass : 0f;
+                if (second != null && second != first) mass += second.mass;
+                return mass;
+            }
+        }
+
+        public float TotalMass => BodyMass + CarriedMass;
+
+        static Rigidbody HeldBody(HandRig hand)
+        {
+            if (hand == null || hand.interactor == null || !hand.interactor.hasSelection) return null;
+            var selected = hand.interactor.interactablesSelected;
+            return selected.Count > 0 && selected[0] != null ? selected[0].transform.GetComponent<Rigidbody>() : null;
+        }
+
+        /// <summary>
+        /// Newton's third law: something pushed on the player with this impulse (kg m/s), so the player
+        /// (and whatever they carry) changes speed by impulse / total mass.
+        /// </summary>
+        public void AddMomentum(Vector3 impulse)
+        {
+            if (m_Driver != null) return; // holding on to the ship: the hull takes it
+            AddImpulse(impulse / Mathf.Max(1f, TotalMass));
         }
 
         void Update()
@@ -285,7 +330,9 @@ namespace TrashAstronauts.Player
             if (along < thrusterMaxSpeed)
             {
                 Vector3 before = m_Velocity;
-                float gain = Mathf.Min(thrusterAcceleration * dt, thrusterMaxSpeed - along);
+                // Same force, more mass, less acceleration: hauling the reactor core is sluggish.
+                float acceleration = thrusterAcceleration * BodyMass / Mathf.Max(1f, TotalMass);
+                float gain = Mathf.Min(acceleration * dt, thrusterMaxSpeed - along);
                 m_Velocity = Vector3.ClampMagnitude(m_Velocity + direction * gain, maxSpeed);
                 ThrusterSpeedGained += (m_Velocity - before).magnitude;
             }

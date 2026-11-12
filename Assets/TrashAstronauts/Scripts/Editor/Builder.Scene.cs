@@ -610,11 +610,13 @@ namespace TrashAstronauts.EditorTools
             var body = plateGo.AddComponent<Rigidbody>();
             body.isKinematic = true;
             body.useGravity = false;
-            body.mass = 4f;
-            body.linearDamping = 0.3f;
-            body.angularDamping = 0.3f;
+            // A sandwich panel of painted aluminium: about 18 kg per square metre of face.
+            body.mass = Mathf.Clamp(plateSize.x * plateSize.y * 18f, 4f, 30f);
+            RealPhysics.ConfigureLooseBody(body);
+            foreach (var plateCollider in plateGo.GetComponentsInChildren<Collider>()) plateCollider.sharedMaterial = SurfaceMaterial(SurfaceKind.PaintedMetal);
             var impact = plateGo.AddComponent<ImpactNoiseEmitter>();
             impact.heavy = true;
+            impact.surface = SurfaceKind.PaintedMetal;
 
             var points = new List<CutPoint>();
             foreach (var p in cutLocal) points.Add(MakeCutPoint(root.transform, new Vector3(p.x, p.y, 0.01f)));
