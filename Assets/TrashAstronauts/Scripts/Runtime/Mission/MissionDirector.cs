@@ -946,34 +946,7 @@ namespace TrashAstronauts.Mission
             }
         }
 
-        /// <summary>
-        /// Abandons the running contract without a result: nothing is banked, the wreck is cleared, the
-        /// creature goes back to sleep and anyone outside the tug is brought home. Used when a co-op link is lost.
-        /// </summary>
-        public bool AbortRun()
-        {
-            if (!Session.AbortToHub()) return false;
-            if (noise != null) noise.Muted = true;
-            if (enemies != null)
-            {
-                foreach (var enemy in enemies)
-                {
-                    if (enemy != null) enemy.EndRun();
-                }
-            }
-            ClearRunObjects();
-            if (locker != null) locker.ResetForRun();
-            bool anyMoved = false;
-            foreach (var player in m_Players)
-            {
-                if (player == null || player.IsRemote || player.locomotion == null || hubSpawn == null) continue;
-                if (safeZone != null && safeZone.Contains(player.HeadPosition)) continue;
-                anyMoved = true;
-                player.locomotion.FadeTeleport(player.fader, hubSpawn, CloseHatch);
-            }
-            if (!anyMoved) CloseHatch();
-            return true;
-        }
+        // AbortRun() lives in MissionDirector.Coop.cs (one definition for link loss and LEAVE).
 
         // ------------------------------------------------------------------ shared-state changes
 
