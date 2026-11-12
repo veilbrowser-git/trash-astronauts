@@ -130,7 +130,9 @@ namespace TrashAstronauts.EditorTools
 
         static void MakeGrabbable(GameObject go, bool heavy, SurfaceKind surface, out XRGrabInteractable grab, out HoverHighlight highlight, out ImpactNoiseEmitter impact)
         {
-            grab = go.AddComponent<XRGrabInteractable>();
+            // The game's own grab: XRGrabInteractable plus the co-op rules (a replica taken in hand is simulated
+            // here from that frame; nothing in another crew member's hand can be selected). Offline it is the base.
+            grab = go.AddComponent<SalvageGrabInteractable>();
             grab.movementType = XRBaseInteractable.MovementType.VelocityTracking;
             grab.useDynamicAttach = true;
             grab.throwOnDetach = true;
