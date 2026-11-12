@@ -38,6 +38,8 @@ namespace TrashAstronauts.Tools
         public CutterHeatModel Heat => m_Heat;
         public bool IsFiring => m_Heat != null && m_Heat.Firing;
         public bool IsCutting { get; private set; }
+        /// <summary>The weld the flame is on this frame (null when not cutting). Co-op streams its progress.</summary>
+        public CutPoint CurrentPoint { get; private set; }
 
         protected override void Awake()
         {
@@ -87,6 +89,7 @@ namespace TrashAstronauts.Tools
             }
 
             IsCutting = false;
+            CurrentPoint = null;
             if (firing) FireStep(dt);
             RefreshReadout();
         }
@@ -114,6 +117,7 @@ namespace TrashAstronauts.Tools
             if (best != null)
             {
                 IsCutting = true;
+                CurrentPoint = best;
                 best.Owner.ApplyCut(best, dt, m_CutterTuning.secondsPerCutPoint, player);
                 if (sparks != null)
                 {

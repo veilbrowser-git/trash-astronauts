@@ -24,6 +24,27 @@ namespace TrashAstronauts.Mission
         public Cuttable Owner { get; internal set; }
         public float Progress { get; private set; }
         public bool IsCut => Progress >= 1f;
+        /// <summary>
+        /// How far another crew member has burnt this weld on their machine (co-op display only, never completes it:
+        /// a finished weld arrives through the reliable PointCut path). The marker shows the larger of the two.
+        /// </summary>
+        public float RemoteProgress { get; private set; }
+        /// <summary>What the marker shows: this machine's progress or a crew member's, whichever is further.</summary>
+        public float DisplayProgress => IsCut ? 1f : Mathf.Max(Progress, RemoteProgress);
+
+        /// <summary>Highest burn shown for another player's progress: a weld only looks finished once it is.</summary>
+        public const float MaxRemoteProgress = 0.98f;
+
+        /// <summary>
+        /// Shows another crew member's progress on this weld (0..1, clamped below finished). Only the look changes:
+        /// <see cref="Progress"/>, <see cref="IsCut"/> and the panel are untouched. Ignored once the weld is through.
+        /// </summary>
+        public void ApplyRemoteProgress(float progress)
+        {
+            if (IsCut) return;
+            RemoteProgress = Mathf.Clamp(progress, 0f, MaxRemoteProgress);
+            Refresh();
+        }
 
         /// <summary>Applies cutting time. Returns true on the call that finishes this point.</summary>
         public bool Burn(float seconds, float secondsRequired)
@@ -37,6 +58,7 @@ namespace TrashAstronauts.Mission
         public void ResetPoint()
         {
             Progress = 0f;
+            RemoteProgress = 0f;
             Refresh();
         }
 
@@ -56,8 +78,9 @@ namespace TrashAstronauts.Mission
                 m_ScaleCached = true;
             }
 
-            Color color = IsCut ? k_Burnt : Color.Lerp(k_Fresh, k_Hot, Progress);
-            Color emission = IsCut ? Color.black : Color.Lerp(k_Fresh * 0.6f, k_Hot * 2.5f, Progress);
+            float shown = DisplayProgress;
+            Color color = IsCut ? k_Burnt : Color.Lerp(k_Fresh, k_Hot, shown);
+            Color emission = IsCut ? Color.black : Color.Lerp(k_Fresh * 0.6f, k_Hot * 2.5f, shown);
             marker.GetPropertyBlock(m_Block);
             m_Block.SetColor(k_BaseColor, color);
             m_Block.SetColor(k_Emission, emission);
@@ -65,7 +88,7 @@ namespace TrashAstronauts.Mission
 
             if (markerTransform != null)
             {
-                float s = IsCut ? 0.45f : 1f + Progress * 0.35f;
+                float s = IsCut ? 0.45f : 1f + shown * 0.35f;
                 markerTransform.localScale = m_MarkerScale * s;
             }
         }
