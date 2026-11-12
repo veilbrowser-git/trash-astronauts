@@ -3,6 +3,7 @@ using TrashAstronauts.Audio;
 using TrashAstronauts.Core;
 using TrashAstronauts.Core.Net;
 using TrashAstronauts.Mission;
+using TrashAstronauts.World;
 using UnityEngine;
 
 namespace TrashAstronauts.Net
@@ -232,7 +233,10 @@ namespace TrashAstronauts.Net
             m_TracerUntil = Time.time + tracerSeconds;
         }
 
-        /// <summary>Emits the sparks of a flame on a weld for <paramref name="dt"/> seconds (LateUpdate; tests and previews).</summary>
+        /// <summary>
+        /// Emits the sparks of a flame on a weld for <paramref name="dt"/> seconds (LateUpdate; tests and previews). When
+        /// the flame meets a seam they spray off the metal where it meets it, as the cutter's own do; otherwise from the tip.
+        /// </summary>
         public void StepSparks(float dt)
         {
             if (!Cutting || cutterSparks == null) { m_SparkDebt = 0f; return; }
@@ -240,9 +244,49 @@ namespace TrashAstronauts.Net
             int count = (int)m_SparkDebt;
             if (count <= 0) return;
             m_SparkDebt -= count;
-            if (cutterTip != null) cutterSparks.transform.position = cutterTip.position;
-            cutterSparks.Emit(count);
+            Vector3 at = cutterTip != null ? cutterTip.position : cutterSparks.transform.position;
+            Vector3 normal = cutterTip != null ? -cutterTip.forward : Vector3.up;
+            if (cutterTip != null && FindSeam(cutterTip.position, cutterTip.forward, out var contact, out var seamNormal))
+            {
+                at = contact;
+                normal = seamNormal;
+            }
+            cutterSparks.transform.position = at;
+            var p = new ParticleSystem.EmitParams { applyShapeToPosition = false };
+            for (int i = 0; i < count; i++)
+            {
+                p.position = at + normal * 0.004f;
+                p.velocity = (normal * 0.9f + Random.insideUnitSphere * 0.75f).normalized * Random.Range(0.7f, 2.4f);
+                bool drop = i % 6 == 5;
+                p.startLifetime = drop ? Random.Range(0.6f, 1f) : Random.Range(0.18f, 0.42f);
+                p.startSize = drop ? Random.Range(0.012f, 0.02f) : Random.Range(0.006f, 0.014f);
+                p.startColor = drop ? new Color(1f, 0.45f, 0.08f) : Color.Lerp(new Color(1f, 0.95f, 0.7f), new Color(1f, 0.65f, 0.2f), Random.value);
+                if (drop) p.velocity *= 0.25f;
+                cutterSparks.Emit(p, 1);
+            }
             SparksEmitted += count;
+        }
+
+        static readonly Collider[] s_SeamHits = new Collider[8];
+
+        /// <summary>Where a flame from this nozzle meets a seam's metal, if it does.</summary>
+        static bool FindSeam(Vector3 nozzle, Vector3 flame, out Vector3 point, out Vector3 normal)
+        {
+            point = nozzle;
+            normal = -flame;
+            int n = Physics.OverlapSphereNonAlloc(nozzle + flame * (SeamCut.MaxStandoff * 0.5f), SeamCut.MaxStandoff * 0.5f + 0.03f,
+                s_SeamHits, GameLayers.CutPointMask, QueryTriggerInteraction.Collide);
+            float best = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                var stretch = s_SeamHits[i].GetComponent<CutPoint>();
+                s_SeamHits[i] = null;
+                if (stretch == null || !SeamCut.Evaluate(stretch, nozzle, flame, out var contact) || contact.strength <= best) continue;
+                best = contact.strength;
+                point = contact.point;
+                normal = stretch.Normal;
+            }
+            return best > 0f;
         }
 
         void LateUpdate()

@@ -59,6 +59,7 @@ namespace TrashAstronauts.Tests
         [TearDown]
         public void TearDown()
         {
+            Time.captureDeltaTime = 0f;
             if (m_Device != null) InputSystem.RemoveDevice(m_Device);
             InputSystem.settings.backgroundBehavior = m_OldBackground;
             InputSystem.settings.editorInputBehaviorInPlayMode = m_OldEditorBehavior;
@@ -180,28 +181,38 @@ namespace TrashAstronauts.Tests
             Assert.IsTrue(cutter.TriggerHeld, "Trigger should activate the held tool." + Diagnose());
             Assert.IsTrue(cutter.IsFiring, "The cutter should fire while the trigger is held." + Diagnose());
 
-            // Hold the flame on each weld of the secure cargo locker.
+            // Draw the flame along each stretch of the secure cargo locker's seam, a few centimetres off the metal, at a
+            // steady hand's pace (1 cm a pose at 72 Hz), going over it again where a pass only scored it.
+            Time.captureDeltaTime = 1f / 72f;
             var panel = m_Director.cuttables.First(c => c.panelId == "panel_cage");
             Quaternion facePanel = Quaternion.LookRotation(-panel.transform.forward, Vector3.up);
             foreach (var point in panel.cutPoints)
             {
-                // Position the hand so the cutter tip sits on the weld.
-                for (int attempt = 0; attempt < 200 && !point.IsCut; attempt++)
+                Vector3 from = point.transform.position - point.Axis * (point.SeamLength * 0.5f + 0.03f) + point.Normal * 0.03f;
+                Vector3 to = point.transform.position + point.Axis * (point.SeamLength * 0.5f + 0.03f) + point.Normal * 0.03f;
+                int steps = Mathf.CeilToInt(Vector3.Distance(from, to) / 0.01f);
+                for (int pass = 0; pass < 8 && !point.IsCut; pass++)
                 {
-                    Vector3 tipOffset = cutter.tip.position - m_Hand.interactor.transform.position;
-                    yield return Pose(point.transform.position - tipOffset, facePanel);
-                    if (cutter.Heat.Overheated)
+                    for (int k = 0; k <= steps && !point.IsCut; k++)
                     {
-                        yield return Buttons(1f, 0f);
-                        yield return new WaitForSeconds(2.5f);
-                        yield return Buttons(1f, 1f);
+                        // Position the hand so the cutter tip is on the seam.
+                        Vector3 tipOffset = cutter.tip.position - m_Hand.interactor.transform.position;
+                        yield return Pose(Vector3.Lerp(from, to, (float)k / steps) - tipOffset, facePanel);
+                        if (cutter.Heat.Overheated)
+                        {
+                            yield return Buttons(1f, 0f);
+                            yield return new WaitForSeconds(2.5f);
+                            yield return Buttons(1f, 1f);
+                        }
                     }
                 }
-                Assert.IsTrue(point.IsCut, "Holding the flame on a weld should burn it through." + Diagnose()
-                    + " tip " + cutter.tip.position.ToString("F2") + " weld " + point.transform.position.ToString("F2") + " firing " + cutter.IsFiring);
+                Assert.IsTrue(point.IsCut, "Drawing the flame along a stretch should cut it through." + Diagnose()
+                    + " tip " + cutter.tip.position.ToString("F2") + " seam " + point.transform.position.ToString("F2") + " firing " + cutter.IsFiring
+                    + " progress " + point.Progress.ToString("F2") + " quality " + cutter.Quality);
             }
             Assert.IsTrue(panel.IsOpen, "Cutting every weld should open the panel.");
             yield return Buttons(0f, 0f);
+            Time.captureDeltaTime = 0f;
         }
     }
 }

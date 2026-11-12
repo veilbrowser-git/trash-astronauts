@@ -268,6 +268,9 @@ namespace TrashAstronauts.EditorTools
             Unlit("Ghost", new Color(0.3f, 0.9f, 1f, 0.25f), true);
             Unlit("Stars", Color.white, false, stars);
             Unlit("Spark", new Color(1f, 0.75f, 0.3f), false, null, "Universal Render Pipeline/Particles/Unlit");
+            // Cut seams: vertex colours over a profile (left half solid for the bead and kerf, right half soft for the glow).
+            var seamLine = Unlit("SeamLine", Color.white, true, MakeTexture("SeamProfile", 32, PaintSeamProfile), "Universal Render Pipeline/Particles/Unlit");
+            seamLine.SetFloat("_Cull", 0f);
             AssetDatabase.SaveAssets();
         }
 
@@ -404,6 +407,18 @@ namespace TrashAstronauts.EditorTools
                     v -= 0.08f * Mathf.PerlinNoise(x * 0.03f, y * 0.03f);
                     px[y * n + x] = new Color32(B(v), B(v), B(v), 255);
                 }
+            }
+        }
+
+        static void PaintSeamProfile(Color32[] px, int n, System.Random rng)
+        {
+            for (int y = 0; y < n; y++)
+            {
+                float v = (y + 0.5f) / n;
+                float centre = 1f - Mathf.Abs(v * 2f - 1f);
+                float solid = Mathf.Clamp01(centre * 6f);
+                float soft = Mathf.Pow(centre, 1.6f);
+                for (int x = 0; x < n; x++) px[y * n + x] = new Color32(255, 255, 255, B(x < n / 2 ? solid : soft));
             }
         }
 
