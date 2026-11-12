@@ -518,6 +518,19 @@ namespace TrashAstronauts.EditorTools
                     Vector3 axis = alongX ? Vector3.right : Vector3.forward;
                     Vector3 face = new Vector3(bw.center.x, 0f, bw.center.z) + normal * (alongX ? bw.extents.z : bw.extents.x);
                     if (!OverFloor(face + normal * 0.7f)) continue;
+                    // structural ribs: shallow frames every 1.6 m, the ship's skeleton showing through the lining
+                    if (length >= 2.4f)
+                    {
+                        int ribs = Mathf.FloorToInt((length - 0.4f) / 1.6f);
+                        for (int k = 0; k <= ribs; k++)
+                        {
+                            float t = -length * 0.5f + 0.2f + (length - 0.4f) * (ribs == 0 ? 0.5f : k / (float)ribs);
+                            Vector3 ribAt = face + axis * t + normal * 0.02f + Vector3.up * (hgt * 0.5f);
+                            Vector3 ribSize = alongX ? new Vector3(0.1f, hgt - 0.3f, 0.04f) : new Vector3(0.04f, hgt - 0.3f, 0.1f);
+                            var probe = new Bounds(ribAt, ribSize - new Vector3(0f, 0.6f, 0f));
+                            if (Clear(probe)) AddBox(ribAt, ribSize, M("Trim"));
+                        }
+                    }
                     // Only some walls carry services, as on a real ship.
                     if (((wallIndex * 7 + side + 3) % 3) == 0) continue;
                     float half = length * 0.5f - 0.12f;
