@@ -748,8 +748,9 @@ namespace TrashAstronauts.EditorTools
         {
             var root = Empty(parent, name, localPos, localRot, GameLayers.Default);
             root.transform.localScale = Vector3.one * scale;
-            Prim(root.transform, "Back", PrimitiveType.Cube, new Vector3(0, -0.03f, 0.012f), new Vector3(0.56f, 0.54f, 0.02f), M("Screen"));
-            var summary = Text(root.transform, "Summary", "SUIT SETTINGS", new Vector3(0, 0.15f, -0.002f), Quaternion.identity, 0.2f, new Vector2(0.52f, 0.17f), new Color(0.75f, 0.95f, 1f));
+            // Seven summary lines above five rows of buttons (the last row is VOICE CHAT alone, centred).
+            Prim(root.transform, "Back", PrimitiveType.Cube, new Vector3(0, -0.035f, 0.012f), new Vector3(0.56f, 0.69f, 0.02f), M("Screen"));
+            var summary = Text(root.transform, "Summary", "SUIT SETTINGS", new Vector3(0, 0.185f, -0.002f), Quaternion.identity, 0.18f, new Vector2(0.52f, 0.2f), new Color(0.75f, 0.95f, 1f));
 
             var size = new Vector2(0.24f, 0.07f);
             var panel = root.AddComponent<SettingsPanel>();
@@ -762,6 +763,7 @@ namespace TrashAstronauts.EditorTools
             panel.voice = Button(root.transform, "Voice", new Vector3(0.13f, -0.15f, 0), Quaternion.identity, size, "MIC: ON", M("ButtonBlue"), 0.22f);
             panel.unstuck = Button(root.transform, "Unstuck", new Vector3(-0.13f, -0.235f, 0), Quaternion.identity, size, "UNSTUCK", M("ButtonAmber"), 0.22f);
             panel.recallTools = Button(root.transform, "Recall Tools", new Vector3(0.13f, -0.235f, 0), Quaternion.identity, size, "RECALL TOOLS", M("ButtonAmber"), 0.2f);
+            panel.voiceChat = Button(root.transform, "Voice Chat", new Vector3(0f, -0.32f, 0), Quaternion.identity, size, "VOICE CHAT: ON", M("ButtonBlue"), 0.18f);
             return panel;
         }
 
