@@ -8,9 +8,10 @@ namespace TrashAstronauts.Core.Net
         /// <summary>
         /// 2: proximity voice chat (the Voice stream message) in one line of builds, suit colour (in the settings
         /// byte and the Welcome roster) in another. 3: both. 4: everyone grabs (item ownership in use) and the
-        /// helmet lamp's HeadLampOn avatar bit (an older build masks it off). Each version refuses every other.
+        /// helmet lamp's HeadLampOn avatar bit (an older build masks it off). 5: the Mimic in co-op (the creature's
+        /// voice as Voice slot 7, and the one-byte "voice off" notice; see VoiceMsg). Each version refuses every other.
         /// </summary>
-        public const byte Version = 4;
+        public const byte Version = 5;
         /// <summary>The host's UDP port. Clients bind an ephemeral port.</summary>
         public const ushort HostPort = 47800;
         public const int MaxDatagram = 1200;

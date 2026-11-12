@@ -42,7 +42,7 @@ namespace TrashAstronauts.Net.Voice
         double m_Owed;
         bool m_WasSounding;
 
-        /// <summary>Crew slot this voice belongs to.</summary>
+        /// <summary>Crew slot this voice belongs to (VoiceMsg.CreatureSlot for the co-op Mimic's).</summary>
         public int Slot { get; private set; }
         /// <summary>20 ms slots pulled from the stream (played, concealed or silent).</summary>
         public long SlotsPulled { get; private set; }
@@ -77,6 +77,43 @@ namespace TrashAstronauts.Net.Voice
             playback.occlusion = occlusion;
             playback.Slot = slot;
             ConfigureSource(source);
+            playback.Begin();
+            return playback;
+        }
+
+        /// <summary>
+        /// Makes the co-op Mimic's voice source on the creature (<paramref name="mouth"/>, its speaker): set up like
+        /// the creature's own speaker <paramref name="like"/> (its rolloff and distances; fully 3D), at
+        /// <paramref name="volume"/> (the Mimic's playback volume, so it is never louder than in single-player),
+        /// with the same wall occlusion as a crew voice. No talk light: this is not a crew member.
+        /// </summary>
+        public static VoicePlayback CreateCreature(Transform mouth, AudioSource like, float volume)
+        {
+            var go = new GameObject("Creature Voice");
+            go.transform.SetParent(mouth, false);
+            var source = go.AddComponent<AudioSource>();
+            var playback = go.AddComponent<VoicePlayback>();
+            var lowPass = go.AddComponent<AudioLowPassFilter>();
+            lowPass.cutoffFrequency = 22000f;
+            lowPass.lowpassResonanceQ = 1f;
+            lowPass.enabled = false;
+            var occlusion = go.AddComponent<SoundOcclusion>();
+            occlusion.lowPass = lowPass;
+            playback.source = source;
+            playback.lowPass = lowPass;
+            playback.occlusion = occlusion;
+            playback.Slot = Core.Net.VoiceMsg.CreatureSlot;
+            ConfigureSource(source);
+            source.priority = 64;
+            source.volume = Mathf.Clamp01(volume);
+            if (like != null)
+            {
+                source.rolloffMode = like.rolloffMode;
+                source.minDistance = like.minDistance;
+                source.maxDistance = like.maxDistance;
+                if (like.rolloffMode == AudioRolloffMode.Custom)
+                    source.SetCustomCurve(AudioSourceCurveType.CustomRolloff, like.GetCustomCurve(AudioSourceCurveType.CustomRolloff));
+            }
             playback.Begin();
             return playback;
         }
@@ -199,7 +236,13 @@ namespace TrashAstronauts.Net.Voice
         {
             if (source == null) return 0f;
             float distance = Vector3.Distance(listener, transform.position);
-            float gain = source.volume * VoiceRolloff.Gain(distance);
+            float rolloff;
+            if (source.rolloffMode == AudioRolloffMode.Linear)
+                rolloff = distance <= source.minDistance ? 1f : Mathf.Clamp01((source.maxDistance - distance) / Mathf.Max(0.01f, source.maxDistance - source.minDistance));
+            else if (source.rolloffMode == AudioRolloffMode.Logarithmic)
+                rolloff = distance > source.maxDistance ? 0f : Mathf.Min(1f, source.minDistance / Mathf.Max(0.01f, distance));
+            else rolloff = VoiceRolloff.Gain(distance);
+            float gain = source.volume * rolloff;
             if (occlusion != null) gain *= occlusion.VolumeFactor;
             return gain;
         }

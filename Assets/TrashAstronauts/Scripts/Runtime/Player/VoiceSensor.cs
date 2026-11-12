@@ -17,8 +17,13 @@ namespace TrashAstronauts.Player
     /// In a co-op session with VOICE CHAT on, the same capture also feeds proximity voice chat through
     /// <see cref="MicTap"/> (Scripts/Runtime/Net/Voice/VoiceChat.cs): while the player talks, their voice is
     /// compressed and sent to the other players in the crew only (through the host, and Unity's Relay when
-    /// online). Recorded Mimic phrases are never sent. This is the only microphone the game opens. MIC off in
-    /// the suit menu switches all of this off; VOICE CHAT off stops only the voice chat.
+    /// online). This is the only microphone the game opens. MIC off in the suit menu switches all of this off;
+    /// VOICE CHAT off stops only the voice chat.
+    ///
+    /// Co-op with a Mimic aboard: on the host this recorder is the host player's share of the crew's phrases
+    /// (Net/Voice/MimicCrewVoice.cs; the clients' come from their voice chat), and what the Mimic says goes to the
+    /// crew, altered, as the creature's voice. Phrases themselves are never sent. Whenever the creature's voice is
+    /// audible on this headset the microphone is suppressed, so it is neither sent nor heard as this player.
     /// </summary>
     public sealed class VoiceSensor : MonoBehaviour
     {

@@ -217,7 +217,7 @@ namespace TrashAstronauts.Tests
         // ================================================================== host half
 
         [UnityTest]
-        public IEnumerator Host_TheCreatureSwitch_BringsItAndTheBlackoutsAboard_NeverTheMimic_AndOffIsTheRideAlong()
+        public IEnumerator Host_TheCreatureSwitch_BringsItAndTheBlackoutsAboard_AnySpeciesTheMimicToo_AndOffIsTheRideAlong()
         {
             var rec = Host(false);
             yield return null;
@@ -230,7 +230,7 @@ namespace TrashAstronauts.Tests
             Assert.AreEqual(0, run.hazardFlags);
             Assert.AreEqual(0u, run.wireArmedMask);
 
-            // On: a creature every time, never the Mimic, blackouts on, no webs.
+            // On: a creature every time, any species (the Mimic too, since it hears the whole crew), blackouts on, no webs.
             m_Rules.CreatureEnabled = true;
             MissionDirector.CreatureOverride = null;
             var picks = new HashSet<int>();
@@ -243,14 +243,13 @@ namespace TrashAstronauts.Tests
                 Assert.AreEqual(0u, run.wireArmedMask);
             }
             CollectionAssert.DoesNotContain(picks, (int)RunStartParams.NoCreature);
-            CollectionAssert.DoesNotContain(picks, mimic);
-            Assert.AreEqual(m_Director.enemies.Length - 1, picks.Count);
-            // Even asked for by name, the Mimic stays ashore.
+            CollectionAssert.Contains(picks, mimic);
+            Assert.AreEqual(m_Director.enemies.Length, picks.Count);
+            // Asked for by name, the Mimic comes aboard.
             MissionDirector.CreatureOverride = mimic;
             MissionDirector.SeedOverride = 7;
             run = m_Director.BuildRunParams();
-            Assert.AreNotEqual(mimic, (int)run.creatureIndex);
-            Assert.AreNotEqual(RunStartParams.NoCreature, run.creatureIndex);
+            Assert.AreEqual(mimic, (int)run.creatureIndex);
             Assert.AreEqual(run.ComputePlanHash(), run.planHash);
 
             // The contract it starts has it awake on the host, simulated here, with a blackout to come.

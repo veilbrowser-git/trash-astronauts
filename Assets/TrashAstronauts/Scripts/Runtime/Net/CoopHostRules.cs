@@ -61,7 +61,7 @@ namespace TrashAstronauts.Net
         public CoopCreatureHost Creature { get; }
 
         /// <summary>
-        /// Stage 4 switch: contracts started from now on carry the creature (never the Mimic) and blackouts.
+        /// Stage 4 switch: contracts started from now on carry the creature (any species) and blackouts.
         /// Off by default, which keeps the ride-along contract. Turned off again with the rules.
         /// </summary>
         public bool CreatureEnabled

@@ -630,17 +630,8 @@ namespace TrashAstronauts.Mission
         int PickCreature(int seed)
         {
             if (CreatureOverride.HasValue) return Mathf.Clamp(CreatureOverride.Value, 0, enemies.Length - 1);
-            var rng = new System.Random(seed ^ 0x5f3759df);
-            if (Net == null) return rng.Next(enemies.Length);
-
-            // In a session the Mimic stays ashore: it plays back one player's own microphone, and no
-            // microphone audio ever leaves a headset.
-            var candidates = new List<int>();
-            for (int i = 0; i < enemies.Length; i++)
-            {
-                if (enemies[i] != null && enemies[i].GetComponent<VoiceMimic>() == null) candidates.Add(i);
-            }
-            return candidates.Count > 0 ? candidates[rng.Next(candidates.Count)] : RunStartParams.NoCreature;
+            // Every species, offline and in co-op alike (in co-op the Mimic hears the whole crew: Net/Voice/MimicCrewVoice.cs).
+            return new System.Random(seed ^ 0x5f3759df).Next(enemies.Length);
         }
 
         /// <summary>

@@ -1084,7 +1084,7 @@ namespace TrashAstronauts.Tests
         }
 
         [UnityTest]
-        public IEnumerator OnAHost_TheContractStartsAsUsual_ButTheMimicStaysAshore()
+        public IEnumerator OnAHost_TheContractStartsAsUsual_AndTheMimicIsPickedAsOffline()
         {
             yield return null;
             var mimics = Enumerable.Range(0, m_Director.enemies.Length).Where(i => m_Director.enemies[i].GetComponent<VoiceMimic>() != null).ToList();
@@ -1101,7 +1101,7 @@ namespace TrashAstronauts.Tests
             CollectionAssert.Contains(offlinePicks, mimics[0]);
             Assert.AreEqual(m_Director.enemies.Length, offlinePicks.Count);
 
-            // In a session it is never picked (its trick is one player's own microphone).
+            // In a session it is picked exactly as offline (in co-op it hears the whole crew).
             var net = new StubNet { client = false, slot = 0 };
             m_Director.Net = net;
             var hostPicks = new HashSet<int>();
@@ -1110,15 +1110,15 @@ namespace TrashAstronauts.Tests
                 MissionDirector.SeedOverride = seed;
                 hostPicks.Add(m_Director.BuildRunParams().creatureIndex);
             }
-            CollectionAssert.DoesNotContain(hostPicks, mimics[0]);
-            Assert.AreEqual(m_Director.enemies.Length - 1, hostPicks.Count);
+            CollectionAssert.Contains(hostPicks, mimics[0]);
+            CollectionAssert.AreEquivalent(offlinePicks, hostPicks);
 
             // A host decides for itself: nothing is turned into a request.
             MissionDirector.SeedOverride = 5;
             Assert.IsTrue(m_Director.StartMission(m_Director.LocalPlayerId));
             yield return Frames(2);
             Assert.AreEqual(MissionPhase.Active, m_Director.Phase);
-            Assert.IsNull(m_Director.ActiveEnemy.GetComponent<VoiceMimic>());
+            Assert.AreSame(m_Director.enemies[m_Director.CurrentRun.creatureIndex], m_Director.ActiveEnemy);
             var scrap = LooseItems().First(i => i.definition.category == SalvageCategory.SmallScrap);
             Assert.IsTrue(m_Director.locker.TryAccept(scrap));
             Assert.IsNotNull(m_Director.Extract(m_Director.LocalPlayerId));
