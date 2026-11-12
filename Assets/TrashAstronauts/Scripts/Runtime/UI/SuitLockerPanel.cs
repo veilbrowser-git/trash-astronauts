@@ -80,6 +80,7 @@ namespace TrashAstronauts.UI
             director.Profile.Data.suitColor = colour;
             int slot = CrewLook.LocalSlot(director);
             CrewLook.ApplyLook(director.LocalPlayer, slot, colour);
+            if (director.Net is NetSession net) net.ReportLookChanged((byte)colour);
             director.ApplyAndSaveSettings(); // saves, and refreshes this panel through ProfileChanged
             Refresh();
         }

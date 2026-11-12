@@ -994,7 +994,7 @@ namespace TrashAstronauts.Mission
             if (local != null)
             {
                 local.AssignId(PlayerId.Local, false);
-                if (local.avatar != null) local.avatar.SetTint(PlayerAvatar.CrewColors[0]);
+                CrewLook.ApplyLook(local, 0, CrewLook.SavedColour(this)); // the chosen colour, not slot 0's
             }
         }
 

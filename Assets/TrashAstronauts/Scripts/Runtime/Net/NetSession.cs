@@ -291,8 +291,17 @@ namespace TrashAstronauts.Net
         public void ReportSettingsChanged(Handedness handedness)
         {
             byte h = handedness == Handedness.Left ? (byte)1 : (byte)0;
-            if (m_Client != null) m_Client.SendSettingsChanged(h);
-            if (m_Host != null) m_Host.SetLocalHandedness(h);
+            byte colour = CrewLook.SavedColour(director);
+            if (m_Client != null) m_Client.SendSettingsChanged(h, colour);
+            if (m_Host != null) m_Host.SetLocalLook(h, colour);
+        }
+
+        /// <summary>A suit colour was picked at the SUIT LOCKER mid-session: the crew is told at once.</summary>
+        public void ReportLookChanged(byte suitColour)
+        {
+            byte h = LocalHandedness();
+            if (m_Client != null && m_Client.Welcomed) m_Client.SendSettingsChanged(h, suitColour);
+            if (m_Host != null) m_Host.SetLocalLook(h, suitColour);
         }
 
         // ================================================================== lifecycle
@@ -751,6 +760,7 @@ namespace TrashAstronauts.Net
                 contentHash = ContentHash,
                 tugNumber = tug,
                 handedness = LocalHandedness(),
+                suitColour = CrewLook.SavedColour(director),
                 seed = Environment.TickCount,
             };
             DisposeContract();
@@ -778,6 +788,7 @@ namespace TrashAstronauts.Net
             {
                 contentHash = ContentHash,
                 handedness = LocalHandedness(),
+                suitColour = CrewLook.SavedColour(director),
                 seed = NewSeed(),
             };
             DisposeContract();
@@ -1030,6 +1041,8 @@ namespace TrashAstronauts.Net
             {
                 crew.SetHandedness(handedness);
             }
+            // Their chosen colour before the suit is ever drawn (it has no pose until its first sample anyway).
+            if (crew != null) CrewLook.ApplyLook(crew, slot, CrewLook.ColourOf(this, slot));
             if (crew != null && crew.context != null) crew.context.IsAway = away;
             m_Lobby.OnRoster(PlayerCount);
         }
@@ -1086,6 +1099,8 @@ namespace TrashAstronauts.Net
         {
             RemoteAvatar crew = Crew(slot);
             if (crew != null) crew.SetHandedness(handedness);
+            // A settings change carries the colour too (a suit colour picked mid-session).
+            if (crew != null) CrewLook.ApplyLook(crew, slot, CrewLook.ColourOf(this, slot));
         }
 
         internal void PushCrewAvatar(byte slot, double time, in AvatarSnapshot avatar)
@@ -1203,7 +1218,8 @@ namespace TrashAstronauts.Net
             PlayerContext local = director.LocalPlayer;
             if (local == null) return;
             local.AssignId(new PlayerId(slot), false);
-            if (local.avatar != null) local.avatar.SetTint(PlayerAvatar.CrewColors[Mathf.Clamp(slot, 0, PlayerAvatar.CrewColors.Length - 1)]);
+            // The colour this player chose (or their new slot's), suit and gloves, the same frame the slot changes.
+            CrewLook.ApplyLook(local, slot, CrewLook.SavedColour(director));
         }
 
         void ClearCrew()

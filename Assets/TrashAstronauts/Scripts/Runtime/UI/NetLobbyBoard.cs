@@ -217,7 +217,7 @@ namespace TrashAstronauts.UI
             for (int slot = 0; slot < NetProtocol.MaxPlayers; slot++)
             {
                 if (!session.IsPresent(slot)) continue;
-                line += "  " + ColourNames[slot];
+                line += "  " + CrewLook.CrewName(session, slot);
                 if (slot == session.LocalSlot) line += " (YOU)";
                 else if (slot == NetProtocol.HostSlot) line += " (HOST)";
                 var crew = session.Crew(slot);
@@ -296,7 +296,7 @@ namespace TrashAstronauts.UI
                     if (online) return "JOINING " + m_JoiningLabel + "  ONLINE...\nTHROUGH UNITY RELAY";
                     return "JOINING " + m_JoiningLabel + "...\n" + lobby.Target.A + "." + lobby.Target.B + "." + lobby.Target.C + "." + lobby.Target.D;
                 case LobbyMode.Joined:
-                    return "JOINED " + m_JoiningLabel + (online ? "  ONLINE" : "") + "\nYOUR SUIT IS " + ColourNames[Mathf.Clamp(session.LocalSlot, 0, 3)] + "\n" + RosterLine()
+                    return "JOINED " + m_JoiningLabel + (online ? "  ONLINE" : "") + "\nYOUR SUIT IS " + CrewLook.CrewName(session, session.LocalSlot) + "\n" + RosterLine()
                         + (session.HostSilent ? "\nHOST NOT RESPONDING..." : "");
                 default:
                     if (session.OnlineSettling) return "CLOSING THE LAST ONLINE STEP...\nThe online buttons come back in a moment.";
