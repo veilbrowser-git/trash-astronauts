@@ -1,0 +1,23 @@
+{
+    "name": "TrashAstronauts.Online",
+    "rootNamespace": "TrashAstronauts.Net.Online",
+    "references": [
+        "TrashAstronauts.Core",
+        "Unity.Services.Core",
+        "Unity.Services.Core.Environments",
+        "Unity.Services.Authentication",
+        "Unity.Services.Multiplayer",
+        "Unity.Networking.Transport",
+        "Unity.Collections",
+        "Unity.Burst"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -7,7 +7,11 @@
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",
         "Unity.XR.Interaction.Toolkit",
-        "Unity.InputSystem"
+        "Unity.InputSystem",
+        "TrashAstronauts.Online",
+        "Unity.Services.Core",
+        "Unity.Networking.Transport",
+        "Unity.Collections"
     ],
     "includePlatforms": [
         "Editor"
