@@ -256,6 +256,8 @@ namespace TrashAstronauts.EditorTools
             wire.endA = endA.transform;
             wire.endB = endB.transform;
             wire.visual = visual.gameObject;
+            // Hidden until a contract strings it (none does since 0.8.3), so it never shows in the hub or in previews.
+            visual.gameObject.SetActive(false);
             s_Tripwires.Add(wire);
         }
 

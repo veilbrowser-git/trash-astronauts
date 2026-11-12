@@ -28,11 +28,11 @@ Material:
     serializedVersion: 3
     m_TexEnvs:
     - _BaseMap:
-        m_Texture: {fileID: 2800000, guid: 53761d1365bfe46059201277adb4671c, type: 3}
+        m_Texture: {fileID: 2800000, guid: d646c01aca1254163902e7ce833ede33, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _BumpMap:
-        m_Texture: {fileID: 2800000, guid: 1b1f2bfa187484ea19aed0fff529bd0a, type: 3}
+        m_Texture: {fileID: 2800000, guid: aad0a881b281c49f29d4f2c9406f9302, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _EmissionMap:
@@ -40,7 +40,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _MainTex:
-        m_Texture: {fileID: 2800000, guid: 53761d1365bfe46059201277adb4671c, type: 3}
+        m_Texture: {fileID: 2800000, guid: d646c01aca1254163902e7ce833ede33, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _SpecGlossMap:
@@ -76,8 +76,8 @@ Material:
     - _ReceiveShadows: 1
     - _ScreenSpaceReflectionsContributeTransparent: 1
     - _Shininess: 0
-    - _Smoothness: 0.3
-    - _SmoothnessSource: 0
+    - _Smoothness: 0.5
+    - _SmoothnessSource: 1
     - _SpecSource: 0
     - _SpecularHighlights: 1
     - _SrcBlend: 1
@@ -86,10 +86,10 @@ Material:
     - _XRMotionVectorsPass: 1
     - _ZWrite: 1
     m_Colors:
-    - _BaseColor: {r: 0.55, g: 0.52, b: 0.46, a: 1}
-    - _Color: {r: 0.54999995, g: 0.52, b: 0.45999992, a: 1}
+    - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
+    - _Color: {r: 1, g: 1, b: 1, a: 1}
     - _EmissionColor: {r: 0.004, g: 0.004, b: 0.004, a: 1}
-    - _SpecColor: {r: 0.25, g: 0.25, b: 0.25, a: 1}
+    - _SpecColor: {r: 0.45, g: 0.45, b: 0.45, a: 0.5}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
 --- !u!114 &4211524268879488825
